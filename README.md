@@ -1,3 +1,5 @@
+Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>

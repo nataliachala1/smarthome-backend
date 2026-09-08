@@ -55,7 +55,6 @@ model user {
   recovery_token                           recovery_token[]
   role                                     role                 @relation(fields: [id_role], references: [id_role], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_role")
   user_preference                          user_preference?
-  electricity_tariff                       electricity_tariff[]
   home                                     home[]
   home_member_home_member_invited_byTouser home_member[]        @relation("home_member_invited_byTouser")
   home_member_home_member_id_userTouser    home_member[]        @relation("home_member_id_userTouser")
@@ -69,35 +68,9 @@ model user {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model home_notification_preference {
-  id_home_notification_preference String   @id(map: "pk_home_notification_preference") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_home                         String   @unique(map: "uq_home_notification_preference_home") @db.Uuid
-  notifications_enabled           Boolean  @default(true)
-  high_consumption_notifications  Boolean  @default(true)
-  device_notifications            Boolean  @default(true)
-  recommendation_notifications    Boolean  @default(true)
-  minimum_priority                String   @default("baja") @db.VarChar(10)
-  created_at                      DateTime @default(now()) @db.Timestamptz(6)
-  updated_at                      DateTime @default(now()) @db.Timestamptz(6)
-  home                            home     @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_home_notification_preference_home")
-
-  @@schema("config")
-}
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model home_recommendation_preference {
-  id_home_recommendation_preference String   @id(map: "pk_home_recommendation_preference") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_home                           String   @unique(map: "uq_home_recommendation_preference_home") @db.Uuid
-  recommendations_enabled           Boolean  @default(true)
-  recommendation_frequency          String   @default("semanal") @db.VarChar(10)
-  created_at                        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at                        DateTime @default(now()) @db.Timestamptz(6)
-  home                              home     @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_home_recommendation_preference_home")
-
-  @@index([recommendation_frequency], map: "idx_home_recommendation_enabled_frequency", where: raw("(recommendations_enabled = true)"))
-  @@schema("config")
-}
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -170,32 +143,9 @@ model consumption_metric {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model recommendation {
-  id_recommendation      String    @id(map: "pk_recommendation") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_home                String    @db.Uuid
-  id_device              String?   @db.Uuid
-  title                  String    @db.VarChar(200)
-  description            String
-  estimated_savings_kwh  Decimal?  @db.Decimal(10, 4)
-  estimated_savings_cost Decimal?  @db.Decimal(12, 4)
-  priority               String    @default("media") @db.VarChar(10)
-  status                 String    @default("pendiente") @db.VarChar(20)
-  created_at             DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime  @default(now()) @db.Timestamptz(6)
-  deleted_at             DateTime? @db.Timestamptz(6)
-  device                 device?   @relation(fields: [id_device, id_home], references: [id_device, id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_recommendation_device_home")
-  home                   home      @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_recommendation_home")
-
-  @@index([id_home, status, created_at(sort: Desc)], map: "idx_recommendation_home_status", where: raw("(deleted_at IS NULL)"))
-  @@schema("consumption")
-}
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model device {
   id_device              String                 @id(map: "pk_device") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_home                String                 @db.Uuid
-  id_zone                String                 @db.Uuid
   id_device_type         String                 @db.Uuid
   name                   String                 @db.VarChar(100)
   status                 String                 @default("ACTIVE") @db.VarChar(20)
@@ -210,9 +160,8 @@ model device {
   deleted_at             DateTime?              @db.Timestamptz(6)
   consumption            consumption[]
   consumption_metric     consumption_metric[]
-  recommendation         recommendation[]
+  home                   home @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_home")
   device_type            device_type            @relation(fields: [id_device_type], references: [id_device_type], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_type")
-  zone                   zone                   @relation(fields: [id_zone, id_home], references: [id_zone, id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_zone_home")
   device_schedule        device_schedule[]
   device_telemetry_raw   device_telemetry_raw[]
   smart_device           smart_device?
@@ -220,9 +169,8 @@ model device {
   notification           notification[]
 
   @@unique([id_device, id_home], map: "uq_device_id_home")
-  @@unique([id_home, name], map: "uq_device_name")
+  @@unique([id_home, name], map: "uq_device_name", where: raw("(deleted_at IS NULL)"))
   @@index([id_home, status], map: "idx_device_home_status")
-  @@index([id_zone, status], map: "idx_device_zone_status")
   @@schema("devices")
 }
 
@@ -276,27 +224,9 @@ model smart_device {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model electricity_tariff {
-  id_electricity_tariff String    @id(map: "pk_electricity_tariff") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_home               String    @db.Uuid
-  price_per_kwh         Decimal   @db.Decimal(10, 4)
-  currency              String    @default("COP") @db.VarChar(10)
-  valid_from            DateTime  @db.Date
-  valid_to              DateTime? @db.Date
-  created_by            String    @db.Uuid
-  created_at            DateTime  @default(now()) @db.Timestamptz(6)
-  user                  user      @relation(fields: [created_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tariff_created_by")
-  home                  home      @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_tariff_home")
-
-  @@index([id_home, valid_from(sort: Desc)], map: "idx_electricity_tariff_home_valid_from")
-  @@schema("homes")
-}
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model home {
+  device device[]
   id_home                        String                          @id(map: "pk_home") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_by                     String                          @db.Uuid
   name                           String                          @db.VarChar(100)
@@ -305,13 +235,8 @@ model home {
   created_at                     DateTime                        @default(now()) @db.Timestamptz(6)
   updated_at                     DateTime                        @default(now()) @db.Timestamptz(6)
   deleted_at                     DateTime?                       @db.Timestamptz(6)
-  home_notification_preference   home_notification_preference?
-  home_recommendation_preference home_recommendation_preference?
-  recommendation                 recommendation[]
-  electricity_tariff             electricity_tariff[]
   user                           user                            @relation(fields: [created_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_home_created_by")
   home_member                    home_member?
-  zone                           zone[]
   audit_log                      audit_log[]
   notification                   notification[]
 
@@ -345,22 +270,6 @@ model home_member {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model zone {
-  id_zone    String    @id(map: "pk_zone") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_home    String    @db.Uuid
-  name       String    @db.VarChar(100)
-  type       String?   @db.VarChar(50)
-  created_at DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at DateTime  @default(now()) @db.Timestamptz(6)
-  deleted_at DateTime? @db.Timestamptz(6)
-  device     device[]
-  home       home      @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_zone_home")
-
-  @@unique([id_zone, id_home], map: "uq_zone_home_identity")
-  @@unique([id_home, name], map: "uq_zone_name")
-  @@index([id_home], map: "idx_zone_home_active", where: raw("(deleted_at IS NULL)"))
-  @@schema("homes")
-}
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

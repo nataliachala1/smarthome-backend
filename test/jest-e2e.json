@@ -3,7 +3,21 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(@nestjs/config|@nestjs/jwt|@nestjs/terminus|dotenv-expand|es-toolkit)/)"
+  ],
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "allowJs": true,
+          "module": "CommonJS",
+          "moduleResolution": "node",
+          "resolvePackageJsonExports": false
+        }
+      }
+    ]
   }
 }
