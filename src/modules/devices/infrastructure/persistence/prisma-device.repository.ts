@@ -6,6 +6,7 @@ import { Device } from '../../domain/entities/device.entity';
 import {
   CreateDeviceData,
   DeviceRepository,
+  UpdateDeviceData,
 } from '../../domain/repositories/device.repository';
 import {
   DeviceAccessDeniedError,
@@ -51,6 +52,30 @@ export class PrismaDeviceRepository implements DeviceRepository {
     }
   }
 
+  async findById(
+    userId: string,
+    homeId: string,
+    deviceId: string,
+  ): Promise<Device | null> {
+    try {
+      return await this.prismaRls.withUserContext(userId, async (tx) => {
+        await this.authorize(tx, homeId, false);
+        const row = await tx.device.findFirst({
+          where: {
+            id_device: deviceId,
+            id_home: homeId,
+            ...(await this.isOwner(tx, homeId))
+              ? {}
+              : { status: 'ACTIVE', deleted_at: null },
+          },
+        });
+        return row ? PrismaDeviceMapper.toDomain(row) : null;
+      });
+    } catch (error) {
+      this.translateError(error);
+    }
+  }
+
   async create(userId: string, data: CreateDeviceData): Promise<Device> {
     try {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
@@ -79,6 +104,77 @@ export class PrismaDeviceRepository implements DeviceRepository {
     } catch (error) {
       this.translateError(error);
     }
+  }
+
+  async update(
+    userId: string,
+    homeId: string,
+    deviceId: string,
+    data: UpdateDeviceData,
+  ): Promise<Device> {
+    try {
+      return await this.prismaRls.withUserContext(userId, async (tx) => {
+        await this.authorize(tx, homeId, true);
+        const current = await tx.device.findFirst({
+          where: { id_device: deviceId, id_home: homeId },
+        });
+        if (!current) throw new DeviceAccessDeniedError();
+        if (data.deviceTypeId) {
+          const type = await tx.device_type.findFirst({
+            where: { id_device_type: data.deviceTypeId, deleted_at: null },
+          });
+          if (!type) throw new InvalidDeviceReferenceError();
+        }
+        const normalized = {
+          ...(data.deviceTypeId !== undefined && { id_device_type: data.deviceTypeId }),
+          ...(data.name !== undefined && { name: data.name.trim() }),
+          ...(data.transportType !== undefined && {
+            transport_type: data.transportType,
+          }),
+          ...(data.messagingProtocol !== undefined && {
+            messaging_protocol: data.messagingProtocol,
+          }),
+        };
+        const raw = await tx.device.update({
+          where: { id_device: deviceId },
+          data: normalized,
+        });
+        return PrismaDeviceMapper.toDomain(raw);
+      });
+    } catch (error) {
+      this.translateError(error);
+    }
+  }
+
+  async deactivate(userId: string, homeId: string, deviceId: string): Promise<Device> {
+    try {
+      return await this.prismaRls.withUserContext(userId, async (tx) => {
+        await this.authorize(tx, homeId, true);
+        const current = await tx.device.findFirst({
+          where: { id_device: deviceId, id_home: homeId },
+        });
+        if (!current) throw new DeviceAccessDeniedError();
+        const raw = await tx.device.update({
+          where: { id_device: deviceId },
+          data: {
+            status: 'DEACTIVATED',
+            deleted_at: new Date(),
+            is_on: false,
+          },
+        });
+        return PrismaDeviceMapper.toDomain(raw);
+      });
+    } catch (error) {
+      this.translateError(error);
+    }
+  }
+
+  private async isOwner(
+    tx: Prisma.TransactionClient,
+    homeId: string,
+  ): Promise<boolean> {
+    const [access] = await tx.$queryRaw<{ is_owner: boolean }[]>`SELECT homes.fn_is_home_owner(${homeId}::uuid) AS is_owner`;
+    return Boolean(access?.is_owner);
   }
 
   private translateError(error: unknown): never {

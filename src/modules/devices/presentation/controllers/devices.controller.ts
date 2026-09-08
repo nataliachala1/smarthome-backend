@@ -2,8 +2,10 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -25,8 +27,12 @@ import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated
 import { ListHomeDevicesUseCase } from '../../application/use-cases/list-home-devices.use-case';
 
 import { CreateDeviceDto } from '../../application/dto/create-device.dto';
+import { UpdateDeviceDto } from '../../application/dto/update-device.dto';
 
 import { CreateDeviceUseCase } from '../../application/use-cases/create-device.use-case';
+import { GetDeviceByIdUseCase } from '../../application/use-cases/get-device-by-id.use-case';
+import { UpdateDeviceUseCase } from '../../application/use-cases/update-device.use-case';
+import { DeactivateDeviceUseCase } from '../../application/use-cases/deactivate-device.use-case';
 
 @Controller('api/v1/homes/:homeId/devices')
 @ApiTags('devices')
@@ -42,6 +48,9 @@ export class DevicesController {
   constructor(
     private readonly listHomeDevicesUseCase: ListHomeDevicesUseCase,
     private readonly createDeviceUseCase: CreateDeviceUseCase,
+    private readonly getDeviceByIdUseCase: GetDeviceByIdUseCase,
+    private readonly updateDeviceUseCase: UpdateDeviceUseCase,
+    private readonly deactivateDeviceUseCase: DeactivateDeviceUseCase,
   ) {}
 
   @Get()
@@ -53,6 +62,28 @@ export class DevicesController {
     @Param('homeId', ParseUUIDPipe) homeId: string,
   ) {
     return this.listHomeDevicesUseCase.execute(user.userId, homeId);
+  }
+
+  @Get(':deviceId')
+  @ApiOperation({
+    summary: 'Consultar un dispositivo del hogar por id',
+  })
+  async findById(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+  ) {
+    const device = await this.getDeviceByIdUseCase.execute(
+      user.userId,
+      homeId,
+      deviceId,
+    );
+
+    if (!device) {
+      throw new NotFoundException('Dispositivo no encontrado');
+    }
+
+    return device;
   }
 
   @Post()
@@ -75,6 +106,43 @@ export class DevicesController {
       manufacturerDeviceId: dto.manufacturerDeviceId,
       transportType: dto.transportType,
       messagingProtocol: dto.messagingProtocol,
+    });
+  }
+
+  @Patch(':deviceId')
+  @ApiOperation({
+    summary: 'Actualizar la configuración de un dispositivo: OWNER',
+  })
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+    @Body() dto: UpdateDeviceDto,
+  ) {
+    return this.updateDeviceUseCase.execute({
+      userId: user.userId,
+      homeId,
+      deviceId,
+      deviceTypeId: dto.deviceTypeId,
+      name: dto.name,
+      transportType: dto.transportType,
+      messagingProtocol: dto.messagingProtocol,
+    });
+  }
+
+  @Patch(':deviceId/deactivate')
+  @ApiOperation({
+    summary: 'Desactivar un dispositivo de forma lógica: OWNER',
+  })
+  async deactivate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+  ) {
+    return this.deactivateDeviceUseCase.execute({
+      userId: user.userId,
+      homeId,
+      deviceId,
     });
   }
 }

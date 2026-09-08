@@ -10,6 +10,9 @@ import { PrismaDeviceRepository } from './infrastructure/persistence/prisma-devi
 
 import { ListDeviceTypesUseCase } from './application/use-cases/list-device-types.use-case';
 import { ListHomeDevicesUseCase } from './application/use-cases/list-home-devices.use-case';
+import { GetDeviceByIdUseCase } from './application/use-cases/get-device-by-id.use-case';
+import { UpdateDeviceUseCase } from './application/use-cases/update-device.use-case';
+import { DeactivateDeviceUseCase } from './application/use-cases/deactivate-device.use-case';
 
 import { DeviceTypesController } from './presentation/controllers/device-types.controller';
 import { DevicesController } from './presentation/controllers/devices.controller';
@@ -24,6 +27,9 @@ import { CreateDeviceUseCase } from './application/use-cases/create-device.use-c
     ListDeviceTypesUseCase,
     ListHomeDevicesUseCase,
     CreateDeviceUseCase,
+    GetDeviceByIdUseCase,
+    UpdateDeviceUseCase,
+    DeactivateDeviceUseCase,
 
     {
       provide: DeviceTypeRepository,
