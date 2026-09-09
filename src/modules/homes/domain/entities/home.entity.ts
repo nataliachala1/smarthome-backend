@@ -2,7 +2,6 @@ export interface HomeProps {
   id: string;
   createdBy: string;
   name: string;
-  stratum: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -22,10 +21,6 @@ export class Home {
 
   get name(): string {
     return this.props.name;
-  }
-
-  get stratum(): number {
-    return this.props.stratum;
   }
 
   get status(): string {

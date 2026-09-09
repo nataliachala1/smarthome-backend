@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 import {
   ListHomesOutput,
@@ -43,6 +44,7 @@ import { UpdateHomeMemberRoleUseCase } from '../../application/use-cases/update-
 import { RevokeHomeMemberUseCase } from '../../application/use-cases/revoke-home-member.use-case';
 
 @Controller('api/v1/homes')
+@ApiBearerAuth()
 export class HomesController {
   constructor(
     private readonly listHomesUseCase: ListHomesUseCase,
@@ -159,7 +161,6 @@ export class HomesController {
       userId: user.userId,
       homeId,
       name: dto.name,
-      stratum: dto.stratum,
     });
   }
 
@@ -196,7 +197,6 @@ export class HomesController {
     return this.createHomeUseCase.execute({
       userId: user.userId,
       name: dto.name,
-      stratum: dto.stratum,
     });
   }
 }

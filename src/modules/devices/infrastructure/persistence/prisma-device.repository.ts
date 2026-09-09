@@ -64,9 +64,9 @@ export class PrismaDeviceRepository implements DeviceRepository {
           where: {
             id_device: deviceId,
             id_home: homeId,
-            ...(await this.isOwner(tx, homeId))
+            ...((await this.isOwner(tx, homeId))
               ? {}
-              : { status: 'ACTIVE', deleted_at: null },
+              : { status: 'ACTIVE', deleted_at: null }),
           },
         });
         return row ? PrismaDeviceMapper.toDomain(row) : null;
@@ -126,7 +126,9 @@ export class PrismaDeviceRepository implements DeviceRepository {
           if (!type) throw new InvalidDeviceReferenceError();
         }
         const normalized = {
-          ...(data.deviceTypeId !== undefined && { id_device_type: data.deviceTypeId }),
+          ...(data.deviceTypeId !== undefined && {
+            id_device_type: data.deviceTypeId,
+          }),
           ...(data.name !== undefined && { name: data.name.trim() }),
           ...(data.transportType !== undefined && {
             transport_type: data.transportType,
@@ -146,7 +148,11 @@ export class PrismaDeviceRepository implements DeviceRepository {
     }
   }
 
-  async deactivate(userId: string, homeId: string, deviceId: string): Promise<Device> {
+  async deactivate(
+    userId: string,
+    homeId: string,
+    deviceId: string,
+  ): Promise<Device> {
     try {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
         await this.authorize(tx, homeId, true);
@@ -173,7 +179,9 @@ export class PrismaDeviceRepository implements DeviceRepository {
     tx: Prisma.TransactionClient,
     homeId: string,
   ): Promise<boolean> {
-    const [access] = await tx.$queryRaw<{ is_owner: boolean }[]>`SELECT homes.fn_is_home_owner(${homeId}::uuid) AS is_owner`;
+    const [access] = await tx.$queryRaw<
+      { is_owner: boolean }[]
+    >`SELECT homes.fn_is_home_owner(${homeId}::uuid) AS is_owner`;
     return Boolean(access?.is_owner);
   }
 

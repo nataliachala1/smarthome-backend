@@ -16,6 +16,9 @@ import {
   ApiForbiddenResponse,
   ApiConflictResponse,
   ApiOperation,
+  ApiParam,
+  ApiCreatedResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 
 import { JwtAuthGuard } from '../../../auth/presentation/http/guards/jwt-auth.guard';
@@ -57,6 +60,8 @@ export class DevicesController {
   @ApiOperation({
     summary: 'Listar dispositivos activos del hogar: OWNER, MEMBER o GUEST',
   })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiOkResponse({ description: 'Lista de dispositivos activos del hogar' })
   async findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -68,6 +73,13 @@ export class DevicesController {
   @ApiOperation({
     summary: 'Consultar un dispositivo del hogar por id',
   })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiOkResponse({ description: 'Dispositivo autorizado' })
   async findById(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -93,6 +105,8 @@ export class DevicesController {
   @ApiConflictResponse({
     description: 'Nombre activo o identificador de fabricante duplicado',
   })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'Dispositivo creado en estado OFFLINE' })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -113,6 +127,13 @@ export class DevicesController {
   @ApiOperation({
     summary: 'Actualizar la configuración de un dispositivo: OWNER',
   })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiOkResponse({ description: 'Dispositivo actualizado' })
   async update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -134,6 +155,13 @@ export class DevicesController {
   @ApiOperation({
     summary: 'Desactivar un dispositivo de forma lógica: OWNER',
   })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiOkResponse({ description: 'Dispositivo desactivado lógicamente' })
   async deactivate(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,

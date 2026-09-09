@@ -228,7 +228,6 @@ model home {
   id_home                        String                          @id(map: "pk_home") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_by                     String                          @db.Uuid
   name                           String                          @db.VarChar(100)
-  stratum                        Int                             @db.SmallInt
   status                         String                          @default("ACTIVE") @db.VarChar(20)
   created_at                     DateTime                        @default(now()) @db.Timestamptz(6)
   updated_at                     DateTime                        @default(now()) @db.Timestamptz(6)

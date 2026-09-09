@@ -8,7 +8,6 @@ export class PrismaHomeMapper {
       id: raw.id_home,
       createdBy: raw.created_by,
       name: raw.name,
-      stratum: raw.stratum,
       status: raw.status,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,

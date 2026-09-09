@@ -14,8 +14,12 @@ import { PrismaDeviceRepository } from '../src/modules/devices/infrastructure/pe
 import { DeviceRepository } from '../src/modules/devices/domain/repositories/device.repository';
 import { CreateDeviceUseCase } from '../src/modules/devices/application/use-cases/create-device.use-case';
 import { ListHomeDevicesUseCase } from '../src/modules/devices/application/use-cases/list-home-devices.use-case';
+import { GetDeviceByIdUseCase } from '../src/modules/devices/application/use-cases/get-device-by-id.use-case';
+import { UpdateDeviceUseCase } from '../src/modules/devices/application/use-cases/update-device.use-case';
+import { DeactivateDeviceUseCase } from '../src/modules/devices/application/use-cases/deactivate-device.use-case';
 import { DevicesController } from '../src/modules/devices/presentation/controllers/devices.controller';
 import { JwtAuthGuard } from '../src/modules/auth/presentation/http/guards/jwt-auth.guard';
+import { describe } from 'node:test';
 
 const databaseUrl = process.env.SCOPE_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -53,6 +57,9 @@ describeDatabase('Direct home devices HTTP + Prisma + PostgreSQL RLS', () => {
         PrismaRlsService,
         CreateDeviceUseCase,
         ListHomeDevicesUseCase,
+        GetDeviceByIdUseCase,
+        UpdateDeviceUseCase,
+        DeactivateDeviceUseCase,
         { provide: DeviceRepository, useClass: PrismaDeviceRepository },
       ],
     })
@@ -139,6 +146,31 @@ describeDatabase('Direct home devices HTTP + Prisma + PostgreSQL RLS', () => {
       .send({
         deviceTypeId: '90000000-0000-4000-8000-000000000001',
         name: 'HTTP scope invalid',
+      })
+      .expect(400);
+  });
+  it('rejects invalid device UUID and enum values', async () => {
+    await request(app.getHttpServer())
+      .post(endpoint)
+      .set('x-test-user', user(1))
+      .send({ deviceTypeId: 'not-a-uuid', name: 'HTTP scope invalid uuid' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(endpoint)
+      .set('x-test-user', user(1))
+      .send({
+        deviceTypeId,
+        name: 'HTTP scope invalid transport',
+        transportType: 'ZIGBEE',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(endpoint)
+      .set('x-test-user', user(1))
+      .send({
+        deviceTypeId,
+        name: 'HTTP scope invalid protocol',
+        messagingProtocol: 'HTTP',
       })
       .expect(400);
   });
