@@ -25,6 +25,12 @@ export abstract class DeviceRepository {
     deviceId: string,
   ): Promise<Device | null>;
 
+  abstract findForControl(
+  userId: string,
+  homeId: string,
+  deviceId: string,
+): Promise<Device | null>;
+
   abstract create(userId: string, data: CreateDeviceData): Promise<Device>;
 
   abstract update(

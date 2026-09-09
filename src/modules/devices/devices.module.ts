@@ -16,7 +16,12 @@ import { DeactivateDeviceUseCase } from './application/use-cases/deactivate-devi
 
 import { DeviceTypesController } from './presentation/controllers/device-types.controller';
 import { DevicesController } from './presentation/controllers/devices.controller';
+
 import { CreateDeviceUseCase } from './application/use-cases/create-device.use-case';
+import { DeviceControlPublisher } from './domain/services/device-control-publisher';
+import { MqttDeviceControlPublisher } from './infrastructure/messaging/mqtt-device-control.publisher';
+import { ControlDeviceUseCase } from './application/use-cases/control-device.use-case';
+import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
 
 @Module({
   imports: [AuthModule],
@@ -30,6 +35,18 @@ import { CreateDeviceUseCase } from './application/use-cases/create-device.use-c
     GetDeviceByIdUseCase,
     UpdateDeviceUseCase,
     DeactivateDeviceUseCase,
+    ControlDeviceUseCase,
+    MqttDeviceStatusSubscriber,
+
+    {
+      provide: DeviceControlPublisher,
+      useClass: MqttDeviceControlPublisher,
+    },
+
+    {
+      provide: DeviceTypeRepository,
+      useClass: PrismaDeviceTypeRepository,
+    },
 
     {
       provide: DeviceTypeRepository,

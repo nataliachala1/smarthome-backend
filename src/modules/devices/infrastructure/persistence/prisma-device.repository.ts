@@ -75,6 +75,29 @@ export class PrismaDeviceRepository implements DeviceRepository {
       this.translateError(error);
     }
   }
+    
+  async findForControl(
+    userId: string,
+    homeId: string,
+    deviceId: string,
+  ): Promise<Device | null> {
+    try {
+      return await this.prismaRls.withUserContext(userId, async (tx) => {
+        await this.authorize(tx, homeId, true);
+
+        const row = await tx.device.findFirst({
+          where: {
+            id_device: deviceId,
+            id_home: homeId,
+          },
+        });
+
+        return row ? PrismaDeviceMapper.toDomain(row) : null;
+      });
+    } catch (error) {
+      this.translateError(error);
+    }
+  }
 
   async create(userId: string, data: CreateDeviceData): Promise<Device> {
     try {

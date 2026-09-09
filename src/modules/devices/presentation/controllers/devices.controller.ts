@@ -31,11 +31,13 @@ import { ListHomeDevicesUseCase } from '../../application/use-cases/list-home-de
 
 import { CreateDeviceDto } from '../../application/dto/create-device.dto';
 import { UpdateDeviceDto } from '../../application/dto/update-device.dto';
+import { ControlDeviceDto } from '../../application/dto/control-device.dto';
 
 import { CreateDeviceUseCase } from '../../application/use-cases/create-device.use-case';
 import { GetDeviceByIdUseCase } from '../../application/use-cases/get-device-by-id.use-case';
 import { UpdateDeviceUseCase } from '../../application/use-cases/update-device.use-case';
 import { DeactivateDeviceUseCase } from '../../application/use-cases/deactivate-device.use-case';
+import { ControlDeviceUseCase } from '../../application/use-cases/control-device.use-case';
 
 @Controller('api/v1/homes/:homeId/devices')
 @ApiTags('devices')
@@ -54,6 +56,7 @@ export class DevicesController {
     private readonly getDeviceByIdUseCase: GetDeviceByIdUseCase,
     private readonly updateDeviceUseCase: UpdateDeviceUseCase,
     private readonly deactivateDeviceUseCase: DeactivateDeviceUseCase,
+    private readonly controlDeviceUseCase: ControlDeviceUseCase,
   ) {}
 
   @Get()
@@ -171,6 +174,37 @@ export class DevicesController {
       userId: user.userId,
       homeId,
       deviceId,
+    });
+  }
+
+  @Patch(':deviceId/control')
+  @ApiOperation({
+    summary: 'Enviar comando ON/OFF al dispositivo: OWNER',
+  })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiOkResponse({
+    description: 'Comando de control aceptado para publicación',
+  })
+  @ApiConflictResponse({
+    description:
+      'Dispositivo desconectado, no configurable o publicador MQTT no configurado',
+  })
+  async control(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+    @Body() dto: ControlDeviceDto,
+  ) {
+    return this.controlDeviceUseCase.execute({
+      userId: user.userId,
+      homeId,
+      deviceId,
+      command: dto.command,
     });
   }
 }
