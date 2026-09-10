@@ -28,6 +28,9 @@ import { ListDeviceConsumptionUseCase } from '../../application/use-cases/list-d
 import { GetDeviceConsumptionSummaryQueryDto } from '../../application/dto/get-device-consumption-summary-query.dto';
 import { GetDeviceConsumptionSummaryUseCase } from '../../application/use-cases/get-device-consumption-summary.use-case';
 
+import { GetDeviceDailyConsumptionQueryDto } from '../../application/dto/get-device-daily-consumption-query.dto';
+import { GetDeviceDailyConsumptionUseCase } from '../../application/use-cases/get-device-daily-consumption.use-case';
+
 @Controller('api/v1/homes/:homeId/devices/:deviceId/consumption')
 @ApiTags('consumption')
 @ApiBearerAuth()
@@ -36,6 +39,7 @@ export class ConsumptionController {
   constructor(
     private readonly listDeviceConsumptionUseCase: ListDeviceConsumptionUseCase,
     private readonly getDeviceConsumptionSummaryUseCase: GetDeviceConsumptionSummaryUseCase,
+    private readonly getDeviceDailyConsumptionUseCase: GetDeviceDailyConsumptionUseCase,
   ) {}
 
   @Get('summary')
@@ -85,6 +89,54 @@ async summaryByDevice(
     to: query.to,
   });
 }
+
+  @Get('daily')
+@ApiOperation({
+  summary: 'Consultar consumo diario de un dispositivo para gráficas',
+})
+@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+@ApiParam({
+  name: 'deviceId',
+  description: 'UUID del dispositivo',
+  format: 'uuid',
+})
+@ApiQuery({
+  name: 'from',
+  required: false,
+  description: 'Fecha inicial en formato ISO',
+})
+@ApiQuery({
+  name: 'to',
+  required: false,
+  description: 'Fecha final en formato ISO',
+})
+@ApiOkResponse({
+  description: 'Consumo del dispositivo agrupado por día',
+})
+@ApiBadRequestResponse({
+  description: 'UUID o rango de fechas inválido',
+})
+@ApiForbiddenResponse({
+  description: 'Sin membresía activa en el hogar',
+})
+@ApiNotFoundResponse({
+  description: 'Dispositivo no encontrado',
+})
+async dailyByDevice(
+  @CurrentUser() user: AuthenticatedUser,
+  @Param('homeId', ParseUUIDPipe) homeId: string,
+  @Param('deviceId', ParseUUIDPipe) deviceId: string,
+  @Query() query: GetDeviceDailyConsumptionQueryDto,
+) {
+  return this.getDeviceDailyConsumptionUseCase.execute({
+    userId: user.userId,
+    homeId,
+    deviceId,
+    from: query.from,
+    to: query.to,
+  });
+}
+
   @Get()
   @ApiOperation({
     summary:

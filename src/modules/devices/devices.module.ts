@@ -22,9 +22,10 @@ import { DeviceControlPublisher } from './domain/services/device-control-publish
 import { MqttDeviceControlPublisher } from './infrastructure/messaging/mqtt-device-control.publisher';
 import { ControlDeviceUseCase } from './application/use-cases/control-device.use-case';
 import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
+import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, RealtimeModule],
 
   controllers: [DeviceTypesController, DevicesController],
 

@@ -27,6 +27,9 @@ import { GetHomeConsumptionSummaryUseCase } from '../../application/use-cases/ge
 import { ListHomeConsumptionQueryDto } from '../../application/dto/list-home-consumption-query.dto';
 import { ListHomeConsumptionUseCase } from '../../application/use-cases/list-home-consumption.use-case';
 
+import { GetHomeDailyConsumptionQueryDto } from '../../application/dto/get-home-daily-consumption-query.dto';
+import { GetHomeDailyConsumptionUseCase } from '../../application/use-cases/get-home-daily-consumption.use-case';
+
 @Controller('api/v1/homes/:homeId/consumption')
 @ApiTags('consumption')
 @ApiBearerAuth()
@@ -35,6 +38,7 @@ export class HomeConsumptionController {
   constructor(
     private readonly getHomeConsumptionSummaryUseCase: GetHomeConsumptionSummaryUseCase,
     private readonly listHomeConsumptionUseCase: ListHomeConsumptionUseCase,
+    private readonly getHomeDailyConsumptionUseCase: GetHomeDailyConsumptionUseCase,
   ) {}
 
   @Get('summary')
@@ -75,6 +79,43 @@ export class HomeConsumptionController {
       to: query.to,
     });
   }
+
+  @Get('daily')
+@ApiOperation({
+  summary: 'Consultar consumo diario del hogar para gráficas',
+})
+@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+@ApiQuery({
+  name: 'from',
+  required: false,
+  description: 'Fecha inicial en formato ISO',
+})
+@ApiQuery({
+  name: 'to',
+  required: false,
+  description: 'Fecha final en formato ISO',
+})
+@ApiOkResponse({
+  description: 'Consumo del hogar agrupado por día',
+})
+@ApiBadRequestResponse({
+  description: 'UUID o rango de fechas inválido',
+})
+@ApiForbiddenResponse({
+  description: 'Sin membresía activa en el hogar',
+})
+async dailyByHome(
+  @CurrentUser() user: AuthenticatedUser,
+  @Param('homeId', ParseUUIDPipe) homeId: string,
+  @Query() query: GetHomeDailyConsumptionQueryDto,
+) {
+  return this.getHomeDailyConsumptionUseCase.execute({
+    userId: user.userId,
+    homeId,
+    from: query.from,
+    to: query.to,
+  });
+}
 
     @Get()
     @ApiOperation({
