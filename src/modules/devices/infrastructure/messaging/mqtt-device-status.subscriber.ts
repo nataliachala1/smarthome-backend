@@ -242,6 +242,24 @@ export class MqttDeviceStatusSubscriber
 
         const notifications: CreatedNotification[] = [];
 
+        let consumptionEvent: {
+          id: string;
+          homeId: string;
+          deviceId: string;
+          deviceName: string;
+          manufacturerDeviceId: string | null;
+          powerW: number;
+          energyDeltaKwh: number;
+          energyTotalKwh: number | null;
+          voltageV: number | null;
+          currentA: number | null;
+          frequencyHz: number | null;
+          temperatureC: number | null;
+          readAt: Date;
+        } | null = null;
+
+        let consumptionRecipients: { id_user: string }[] = [];
+
         if (shouldCreateConsumption && powerW !== undefined) {
           const createdConsumption = await tx.consumption.create({
   data: {
@@ -271,47 +289,41 @@ export class MqttDeviceStatusSubscriber
   },
 });
 
-const consumptionRecipients = await this.findHomeRealtimeRecipients(
+consumptionRecipients = await this.findHomeRealtimeRecipients(
   tx,
   device.id_home,
 );
 
-for (const recipient of consumptionRecipients) {
-  this.realtimeEventsService.emitToUser(
-    recipient.id_user,
-    'consumption.created',
-    {
-      id: createdConsumption.id_consumption,
-      homeId: createdConsumption.id_home,
-      deviceId: createdConsumption.id_device,
-      deviceName: device.name,
-      manufacturerDeviceId: device.manufacturer_device_id,
-      powerW: Number(createdConsumption.power_w),
-      energyDeltaKwh: Number(createdConsumption.energy_delta_kwh),
-      energyTotalKwh:
-        createdConsumption.energy_total_kwh === null
-          ? null
-          : Number(createdConsumption.energy_total_kwh),
-      voltageV:
-        createdConsumption.voltage_v === null
-          ? null
-          : Number(createdConsumption.voltage_v),
-      currentA:
-        createdConsumption.current_a === null
-          ? null
-          : Number(createdConsumption.current_a),
-      frequencyHz:
-        createdConsumption.frequency_hz === null
-          ? null
-          : Number(createdConsumption.frequency_hz),
-      temperatureC:
-        createdConsumption.temperature_c === null
-          ? null
-          : Number(createdConsumption.temperature_c),
-      readAt: createdConsumption.read_at,
-    },
-  );
-}
+consumptionEvent = {
+  id: createdConsumption.id_consumption,
+  homeId: createdConsumption.id_home,
+  deviceId: createdConsumption.id_device,
+  deviceName: device.name,
+  manufacturerDeviceId: device.manufacturer_device_id,
+  powerW: Number(createdConsumption.power_w),
+  energyDeltaKwh: Number(createdConsumption.energy_delta_kwh),
+  energyTotalKwh:
+    createdConsumption.energy_total_kwh === null
+      ? null
+      : Number(createdConsumption.energy_total_kwh),
+  voltageV:
+    createdConsumption.voltage_v === null
+      ? null
+      : Number(createdConsumption.voltage_v),
+  currentA:
+    createdConsumption.current_a === null
+      ? null
+      : Number(createdConsumption.current_a),
+  frequencyHz:
+    createdConsumption.frequency_hz === null
+      ? null
+      : Number(createdConsumption.frequency_hz),
+  temperatureC:
+    createdConsumption.temperature_c === null
+      ? null
+      : Number(createdConsumption.temperature_c),
+  readAt: createdConsumption.read_at,
+};
 
           await this.refreshDailyDeviceMetric(
             tx,
@@ -337,6 +349,8 @@ for (const recipient of consumptionRecipients) {
           updatedDevice,
           recipients,
           notifications,
+          consumptionEvent,
+          consumptionRecipients,
         };
       },
     );
@@ -346,6 +360,16 @@ for (const recipient of consumptionRecipients) {
      * correctamente. Así evitamos enviar eventos de datos que luego
      * podrían ser revertidos por un rollback.
      */
+    if (transactionResult.consumptionEvent) {
+      for (const recipient of transactionResult.consumptionRecipients) {
+        this.realtimeEventsService.emitToUser(
+          recipient.id_user,
+          'consumption.created',
+          transactionResult.consumptionEvent,
+        );
+      }
+    }
+
     for (const recipient of transactionResult.recipients) {
       this.realtimeEventsService.emitToUser(
         recipient.id_user,
