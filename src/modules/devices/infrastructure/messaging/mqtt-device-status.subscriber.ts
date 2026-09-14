@@ -89,19 +89,38 @@ export class MqttDeviceStatusSubscriber
     this.client = client;
 
     client.on('connect', () => {
-      const topic =
+      const smartHomeTopic =
         this.configService.get<string>('MQTT_STATUS_TOPIC_FILTER') ??
         'smarthome/devices/+/status';
 
-      client.subscribe(topic, { qos: 1 }, (error) => {
+      const shellySwitchTopic =
+        this.configService.get<string>('MQTT_SHELLY_SWITCH_TOPIC_FILTER') ??
+        '+/status/switch:0';
+
+      const shellyRpcEventsTopic =
+        this.configService.get<string>(
+          'MQTT_SHELLY_RPC_EVENTS_TOPIC_FILTER',
+        ) ?? '+/events/rpc';
+
+      const topics = Array.from(
+        new Set([
+          smartHomeTopic,
+          shellySwitchTopic,
+          shellyRpcEventsTopic,
+        ]),
+      );
+
+      client.subscribe(topics, { qos: 1 }, (error) => {
         if (error) {
           this.logger.error(
-            `No se pudo suscribir al tópico MQTT de estado: ${error.message}`,
+            `No se pudo suscribir a los tópicos MQTT de estado: ${error.message}`,
           );
           return;
         }
 
-        this.logger.log(`Suscrito a tópico MQTT de estado: ${topic}`);
+        this.logger.log(
+          `Suscrito a tópicos MQTT de estado: ${topics.join(', ')}`,
+        );
       });
     });
 
@@ -145,17 +164,23 @@ export class MqttDeviceStatusSubscriber
     topic: string,
     payload: Buffer,
   ): Promise<void> {
-    const manufacturerDeviceId =
-      this.extractManufacturerDeviceId(topic);
+    const manufacturerDeviceId = this.extractManufacturerDeviceId(topic);
 
     if (!manufacturerDeviceId) {
       this.logger.warn(`Tópico MQTT de estado inválido: ${topic}`);
       return;
     }
 
-    const message = this.parsePayload(payload);
+    const message = this.parsePayload(topic, payload);
 
     if (!message) {
+      if (this.isShellyTopic(topic)) {
+        this.logger.debug(
+          `Mensaje MQTT Shelly ignorado porque no contiene datos de switch: ${topic}`,
+        );
+        return;
+      }
+
       this.logger.warn(
         `Payload MQTT de estado inválido para ${manufacturerDeviceId}`,
       );
@@ -163,18 +188,18 @@ export class MqttDeviceStatusSubscriber
     }
 
     const device = await this.prisma.device.findFirst({
-    where: {
-    manufacturer_device_id: manufacturerDeviceId,
-    status: 'ACTIVE',
-    deleted_at: null,
-   },
-  select: {
-    id_device: true,
-    id_home: true,
-    name: true,
-    manufacturer_device_id: true,
-    },
-  });
+      where: {
+        manufacturer_device_id: manufacturerDeviceId,
+        status: 'ACTIVE',
+        deleted_at: null,
+      },
+      select: {
+        id_device: true,
+        id_home: true,
+        name: true,
+        manufacturer_device_id: true,
+      },
+    });
 
     if (!device) {
       this.logger.warn(
@@ -185,9 +210,7 @@ export class MqttDeviceStatusSubscriber
 
     const now = new Date();
 
-    const readAt = message.readAt
-      ? new Date(message.readAt)
-      : now;
+    const readAt = message.readAt ? new Date(message.readAt) : now;
 
     const metricStartAt = this.getUtcDayStart(readAt);
     const metricEndAt = this.addDays(metricStartAt, 1);
@@ -215,8 +238,7 @@ export class MqttDeviceStatusSubscriber
 
     const powerW = message.currentPowerW;
 
-    const shouldCreateConsumption =
-      typeof powerW === 'number';
+    const shouldCreateConsumption = typeof powerW === 'number';
 
     const transactionResult = await this.prisma.$transaction(
       async (tx) => {
@@ -261,69 +283,98 @@ export class MqttDeviceStatusSubscriber
         let consumptionRecipients: { id_user: string }[] = [];
 
         if (shouldCreateConsumption && powerW !== undefined) {
+          const previousConsumption =
+            message.energyTotalKwh === undefined ||
+            message.energyTotalKwh === null
+              ? null
+              : await tx.consumption.findFirst({
+                  where: {
+                    id_device: device.id_device,
+                    id_home: device.id_home,
+                    energy_total_kwh: {
+                      not: null,
+                    },
+                  },
+                  orderBy: {
+                    read_at: 'desc',
+                  },
+                  select: {
+                    energy_total_kwh: true,
+                  },
+                });
+
+          const energyDeltaKwh =
+            message.energyDeltaKwh ??
+            this.calculateEnergyDeltaKwh(
+              message.energyTotalKwh,
+              previousConsumption?.energy_total_kwh ?? null,
+            );
+
           const createdConsumption = await tx.consumption.create({
-  data: {
-    id_device: device.id_device,
-    id_home: device.id_home,
-    power_w: powerW,
-    energy_delta_kwh: message.energyDeltaKwh ?? 0,
-    energy_total_kwh: message.energyTotalKwh ?? null,
-    voltage_v: message.voltageV ?? null,
-    current_a: message.currentA ?? null,
-    frequency_hz: message.frequencyHz ?? null,
-    temperature_c: message.temperatureC ?? null,
-    read_at: readAt,
-  },
-  select: {
-    id_consumption: true,
-    id_device: true,
-    id_home: true,
-    power_w: true,
-    energy_delta_kwh: true,
-    energy_total_kwh: true,
-    voltage_v: true,
-    current_a: true,
-    frequency_hz: true,
-    temperature_c: true,
-    read_at: true,
-  },
-});
+            data: {
+              id_device: device.id_device,
+              id_home: device.id_home,
+              power_w: powerW,
+              energy_delta_kwh: energyDeltaKwh,
+              energy_total_kwh: message.energyTotalKwh ?? null,
+              voltage_v: message.voltageV ?? null,
+              current_a: message.currentA ?? null,
+              frequency_hz: message.frequencyHz ?? null,
+              temperature_c: message.temperatureC ?? null,
+              read_at: readAt,
+            },
+            select: {
+              id_consumption: true,
+              id_device: true,
+              id_home: true,
+              power_w: true,
+              energy_delta_kwh: true,
+              energy_total_kwh: true,
+              voltage_v: true,
+              current_a: true,
+              frequency_hz: true,
+              temperature_c: true,
+              read_at: true,
+            },
+          });
 
-consumptionRecipients = await this.findHomeRealtimeRecipients(
-  tx,
-  device.id_home,
-);
+          consumptionRecipients = await this.findHomeRealtimeRecipients(
+            tx,
+            device.id_home,
+          );
 
-consumptionEvent = {
-  id: createdConsumption.id_consumption,
-  homeId: createdConsumption.id_home,
-  deviceId: createdConsumption.id_device,
-  deviceName: device.name,
-  manufacturerDeviceId: device.manufacturer_device_id,
-  powerW: Number(createdConsumption.power_w),
-  energyDeltaKwh: Number(createdConsumption.energy_delta_kwh),
-  energyTotalKwh:
-    createdConsumption.energy_total_kwh === null
-      ? null
-      : Number(createdConsumption.energy_total_kwh),
-  voltageV:
-    createdConsumption.voltage_v === null
-      ? null
-      : Number(createdConsumption.voltage_v),
-  currentA:
-    createdConsumption.current_a === null
-      ? null
-      : Number(createdConsumption.current_a),
-  frequencyHz:
-    createdConsumption.frequency_hz === null
-      ? null
-      : Number(createdConsumption.frequency_hz),
-  temperatureC:
-    createdConsumption.temperature_c === null
-      ? null
-      : Number(createdConsumption.temperature_c),
-  readAt: createdConsumption.read_at,
-};
+          consumptionEvent = {
+            id: createdConsumption.id_consumption,
+            homeId: createdConsumption.id_home,
+            deviceId: createdConsumption.id_device,
+            deviceName: device.name,
+            manufacturerDeviceId: device.manufacturer_device_id,
+            powerW: Number(createdConsumption.power_w),
+            energyDeltaKwh: Number(
+              createdConsumption.energy_delta_kwh,
+            ),
+            energyTotalKwh:
+              createdConsumption.energy_total_kwh === null
+                ? null
+                : Number(createdConsumption.energy_total_kwh),
+            voltageV:
+              createdConsumption.voltage_v === null
+                ? null
+                : Number(createdConsumption.voltage_v),
+            currentA:
+              createdConsumption.current_a === null
+                ? null
+                : Number(createdConsumption.current_a),
+            frequencyHz:
+              createdConsumption.frequency_hz === null
+                ? null
+                : Number(createdConsumption.frequency_hz),
+            temperatureC:
+              createdConsumption.temperature_c === null
+                ? null
+                : Number(createdConsumption.temperature_c),
+            readAt: createdConsumption.read_at,
+          };
 
           await this.refreshDailyDeviceMetric(
             tx,
@@ -383,9 +434,7 @@ consumptionEvent = {
           currentPowerW:
             transactionResult.updatedDevice.current_power_w === null
               ? null
-              : Number(
-                  transactionResult.updatedDevice.current_power_w,
-                ),
+              : Number(transactionResult.updatedDevice.current_power_w),
           updatedAt: transactionResult.updatedDevice.updated_at,
         },
       );
@@ -433,151 +482,303 @@ consumptionEvent = {
     );
   }
 
-  private extractManufacturerDeviceId(
-    topic: string,
-  ): string | null {
+  private extractManufacturerDeviceId(topic: string): string | null {
     const parts = topic.split('/');
 
     // smarthome/devices/{manufacturerDeviceId}/status
-    if (parts.length !== 4) {
-      return null;
-    }
-
     if (
-      parts[0] !== 'smarthome' ||
-      parts[1] !== 'devices'
+      parts.length === 4 &&
+      parts[0] === 'smarthome' &&
+      parts[1] === 'devices' &&
+      parts[3] === 'status'
     ) {
-      return null;
+      return parts[2]?.trim() || null;
     }
 
-    if (parts[3] !== 'status') {
-      return null;
+    // {shellyId}/status/switch:0
+    if (
+      parts.length === 3 &&
+      parts[1] === 'status' &&
+      parts[2] === 'switch:0'
+    ) {
+      return parts[0]?.trim() || null;
     }
 
-    return parts[2]?.trim() || null;
+    // {shellyId}/events/rpc
+    if (
+      parts.length === 3 &&
+      parts[1] === 'events' &&
+      parts[2] === 'rpc'
+    ) {
+      return parts[0]?.trim() || null;
+    }
+
+    return null;
   }
 
   private parsePayload(
+    topic: string,
     payload: Buffer,
   ): DeviceStatusMessage | null {
     try {
       const rawPayload = payload.toString('utf8');
       const parsed = JSON.parse(rawPayload) as unknown;
 
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed)
-      ) {
+      if (!this.isObjectRecord(parsed)) {
         return null;
       }
 
-      const message = parsed as DeviceStatusMessage;
+      const smartHomeMessage = this.parseSmartHomePayload(parsed);
 
-      const hasAtLeastOneSupportedField =
-        message.connectivityStatus !== undefined ||
-        message.isOn !== undefined ||
-        message.currentPowerW !== undefined ||
-        message.energyDeltaKwh !== undefined ||
-        message.energyTotalKwh !== undefined ||
-        message.voltageV !== undefined ||
-        message.currentA !== undefined ||
-        message.frequencyHz !== undefined ||
-        message.temperatureC !== undefined;
+      if (smartHomeMessage) {
+        return smartHomeMessage;
+      }
 
-      if (!hasAtLeastOneSupportedField) {
+      const shellySwitchStatus = this.extractShellySwitchStatus(
+        topic,
+        parsed,
+      );
+
+      if (!shellySwitchStatus) {
         return null;
       }
 
-      if (
-        message.connectivityStatus !== undefined &&
-        !['ONLINE', 'OFFLINE'].includes(
-          message.connectivityStatus,
-        )
-      ) {
-        return null;
-      }
-
-      if (
-        message.isOn !== undefined &&
-        typeof message.isOn !== 'boolean'
-      ) {
-        return null;
-      }
-
-      if (!this.isValidOptionalNumber(message.currentPowerW)) {
-        return null;
-      }
-
-      if (
-        !this.isValidOptionalNumber(
-          message.energyDeltaKwh,
-        )
-      ) {
-        return null;
-      }
-
-      if (
-        !this.isValidOptionalNumber(
-          message.energyTotalKwh,
-        )
-      ) {
-        return null;
-      }
-
-      if (!this.isValidOptionalNumber(message.voltageV)) {
-        return null;
-      }
-
-      if (!this.isValidOptionalNumber(message.currentA)) {
-        return null;
-      }
-
-      if (
-        !this.isValidOptionalNumber(
-          message.frequencyHz,
-        )
-      ) {
-        return null;
-      }
-
-      if (
-        !this.isValidOptionalNumber(
-          message.temperatureC,
-        )
-      ) {
-        return null;
-      }
-
-      if (message.readAt !== undefined) {
-        if (typeof message.readAt !== 'string') {
-          return null;
-        }
-
-        if (
-          Number.isNaN(
-            new Date(message.readAt).getTime(),
-          )
-        ) {
-          return null;
-        }
-      }
-
-      return message;
+      return this.parseShellySwitchStatus(shellySwitchStatus);
     } catch {
       return null;
     }
   }
 
-  private isValidOptionalNumber(
-    value: unknown,
-  ): boolean {
+  private parseSmartHomePayload(
+    parsed: Record<string, unknown>,
+  ): DeviceStatusMessage | null {
+    const message = parsed as DeviceStatusMessage;
+
+    const hasAtLeastOneSupportedField =
+      message.connectivityStatus !== undefined ||
+      message.isOn !== undefined ||
+      message.currentPowerW !== undefined ||
+      message.energyDeltaKwh !== undefined ||
+      message.energyTotalKwh !== undefined ||
+      message.voltageV !== undefined ||
+      message.currentA !== undefined ||
+      message.frequencyHz !== undefined ||
+      message.temperatureC !== undefined;
+
+    if (!hasAtLeastOneSupportedField) {
+      return null;
+    }
+
+    if (
+      message.connectivityStatus !== undefined &&
+      !['ONLINE', 'OFFLINE'].includes(message.connectivityStatus)
+    ) {
+      return null;
+    }
+
+    if (
+      message.isOn !== undefined &&
+      typeof message.isOn !== 'boolean'
+    ) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.currentPowerW)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.energyDeltaKwh)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.energyTotalKwh)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.voltageV)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.currentA)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.frequencyHz)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.temperatureC)) {
+      return null;
+    }
+
+    if (message.readAt !== undefined) {
+      if (typeof message.readAt !== 'string') {
+        return null;
+      }
+
+      if (Number.isNaN(new Date(message.readAt).getTime())) {
+        return null;
+      }
+    }
+
+    return message;
+  }
+
+  private extractShellySwitchStatus(
+    topic: string,
+    parsed: Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    const parts = topic.split('/');
+
+    // shelly1pmg4-xxxx/status/switch:0
+    if (
+      parts.length === 3 &&
+      parts[1] === 'status' &&
+      parts[2] === 'switch:0'
+    ) {
+      return parsed;
+    }
+
+    // shelly1pmg4-xxxx/events/rpc
+    if (
+      parts.length === 3 &&
+      parts[1] === 'events' &&
+      parts[2] === 'rpc'
+    ) {
+      const method = parsed.method;
+      const params = parsed.params;
+
+      if (
+        method !== 'NotifyStatus' &&
+        method !== 'NotifyFullStatus'
+      ) {
+        return null;
+      }
+
+      if (!this.isObjectRecord(params)) {
+        return null;
+      }
+
+      const switchStatus = params['switch:0'];
+
+      if (!this.isObjectRecord(switchStatus)) {
+        return null;
+      }
+
+      return switchStatus;
+    }
+
+    return null;
+  }
+
+  private parseShellySwitchStatus(
+    switchStatus: Record<string, unknown>,
+  ): DeviceStatusMessage | null {
+    const aenergy = switchStatus.aenergy;
+    const temperature = switchStatus.temperature;
+
+    const energyTotalWh = this.isObjectRecord(aenergy)
+      ? aenergy.total
+      : undefined;
+
+    const temperatureC = this.isObjectRecord(temperature)
+      ? temperature.tC
+      : undefined;
+
+    const message: DeviceStatusMessage = {
+      connectivityStatus: 'ONLINE',
+      isOn:
+        typeof switchStatus.output === 'boolean'
+          ? switchStatus.output
+          : undefined,
+      currentPowerW: this.toOptionalNumber(switchStatus.apower),
+      energyTotalKwh:
+        typeof energyTotalWh === 'number' &&
+        Number.isFinite(energyTotalWh)
+          ? energyTotalWh / 1000
+          : undefined,
+      voltageV: this.toOptionalNumber(switchStatus.voltage),
+      currentA: this.toOptionalNumber(switchStatus.current),
+      frequencyHz: this.toOptionalNumber(switchStatus.freq),
+      temperatureC: this.toOptionalNumber(temperatureC),
+      readAt: new Date().toISOString(),
+    };
+
+    const hasShellyData =
+      message.isOn !== undefined ||
+      message.currentPowerW !== undefined ||
+      message.energyTotalKwh !== undefined ||
+      message.voltageV !== undefined ||
+      message.currentA !== undefined ||
+      message.frequencyHz !== undefined ||
+      message.temperatureC !== undefined;
+
+    if (!hasShellyData) {
+      return null;
+    }
+
+    return message;
+  }
+
+  private isShellyTopic(topic: string): boolean {
+    const parts = topic.split('/');
+
+    return (
+      parts.length === 3 &&
+      ((parts[1] === 'status' && parts[2] === 'switch:0') ||
+        (parts[1] === 'events' && parts[2] === 'rpc'))
+    );
+  }
+
+  private isObjectRecord(value: unknown): value is Record<string, unknown> {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value)
+    );
+  }
+
+  private toOptionalNumber(value: unknown): number | null | undefined {
+    if (value === null) {
+      return null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    return undefined;
+  }
+
+  private isValidOptionalNumber(value: unknown): boolean {
     return (
       value === undefined ||
       value === null ||
-      (typeof value === 'number' &&
-        Number.isFinite(value))
+      (typeof value === 'number' && Number.isFinite(value))
     );
+  }
+
+  private calculateEnergyDeltaKwh(
+    currentTotalKwh: number | null | undefined,
+    previousTotalKwh: Prisma.Decimal | number | null | undefined,
+  ): number {
+    if (
+      currentTotalKwh === null ||
+      currentTotalKwh === undefined ||
+      previousTotalKwh === null ||
+      previousTotalKwh === undefined
+    ) {
+      return 0;
+    }
+
+    const previous = Number(previousTotalKwh);
+    const delta = currentTotalKwh - previous;
+
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return 0;
+    }
+
+    return delta;
   }
 
   private getUtcDayStart(value: Date): Date {
@@ -590,15 +791,10 @@ consumptionEvent = {
     );
   }
 
-  private addDays(
-    value: Date,
-    days: number,
-  ): Date {
+  private addDays(value: Date, days: number): Date {
     const result = new Date(value);
 
-    result.setUTCDate(
-      result.getUTCDate() + days,
-    );
+    result.setUTCDate(result.getUTCDate() + days);
 
     return result;
   }
@@ -610,51 +806,48 @@ consumptionEvent = {
     startAt: Date,
     endAt: Date,
   ): Promise<void> {
-    const aggregate =
-      await tx.consumption.aggregate({
-        where: {
-          id_device: deviceId,
-          id_home: homeId,
-          read_at: {
-            gte: startAt,
-            lt: endAt,
-          },
+    const aggregate = await tx.consumption.aggregate({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        read_at: {
+          gte: startAt,
+          lt: endAt,
         },
-        _sum: {
-          energy_delta_kwh: true,
-        },
-        _avg: {
-          power_w: true,
-        },
-        _max: {
-          power_w: true,
-        },
-        _min: {
-          power_w: true,
-        },
-      });
+      },
+      _sum: {
+        energy_delta_kwh: true,
+      },
+      _avg: {
+        power_w: true,
+      },
+      _max: {
+        power_w: true,
+      },
+      _min: {
+        power_w: true,
+      },
+    });
 
     const metricData = {
       end_at: endAt,
-      kwh_total:
-        aggregate._sum.energy_delta_kwh ?? 0,
+      kwh_total: aggregate._sum.energy_delta_kwh ?? 0,
       average_watts: aggregate._avg.power_w,
       max_watts: aggregate._max.power_w,
       min_watts: aggregate._min.power_w,
       updated_at: new Date(),
     };
 
-    const existingMetric =
-      await tx.consumption_metric.findFirst({
-        where: {
-          id_device: deviceId,
-          period: 'dia',
-          start_at: startAt,
-        },
-        select: {
-          id_consumption_metric: true,
-        },
-      });
+    const existingMetric = await tx.consumption_metric.findFirst({
+      where: {
+        id_device: deviceId,
+        period: 'dia',
+        start_at: startAt,
+      },
+      select: {
+        id_consumption_metric: true,
+      },
+    });
 
     if (existingMetric) {
       await tx.consumption_metric.update({
@@ -710,22 +903,21 @@ consumptionEvent = {
 
     const historyStartAt = this.addDays(startAt, -7);
 
-    const historicalMetrics =
-      await tx.consumption_metric.findMany({
-        where: {
-          id_device: deviceId,
-          id_home: homeId,
-          period: 'dia',
-          start_at: {
-            gte: historyStartAt,
-            lt: startAt,
-          },
+    const historicalMetrics = await tx.consumption_metric.findMany({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        period: 'dia',
+        start_at: {
+          gte: historyStartAt,
+          lt: startAt,
         },
-        select: {
-          kwh_total: true,
-          start_at: true,
-        },
-      });
+      },
+      select: {
+        kwh_total: true,
+        start_at: true,
+      },
+    });
 
     if (historicalMetrics.length === 0) {
       return [];
@@ -742,8 +934,7 @@ consumptionEvent = {
       return [];
     }
 
-    const expectedMaxKwh =
-      historicalAverageKwh * 1.5;
+    const expectedMaxKwh = historicalAverageKwh * 1.5;
 
     if (currentDailyKwh <= expectedMaxKwh) {
       return [];
@@ -794,11 +985,7 @@ consumptionEvent = {
       },
     });
 
-    const recipients =
-      await this.findHomeRealtimeRecipients(
-        tx,
-        homeId,
-      );
+    const recipients = await this.findHomeRealtimeRecipients(tx, homeId);
 
     if (recipients.length === 0) {
       return [];
@@ -807,39 +994,38 @@ consumptionEvent = {
     const notifications: CreatedNotification[] = [];
 
     for (const recipient of recipients) {
-      const notification =
-        await tx.notification.create({
-          data: {
-            id_user: recipient.id_user,
-            id_alert: createdAlert.id_alert,
-            id_home: homeId,
-            id_device: deviceId,
-            type: 'ALERT',
-            title: 'Consumo anómalo detectado',
-            message:
-              `El dispositivo está consumiendo más energía de lo habitual. ` +
-              `Consumo actual: ${currentDailyKwh.toFixed(6)} kWh. ` +
-              `Promedio histórico: ${historicalAverageKwh.toFixed(6)} kWh.`,
-            status: 'UNREAD',
-            priority: 'alta',
-            channel: 'IN_APP',
-          },
-          select: {
-            id_notification: true,
-            id_user: true,
-            id_alert: true,
-            id_home: true,
-            id_device: true,
-            type: true,
-            title: true,
-            message: true,
-            status: true,
-            priority: true,
-            channel: true,
-            created_at: true,
-            updated_at: true,
-          },
-        });
+      const notification = await tx.notification.create({
+        data: {
+          id_user: recipient.id_user,
+          id_alert: createdAlert.id_alert,
+          id_home: homeId,
+          id_device: deviceId,
+          type: 'ALERT',
+          title: 'Consumo anómalo detectado',
+          message:
+            `El dispositivo está consumiendo más energía de lo habitual. ` +
+            `Consumo actual: ${currentDailyKwh.toFixed(6)} kWh. ` +
+            `Promedio histórico: ${historicalAverageKwh.toFixed(6)} kWh.`,
+          status: 'UNREAD',
+          priority: 'alta',
+          channel: 'IN_APP',
+        },
+        select: {
+          id_notification: true,
+          id_user: true,
+          id_alert: true,
+          id_home: true,
+          id_device: true,
+          type: true,
+          title: true,
+          message: true,
+          status: true,
+          priority: true,
+          channel: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
 
       notifications.push(notification);
     }
