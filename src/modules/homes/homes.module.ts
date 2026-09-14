@@ -17,13 +17,6 @@ import { UpdateHomeUseCase } from './application/use-cases/update-home.use-case'
 import { DeactivateHomeUseCase } from './application/use-cases/deactivate-home.use-case';
 import { ReactivateHomeUseCase } from './application/use-cases/reactivate-home.use-case';
 
-import { CreateZoneUseCase } from './application/use-cases/create-zone.use-case';
-import { ListZonesUseCase } from './application/use-cases/list-zones.use-case';
-import { ZoneRepository } from './domain/repositories/zone.repository';
-import { PrismaZoneRepository } from './infrastructure/persistence/prisma-zone.repository';
-import { DeactivateZoneUseCase } from './application/use-cases/deactivate-zone.use-case';
-import { UpdateZoneUseCase } from './application/use-cases/update-zone.use-case';
-import { GetZoneByIdUseCase } from './application/use-cases/get-zone-by-id.use-case';
 import { HomeMemberRepository } from './domain/repositories/home-member.repository';
 import { PrismaHomeMemberRepository } from './infrastructure/persistence/prisma-home-member.repository';
 import { ListHomeMembersUseCase } from './application/use-cases/list-home-members.use-case';
@@ -39,15 +32,9 @@ import { RevokeHomeMemberUseCase } from './application/use-cases/revoke-home-mem
 import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home-member-role.use-case';
 
 @Module({
-  imports: [
-    AuthModule,
-    UsersModule,
-  ],
+  imports: [AuthModule, UsersModule],
 
-  controllers: [
-    HomesController,
-    InvitationsController,
-  ],
+  controllers: [HomesController, InvitationsController],
 
   providers: [
     ListHomesUseCase,
@@ -58,11 +45,6 @@ import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home
     UpdateHomeUseCase,
     DeactivateHomeUseCase,
     ReactivateHomeUseCase,
-    ListZonesUseCase,
-    CreateZoneUseCase,
-    GetZoneByIdUseCase,
-    UpdateZoneUseCase,
-    DeactivateZoneUseCase,
     ListHomeMembersUseCase,
     CreateHomeInvitationUseCase,
     ListMyInvitationsUseCase,
@@ -72,14 +54,9 @@ import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home
     UpdateHomeMemberRoleUseCase,
     RevokeHomeMemberUseCase,
 
-{
-  provide: HomeMemberRepository,
-  useClass: PrismaHomeMemberRepository,
-},
-
     {
-      provide: ZoneRepository,
-      useClass: PrismaZoneRepository,
+      provide: HomeMemberRepository,
+      useClass: PrismaHomeMemberRepository,
     },
 
     {

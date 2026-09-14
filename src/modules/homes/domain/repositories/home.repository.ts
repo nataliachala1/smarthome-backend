@@ -3,14 +3,12 @@ import { Home } from '../entities/home.entity';
 export interface CreateHomeData {
   userId: string;
   name: string;
-  stratum: number;
 }
 
 export interface UpdateHomeData {
   userId: string;
   homeId: string;
   name?: string;
-  stratum?: number;
 }
 
 export abstract class HomeRepository {

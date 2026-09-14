@@ -11,7 +11,6 @@ export interface GetHomeByIdOutput {
   id: string;
   createdBy: string;
   name: string;
-  stratum: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -39,7 +38,6 @@ export class GetHomeByIdUseCase {
       id: home.id,
       createdBy: home.createdBy,
       name: home.name,
-      stratum: home.stratum,
       status: home.status,
       createdAt: home.createdAt,
       updatedAt: home.updatedAt,

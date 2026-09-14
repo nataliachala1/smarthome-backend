@@ -124,9 +124,6 @@ async update(
             ...(data.name !== undefined && {
               name: data.name,
             }),
-            ...(data.stratum !== undefined && {
-              stratum: data.stratum,
-            }),
           },
         });
 
@@ -161,7 +158,6 @@ async update(
           data: {
             created_by: data.userId,
             name: data.name,
-            stratum: data.stratum,
             status: 'ACTIVE',
           },
         });
