@@ -19,7 +19,9 @@ export abstract class RecoveryTokenRepository {
   ): Promise<RecoveryToken | null>;
 
   abstract invalidateUnusedByUserAndType(
-  userId: string,
-  type: RecoveryTokenType,
+    userId: string,
+    type: RecoveryTokenType,
   ): Promise<void>;
+
+  abstract markAsUsed(id: string): Promise<void>;
 }

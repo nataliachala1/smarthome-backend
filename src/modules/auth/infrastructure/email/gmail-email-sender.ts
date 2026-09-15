@@ -5,8 +5,8 @@ import nodemailer, { Transporter } from 'nodemailer';
 import {
   EmailSender,
   SendAccountActivationEmailInput,
+  SendPasswordResetEmailInput,
 } from '../../domain/ports/email-sender.port';
-
 @Injectable()
 export class GmailEmailSender implements EmailSender {
   private readonly transporter: Transporter;
@@ -76,4 +76,49 @@ export class GmailEmailSender implements EmailSender {
       `,
     });
   }
+  async sendPasswordResetEmail(
+  input: SendPasswordResetEmailInput,
+): Promise<void> {
+  await this.transporter.sendMail({
+    from: this.from,
+    to: input.to,
+    subject: 'Restablece tu contraseña de Smart Home',
+    text: [
+      `Hola ${input.name},`,
+      '',
+      'Recibimos una solicitud para restablecer tu contraseña.',
+      'Utiliza el siguiente enlace:',
+      '',
+      input.resetUrl,
+      '',
+      'Este enlace tiene una vigencia limitada.',
+      '',
+      'Si no solicitaste este cambio, ignora este mensaje.',
+    ].join('\n'),
+    html: `
+      <h2>Restablece tu contraseña de Smart Home</h2>
+
+      <p>Hola ${input.name},</p>
+
+      <p>
+        Recibimos una solicitud para restablecer tu contraseña.
+        Utiliza el siguiente enlace:
+      </p>
+
+      <p>
+        <a href="${input.resetUrl}">
+          Restablecer contraseña
+        </a>
+      </p>
+
+      <p>
+        Este enlace tiene una vigencia limitada.
+      </p>
+
+      <p>
+        Si no solicitaste este cambio, ignora este mensaje.
+      </p>
+    `,
+  });
+}
 }

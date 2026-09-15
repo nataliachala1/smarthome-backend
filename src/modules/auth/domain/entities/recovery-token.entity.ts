@@ -11,41 +11,44 @@ export interface RecoveryTokenProps {
 }
 
 export class RecoveryToken {
-  constructor(private readonly props: RecoveryTokenProps) {}
+  readonly id: string;
+  readonly userId: string;
+  readonly tokenHash: string;
+  readonly type: RecoveryTokenType;
+  readonly expiresAt: Date;
+  readonly usedAt: Date | null;
+  readonly createdAt: Date;
 
-  get id(): string {
-    return this.props.id;
+  constructor(props: RecoveryTokenProps) {
+    this.id = props.id;
+    this.userId = props.userId;
+    this.tokenHash = props.tokenHash;
+    this.type = props.type;
+    this.expiresAt = props.expiresAt;
+    this.usedAt = props.usedAt;
+    this.createdAt = props.createdAt;
   }
+}
 
-  get userId(): string {
-    return this.props.userId;
-  }
+export interface CreateRecoveryTokenData {
+  userId: string;
+  tokenHash: string;
+  type: RecoveryTokenType;
+  expiresAt: Date;
+}
 
-  get tokenHash(): string {
-    return this.props.tokenHash;
-  }
+export abstract class RecoveryTokenRepository {
+  abstract create(data: CreateRecoveryTokenData): Promise<RecoveryToken>;
 
-  get type(): RecoveryTokenType {
-    return this.props.type;
-  }
+  abstract findValidByHashAndType(
+    tokenHash: string,
+    type: RecoveryTokenType,
+  ): Promise<RecoveryToken | null>;
 
-  get expiresAt(): Date {
-    return this.props.expiresAt;
-  }
+  abstract invalidateUnusedByUserAndType(
+    userId: string,
+    type: RecoveryTokenType,
+  ): Promise<void>;
 
-  get usedAt(): Date | null {
-    return this.props.usedAt;
-  }
-
-  get createdAt(): Date {
-    return this.props.createdAt;
-  }
-
-  isExpired(now = new Date()): boolean {
-    return this.props.expiresAt <= now;
-  }
-
-  isUsed(): boolean {
-    return this.props.usedAt !== null;
-  }
+  abstract markAsUsed(id: string): Promise<void>;
 }

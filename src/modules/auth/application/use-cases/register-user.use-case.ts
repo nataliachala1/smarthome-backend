@@ -14,10 +14,13 @@ import { EmailAlreadyExistsError } from '../../domain/errors/email-already-exist
 import { UserRepository } from '../../../users/domain/repositories/user.repository';
 import { UserStatus } from '../../../users/domain/entities/user-status.enum';
 
+import { PasswordsDoNotMatchError } from '../../domain/errors/passwords-do-not-match.error';
+
 export interface RegisterUserInput {
   name: string;
   email: string;
   password: string;
+  passwordConfirmation: string;
 }
 
 export interface RegisterUserOutput {
@@ -42,13 +45,16 @@ export class RegisterUserUseCase {
   async execute(
     input: RegisterUserInput,
   ): Promise<RegisterUserOutput> {
+    if (input.password !== input.passwordConfirmation) {
+  throw new PasswordsDoNotMatchError();
+  }
     const normalizedEmail = input.email
       .trim()
       .toLowerCase();
 
     const existingUser =
       await this.userRepository.findByEmail(normalizedEmail);
-
+    
     if (existingUser) {
       throw new EmailAlreadyExistsError();
     }

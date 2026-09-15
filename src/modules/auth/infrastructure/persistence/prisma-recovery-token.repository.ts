@@ -91,4 +91,14 @@ export class PrismaRecoveryTokenRepository
       },
     });
   }
+  async markAsUsed(id: string): Promise<void> {
+  await this.prisma.recovery_token.update({
+    where: {
+      id_recovery_token: id,
+    },
+    data: {
+      used_at: new Date(),
+    },
+  });
+}
 }

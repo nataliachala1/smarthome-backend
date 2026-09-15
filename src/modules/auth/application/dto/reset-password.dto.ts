@@ -1,22 +1,9 @@
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsString,
-  MaxLength,
-  MinLength,
-  Matches,
-} from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 
-export class RegisterUserDto {
+export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
-  name!: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  @MaxLength(255)
-  email!: string;
+  token!: string;
 
   @IsString()
   @MinLength(8)
