@@ -31,6 +31,9 @@ import { JwtAuthGuard } from './presentation/http/guards/jwt-auth.guard';
 import { RolesGuard } from './presentation/http/guards/roles.guard';
 import { UsersModule } from '../users/users.module';
 
+import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.use-case';
+import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
+
 @Module({
   imports: [
     ConfigModule,
@@ -54,6 +57,8 @@ import { UsersModule } from '../users/users.module';
     ActivateAccountUseCase,
     ResendActivationUseCase,
     LoginUserUseCase,
+    ForgotPasswordUseCase,
+    ResetPasswordUseCase,
 
     RolesGuard,
 

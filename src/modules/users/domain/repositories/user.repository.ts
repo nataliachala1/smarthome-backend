@@ -28,4 +28,9 @@ export abstract class UserRepository {
   abstract registerSuccessfulLogin(
     id: string,
   ): Promise<void>;
+
+  abstract updatePassword(
+  id: string,
+  passwordHash: string,
+  ): Promise<void>;
 }

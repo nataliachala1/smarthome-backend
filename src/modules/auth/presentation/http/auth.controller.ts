@@ -3,7 +3,11 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
+  Get,
   Post,
+  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 
 import { RegisterUserDto } from '../../application/dto/register-user.dto';
@@ -22,11 +26,6 @@ import {
 import { EmailAlreadyExistsError } from '../../domain/errors/email-already-exists.error';
 import { InvalidActivationTokenError } from '../../domain/errors/invalid-activation-token.error';
 
-import {
-  UnauthorizedException,
-  ForbiddenException,
-} from '@nestjs/common';
-
 import { LoginDto } from '../../application/dto/login.dto';
 
 import {
@@ -44,18 +43,26 @@ import {
   ResendActivationUseCase,
 } from '../../application/use-cases/resend-activation.use-case';
 
+import { ForgotPasswordDto } from '../../application/dto/forgot-password.dto';
+import { ResetPasswordDto } from '../../application/dto/reset-password.dto';
+
 import {
-  Get,
-  UseGuards,
-} from '@nestjs/common';
+  ForgotPasswordOutput,
+  ForgotPasswordUseCase,
+} from '../../application/use-cases/forgot-password.use-case';
+
+import {
+  ResetPasswordOutput,
+  ResetPasswordUseCase,
+} from '../../application/use-cases/reset-password.use-case';
+
+import { PasswordsDoNotMatchError } from '../../domain/errors/passwords-do-not-match.error';
+import { InvalidPasswordResetTokenError } from '../../domain/errors/invalid-password-reset-token.error';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../domain/types/authenticated-user.type';
-
-import { Roles } from './decorators/roles.decorator';
-import { RolesGuard } from './guards/roles.guard';
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -64,23 +71,25 @@ export class AuthController {
     private readonly activateAccountUseCase: ActivateAccountUseCase,
     private readonly loginUserUseCase: LoginUserUseCase,
     private readonly resendActivationUseCase: ResendActivationUseCase,
+    private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
+    private readonly resetPasswordUseCase: ResetPasswordUseCase,
   ) {}
 
-    @Get('me')
+  @Get('me')
   @UseGuards(JwtAuthGuard)
-  me(
-    @CurrentUser() user: AuthenticatedUser,
-  ): AuthenticatedUser {
+  me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
     return user;
   }
 
   @Post('register')
-  async register(
-    @Body() dto: RegisterUserDto,
-  ): Promise<RegisterUserOutput> {
+  async register(@Body() dto: RegisterUserDto): Promise<RegisterUserOutput> {
     try {
       return await this.registerUserUseCase.execute(dto);
     } catch (error) {
+      if (error instanceof PasswordsDoNotMatchError) {
+        throw new BadRequestException(error.message);
+      }
+
       if (error instanceof EmailAlreadyExistsError) {
         throw new ConflictException(error.message);
       }
@@ -111,10 +120,34 @@ export class AuthController {
     return this.resendActivationUseCase.execute(dto);
   }
 
+  @Post('forgot-password')
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<ForgotPasswordOutput> {
+    return this.forgotPasswordUseCase.execute(dto);
+  }
+
+  @Post('reset-password')
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<ResetPasswordOutput> {
+    try {
+      return await this.resetPasswordUseCase.execute(dto);
+    } catch (error) {
+      if (error instanceof PasswordsDoNotMatchError) {
+        throw new BadRequestException(error.message);
+      }
+
+      if (error instanceof InvalidPasswordResetTokenError) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw error;
+    }
+  }
+
   @Post('login')
-  async login(
-    @Body() dto: LoginDto,
-  ): Promise<LoginUserOutput> {
+  async login(@Body() dto: LoginDto): Promise<LoginUserOutput> {
     try {
       return await this.loginUserUseCase.execute(dto);
     } catch (error) {
@@ -130,7 +163,7 @@ export class AuthController {
         throw new ForbiddenException(error.message);
       }
 
-    throw error;
-  }
+      throw error;
+    }
   }
 }
