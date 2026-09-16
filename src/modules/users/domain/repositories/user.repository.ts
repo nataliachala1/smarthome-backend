@@ -7,6 +7,11 @@ export interface CreateUserData {
   passwordHash: string;
 }
 
+export interface UpdateUserProfileData {
+  name?: string;
+  email?: string;
+}
+
 export abstract class UserRepository {
   abstract findByEmail(email: string): Promise<User | null>;
 
@@ -30,7 +35,12 @@ export abstract class UserRepository {
   ): Promise<void>;
 
   abstract updatePassword(
-  id: string,
-  passwordHash: string,
+    id: string,
+    passwordHash: string,
   ): Promise<void>;
+
+  abstract updateProfile(
+    id: string,
+    data: UpdateUserProfileData,
+  ): Promise<User>;
 }

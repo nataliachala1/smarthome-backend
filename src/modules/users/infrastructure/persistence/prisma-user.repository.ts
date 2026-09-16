@@ -4,6 +4,7 @@ import { PrismaService } from '../../../../infrastructure/database/prisma/prisma
 
 import {
   CreateUserData,
+  UpdateUserProfileData,
   UserRepository,
 } from '../../domain/repositories/user.repository';
 
@@ -210,8 +211,8 @@ export class PrismaUserRepository implements UserRepository {
     });
   }
   async updatePassword(
-  id: string,
-  passwordHash: string,
+    id: string,
+    passwordHash: string,
   ): Promise<void> {
     await this.prisma.user.update({
       where: {
@@ -225,5 +226,23 @@ export class PrismaUserRepository implements UserRepository {
         updated_at: new Date(),
       },
     });
+  }
+
+  async updateProfile(
+    id: string,
+    data: UpdateUserProfileData,
+  ): Promise<User> {
+    const normalizedEmail = data.email?.trim().toLowerCase();
+    const raw = await this.prisma.user.update({
+      where: { id_user: id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+        ...(normalizedEmail !== undefined ? { email: normalizedEmail } : {}),
+        updated_at: new Date(),
+      },
+      include: { role: true },
+    });
+
+    return PrismaUserMapper.toDomain(raw);
   }
 }

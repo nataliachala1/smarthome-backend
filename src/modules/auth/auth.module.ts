@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -34,10 +34,12 @@ import { UsersModule } from '../users/users.module';
 import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
 
+import { ChangePasswordUseCase } from './application/use-cases/change-password.use-case';
+
 @Module({
   imports: [
     ConfigModule,
-    UsersModule,
+    forwardRef(() => UsersModule),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -59,6 +61,7 @@ import { ResetPasswordUseCase } from './application/use-cases/reset-password.use
     LoginUserUseCase,
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
+    ChangePasswordUseCase,
 
     RolesGuard,
 

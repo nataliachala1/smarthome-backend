@@ -24,10 +24,19 @@ async function bootstrap() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Smart Home API')
-    .setVersion('1')
-    .addBearerAuth()
-    .build();
+  .setTitle('Smart Home API')
+  .setVersion('1')
+  .addBearerAuth(
+    {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'Authorization',
+      in: 'header',
+    },
+    'access-token',
+  )
+  .build();
 
   SwaggerModule.setup(
     'api/docs',

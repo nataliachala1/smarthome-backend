@@ -14,6 +14,7 @@ import { PrismaHomeMapper } from './prisma-home.mapper';
 
 import { isPostgresAccessDeniedError } from '../../../../infrastructure/database/prisma/prisma-error.util';
 import { HomeAccessDeniedError } from '../../domain/errors/home-access-denied.error';
+import { HomeHasDevicesError } from '../../domain/errors/home-has-devices.error';
 
 @Injectable()
 export class PrismaHomeRepository
@@ -176,4 +177,73 @@ async update(
       },
     );
   }
+  async deleteIfNoDevices(
+  userId: string,
+  homeId: string,
+): Promise<void> {
+  try {
+    await this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const ownerMembership = await tx.home_member.findFirst({
+          where: {
+            id_home: homeId,
+            id_user: userId,
+            role: 'OWNER',
+            status: 'ACTIVE',
+          },
+          select: {
+            id_home_member: true,
+          },
+        });
+
+        if (!ownerMembership) {
+          throw new HomeAccessDeniedError();
+        }
+
+        const devicesCount = await tx.device.count({
+          where: {
+            id_home: homeId,
+          },
+        });
+
+        if (devicesCount > 0) {
+          throw new HomeHasDevicesError();
+        }
+
+        await tx.home.update({
+          where: {
+            id_home: homeId,
+          },
+          data: {
+            deleted_at: new Date(),
+            status: 'DEACTIVATED',
+          },
+        });
+      },
+    );
+  } catch (error: unknown) {
+    if (
+      error instanceof HomeHasDevicesError ||
+      error instanceof HomeAccessDeniedError
+    ) {
+      throw error;
+    }
+
+    if (isPostgresAccessDeniedError(error)) {
+      throw new HomeAccessDeniedError();
+    }
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2025'
+    ) {
+      throw new HomeAccessDeniedError();
+    }
+
+    throw error;
+  }
+}
 }

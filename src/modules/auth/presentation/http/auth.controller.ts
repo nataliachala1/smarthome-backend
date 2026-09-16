@@ -6,9 +6,12 @@ import {
   ForbiddenException,
   Get,
   Post,
+  Patch,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 import { RegisterUserDto } from '../../application/dto/register-user.dto';
 import { ActivateAccountDto } from '../../application/dto/activate-account.dto';
@@ -64,6 +67,15 @@ import { CurrentUser } from './decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../domain/types/authenticated-user.type';
 
+import { ChangePasswordDto } from '../../application/dto/change-password.dto';
+
+import {
+  ChangePasswordOutput,
+  ChangePasswordUseCase,
+} from '../../application/use-cases/change-password.use-case';
+
+import { InvalidCurrentPasswordError } from '../../domain/errors/invalid-current-password.error';
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(
@@ -73,11 +85,13 @@ export class AuthController {
     private readonly resendActivationUseCase: ResendActivationUseCase,
     private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
+    private readonly changePasswordUseCase: ChangePasswordUseCase,
   ) {}
 
   @Get('me')
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
-  me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
+  async me(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 
@@ -139,6 +153,33 @@ export class AuthController {
       }
 
       if (error instanceof InvalidPasswordResetTokenError) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw error;
+    }
+  }
+
+  @Patch('change-password')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<ChangePasswordOutput> {
+    try {
+      return await this.changePasswordUseCase.execute({
+        userId: user.userId,
+        currentPassword: dto.currentPassword,
+        newPassword: dto.newPassword,
+        newPasswordConfirmation: dto.newPasswordConfirmation,
+      });
+    } catch (error) {
+      if (error instanceof PasswordsDoNotMatchError) {
+        throw new BadRequestException(error.message);
+      }
+
+      if (error instanceof InvalidCurrentPasswordError) {
         throw new BadRequestException(error.message);
       }
 

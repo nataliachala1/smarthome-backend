@@ -35,7 +35,12 @@ export abstract class HomeRepository {
   ): Promise<Home>;
 
   abstract reactivate(
-    userId: string,
-    homeId: string,
+  userId: string,
+  homeId: string,
   ): Promise<Home>;
+
+  abstract deleteIfNoDevices(
+  userId: string,
+  homeId: string,
+  ): Promise<void>;
 }
