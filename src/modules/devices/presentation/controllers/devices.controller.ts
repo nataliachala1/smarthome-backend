@@ -41,7 +41,7 @@ import { ControlDeviceUseCase } from '../../application/use-cases/control-device
 
 @Controller('api/v1/homes/:homeId/devices')
 @ApiTags('devices')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @ApiBadRequestResponse({
   description: 'UUID, datos o tipo de dispositivo inválidos',
 })

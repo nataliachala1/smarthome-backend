@@ -24,10 +24,19 @@ import { ControlDeviceUseCase } from './application/use-cases/control-device.use
 import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
 import { RealtimeModule } from '../realtime/realtime.module';
 
+import { ShellyController } from './presentation/controllers/shelly.controller';
+
+import { ProvisionShellyDeviceUseCase } from './application/use-cases/provision-shelly-device.use-case';
+import { IdentifyShellyDeviceUseCase } from './application/use-cases/identify-shelly-device.use-case';
+import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
+import { DiscoverShellyDevicesUseCase } from './application/use-cases/discover-shelly-devices.use-case';
+
+import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
+
 @Module({
   imports: [AuthModule, RealtimeModule],
 
-  controllers: [DeviceTypesController, DevicesController],
+  controllers: [DeviceTypesController, DevicesController, ShellyController],
 
   providers: [
     ListDeviceTypesUseCase,
@@ -38,6 +47,11 @@ import { RealtimeModule } from '../realtime/realtime.module';
     DeactivateDeviceUseCase,
     ControlDeviceUseCase,
     MqttDeviceStatusSubscriber,
+    IdentifyShellyDeviceUseCase,
+    ShellyRpcClientService,
+    ProvisionShellyDeviceUseCase,
+    DiscoverShellyDevicesUseCase,
+    ShellyDiscoveryService,
 
     {
       provide: DeviceControlPublisher,
