@@ -72,6 +72,7 @@ export class PrismaUserRepository implements UserRepository {
         locked_until: Date | null;
         last_login_at: Date | null;
         deactivated_at: Date | null;
+        session_version: number;
         created_at: Date;
         updated_at: Date;
         role_name: string;
@@ -147,6 +148,7 @@ export class PrismaUserRepository implements UserRepository {
       deactivatedAt: raw.deactivated_at,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
+      sessionVersion: raw.session_version,
     });
   }
 
@@ -228,6 +230,33 @@ export class PrismaUserRepository implements UserRepository {
     });
   }
 
+  async reactivate(
+  id: string,
+  ): Promise<void> {
+    await this.prisma.user.update({
+      where: {
+        id_user: id,
+      },
+
+      data: {
+        status:
+          UserStatus.ACTIVE,
+
+        deactivated_at:
+          null,
+
+        failed_login_attempts:
+          0,
+
+        locked_until:
+          null,
+
+        updated_at:
+          new Date(),
+      },
+    });
+  }
+
   async updateProfile(
     id: string,
     data: UpdateUserProfileData,
@@ -244,5 +273,76 @@ export class PrismaUserRepository implements UserRepository {
     });
 
     return PrismaUserMapper.toDomain(raw);
+  }
+    async deactivate(
+    id: string,
+    ): Promise<{
+    deactivatedAt: Date;
+    sessionVersion: number;
+    }> {
+    const deactivatedAt = new Date();
+
+    const updated =
+      await this.prisma.user.update({
+        where: {
+          id_user: id,
+        },
+        data: {
+          status: UserStatus.DEACTIVATED,
+          deactivated_at: deactivatedAt,
+
+          /*
+          * Revoca todos los JWT emitidos
+          * anteriormente.
+          */
+          session_version: {
+            increment: 1,
+          },
+
+          locked_until: null,
+          failed_login_attempts: 0,
+          updated_at: deactivatedAt,
+        },
+        select: {
+          deactivated_at: true,
+          session_version: true,
+        },
+      });
+
+      return {
+        deactivatedAt:
+          updated.deactivated_at ??
+          deactivatedAt,
+
+        sessionVersion:
+          updated.session_version,
+      };
+    }
+
+  async incrementSessionVersion(
+    id: string,
+  ): Promise<number> {
+    const updated =
+      await this.prisma.user.update({
+        where: {
+          id_user: id,
+        },
+
+        data: {
+          session_version: {
+            increment: 1,
+          },
+
+          updated_at:
+            new Date(),
+        },
+
+        select: {
+          session_version:
+            true,
+        },
+      });
+
+    return updated.session_version;
   }
 }

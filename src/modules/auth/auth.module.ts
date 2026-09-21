@@ -35,6 +35,17 @@ import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.u
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
 
 import { ChangePasswordUseCase } from './application/use-cases/change-password.use-case';
+import { RefreshTokenRepository } from './domain/repositories/refresh-token.repository';
+
+import { PrismaRefreshTokenRepository } from './infrastructure/persistence/prisma-refresh-token.repository';
+import { RefreshSessionUseCase } from './application/use-cases/refresh-session.use-case';
+
+import { LogoutUseCase } from './application/use-cases/logout.use-case';
+
+import { LogoutAllUseCase } from './application/use-cases/logout-all.use-case';
+import { RequestReactivationUseCase } from './application/use-cases/request-reactivation.use-case';
+
+import { ReactivateAccountUseCase } from './application/use-cases/reactivate-account.use-case';
 
 @Module({
   imports: [
@@ -62,9 +73,12 @@ import { ChangePasswordUseCase } from './application/use-cases/change-password.u
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
     ChangePasswordUseCase,
-
+    RefreshSessionUseCase,
+    LogoutUseCase,
+    LogoutAllUseCase,
+    RequestReactivationUseCase,
+    ReactivateAccountUseCase,
     RolesGuard,
-
     JwtAuthGuard,
 
     {
@@ -95,6 +109,12 @@ import { ChangePasswordUseCase } from './application/use-cases/change-password.u
     {
       provide: AccountActivationRepository,
       useClass: PrismaAccountActivationRepository,
+    },
+    {
+      provide:
+        RefreshTokenRepository,
+      useClass:
+        PrismaRefreshTokenRepository,
     },
   ],
 

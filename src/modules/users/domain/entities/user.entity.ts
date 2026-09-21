@@ -15,6 +15,7 @@ export interface UserProps {
   deactivatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  sessionVersion: number;
 }
 
 
@@ -75,5 +76,8 @@ export class User {
 
   get updatedAt(): Date {
     return this.props.updatedAt;
+  }
+  get sessionVersion(): number {
+  return this.props.sessionVersion;
   }
 }

@@ -50,9 +50,11 @@ model user {
   locked_until                             DateTime?            @db.Timestamptz(6)
   last_login_at                            DateTime?            @db.Timestamptz(6)
   deactivated_at                           DateTime?            @db.Timestamptz(6)
+  session_version                          Int                  @default(0)
   created_at                               DateTime             @default(now()) @db.Timestamptz(6)
   updated_at                               DateTime             @default(now()) @db.Timestamptz(6)
   recovery_token                           recovery_token[]
+  refresh_token                            refresh_token[]
   role                                     role                 @relation(fields: [id_role], references: [id_role], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_role")
   user_preference                          user_preference?
   home                                     home[]
@@ -63,6 +65,23 @@ model user {
   backup                                   backup[]
 
   @@index([status], map: "idx_user_status")
+  @@schema("auth")
+}
+model refresh_token {
+  id_refresh_token       String    @id(map: "pk_refresh_token") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id_user                String    @db.Uuid
+  token_hash             String    @unique(map: "uq_refresh_token_hash")
+  family_id              String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_version        Int
+  expires_at             DateTime  @db.Timestamptz(6)
+  revoked_at             DateTime? @db.Timestamptz(6)
+  replaced_by_token_hash String?
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at           DateTime? @db.Timestamptz(6)
+  user                   user      @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_refresh_token_user")
+
+  @@index([id_user], map: "idx_refresh_token_user")
+  @@index([family_id], map: "idx_refresh_token_family")
   @@schema("auth")
 }
 

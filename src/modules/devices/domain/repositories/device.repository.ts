@@ -45,4 +45,21 @@ export abstract class DeviceRepository {
     homeId: string,
     deviceId: string,
   ): Promise<Device>;
+
+  abstract activate(
+  userId: string,
+  homeId: string,
+  deviceId: string,
+  ): Promise<Device>;
+
+  abstract delete(
+    userId: string,
+    homeId: string,
+    deviceId: string,
+  ): Promise<void>;
+
+  abstract findInactiveByHome(
+  userId: string,
+  homeId: string,
+  ): Promise<Device[]>;
 }

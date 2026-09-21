@@ -16,7 +16,7 @@ import { GetMyPreferencesUseCase } from './application/use-cases/get-my-preferen
 import { UpdateMyPreferencesUseCase } from './application/use-cases/update-my-preferences.use-case';
 import { GetMyProfileUseCase } from './application/use-cases/get-my-profile.use-case';
 import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profile.use-case';
-
+import { DeactivateMyAccountUseCase } from './application/use-cases/deactivate-my-account.use-case';
 @Module({
   imports: [PrismaModule, forwardRef(() => AuthModule)],
   controllers: [UsersController],
@@ -25,6 +25,7 @@ import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profil
     UpdateMyPreferencesUseCase,
     GetMyProfileUseCase,
     UpdateMyProfileUseCase,
+    DeactivateMyAccountUseCase,
     {
       provide: UserRepository,
       useClass: PrismaUserRepository,

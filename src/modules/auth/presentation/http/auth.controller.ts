@@ -7,10 +7,15 @@ import {
   Get,
   Post,
   Patch,
+  Res,
+  Req,
+  HttpCode,
+  HttpStatus,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 
+import type { Request, Response } from 'express';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
 import { RegisterUserDto } from '../../application/dto/register-user.dto';
@@ -75,6 +80,26 @@ import {
 } from '../../application/use-cases/change-password.use-case';
 
 import { InvalidCurrentPasswordError } from '../../domain/errors/invalid-current-password.error';
+import { RefreshSessionUseCase } from '../../application/use-cases/refresh-session.use-case';
+
+import { InvalidRefreshTokenError } from '../../domain/errors/invalid-refresh-token.error';
+import { LogoutUseCase } from '../../application/use-cases/logout.use-case';
+
+import { LogoutAllUseCase } from '../../application/use-cases/logout-all.use-case';
+import { RequestReactivationDto } from '../../application/dto/request-reactivation.dto';
+
+import { ReactivateAccountDto } from '../../application/dto/reactivate-account.dto';
+
+import {
+  RequestReactivationUseCase,
+  RequestReactivationOutput,
+} from '../../application/use-cases/request-reactivation.use-case';
+
+import {
+  ReactivateAccountUseCase,
+  ReactivateAccountOutput,
+} from '../../application/use-cases/reactivate-account.use-case';
+
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -86,6 +111,11 @@ export class AuthController {
     private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
     private readonly changePasswordUseCase: ChangePasswordUseCase,
+    private readonly refreshSessionUseCase: RefreshSessionUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
+    private readonly logoutAllUseCase: LogoutAllUseCase,
+    private readonly requestReactivationUseCase: RequestReactivationUseCase,
+    private readonly reactivateAccountUseCase: ReactivateAccountUseCase,
   ) {}
 
   @Get('me')
@@ -188,20 +218,282 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() dto: LoginDto): Promise<LoginUserOutput> {
+  async login(
+    @Body()
+    dto: LoginDto,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
     try {
-      return await this.loginUserUseCase.execute(dto);
+      const result =
+        await this.loginUserUseCase.execute(
+          dto,
+        );
+
+      response.cookie(
+        'refresh_token',
+        result.refreshToken,
+        {
+          httpOnly: true,
+
+          secure:
+            process.env.NODE_ENV ===
+            'production',
+
+          sameSite: 'lax',
+
+          path:
+            '/api/v1/auth',
+
+          expires:
+            result.refreshTokenExpiresAt,
+        },
+      );
+
+      /*
+      * Nunca enviamos el refresh token
+      * dentro del JSON.
+      */
+      const {
+        refreshToken: _refreshToken,
+
+        refreshTokenExpiresAt:
+          _refreshTokenExpiresAt,
+
+        ...publicResult
+      } = result;
+
+      return publicResult;
     } catch (error) {
-      if (error instanceof InvalidCredentialsError) {
-        throw new UnauthorizedException(error.message);
+      if (
+        error instanceof
+        InvalidCredentialsError
+      ) {
+        throw new UnauthorizedException(
+          error.message,
+        );
       }
 
-      if (error instanceof AccountNotActiveError) {
-        throw new ForbiddenException(error.message);
+      if (
+        error instanceof
+        AccountNotActiveError
+      ) {
+        throw new ForbiddenException(
+          error.message,
+        );
       }
 
-      if (error instanceof AccountLockedError) {
-        throw new ForbiddenException(error.message);
+      if (
+        error instanceof
+        AccountLockedError
+      ) {
+        throw new ForbiddenException(
+          error.message,
+        );
+      }
+
+      throw error;
+    }
+  }
+  @Post('refresh')
+  async refresh(
+    @Req()
+    request: Request,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    const refreshToken =
+      request.cookies?.refresh_token;
+
+    if (
+      !refreshToken ||
+      typeof refreshToken !== 'string'
+    ) {
+      throw new UnauthorizedException(
+        'Refresh token requerido',
+      );
+    }
+
+    try {
+      const result =
+        await this.refreshSessionUseCase.execute(
+          refreshToken,
+        );
+
+      response.cookie(
+        'refresh_token',
+        result.refreshToken,
+        {
+          httpOnly: true,
+
+          secure:
+            process.env.NODE_ENV ===
+            'production',
+
+          sameSite: 'lax',
+
+          path:
+            '/api/v1/auth',
+
+          expires:
+            result.refreshTokenExpiresAt,
+        },
+      );
+
+      return {
+        accessToken:
+          result.accessToken,
+
+        tokenType:
+          result.tokenType,
+      };
+    } catch (error) {
+      if (
+        error instanceof
+        InvalidRefreshTokenError
+      ) {
+        response.clearCookie(
+          'refresh_token',
+          {
+            httpOnly: true,
+
+            secure:
+              process.env.NODE_ENV ===
+              'production',
+
+            sameSite:
+              'lax',
+
+            path:
+              '/api/v1/auth',
+          },
+        );
+
+        throw new UnauthorizedException(
+          error.message,
+        );
+      }
+
+      throw error;
+    }
+  }
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(
+    @Req()
+    request: Request,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    const refreshToken =
+      typeof request.cookies?.refresh_token ===
+      'string'
+        ? request.cookies.refresh_token
+        : undefined;
+
+    await this.logoutUseCase.execute(
+      refreshToken,
+    );
+
+    response.clearCookie(
+      'refresh_token',
+      {
+        httpOnly: true,
+
+        secure:
+          process.env.NODE_ENV ===
+          'production',
+
+        sameSite:
+          'lax',
+
+        path:
+          '/api/v1/auth',
+      },
+    );
+
+    return {
+      message:
+        'Sesión cerrada correctamente',
+    };
+  }
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  async logoutAll(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    await this.logoutAllUseCase.execute(
+      user.userId,
+    );
+
+    response.clearCookie(
+      'refresh_token',
+      {
+        httpOnly: true,
+
+        secure:
+          process.env.NODE_ENV ===
+          'production',
+
+        sameSite:
+          'lax',
+
+        path:
+          '/api/v1/auth',
+      },
+    );
+
+    return {
+      message:
+        'Todas las sesiones fueron cerradas correctamente',
+    };
+  }
+
+  @Post('request-reactivation')
+  async requestReactivation(
+    @Body()
+    dto: RequestReactivationDto,
+  ): Promise<RequestReactivationOutput> {
+    return this.requestReactivationUseCase.execute(
+      dto,
+    );
+  }
+
+  @Post('reactivate')
+  async reactivate(
+    @Body()
+    dto: ReactivateAccountDto,
+  ): Promise<ReactivateAccountOutput> {
+    try {
+      return await this.reactivateAccountUseCase.execute(
+        dto,
+      );
+    } catch (error) {
+      if (
+        error instanceof
+        InvalidActivationTokenError
+      ) {
+        throw new BadRequestException(
+          error.message,
+        );
       }
 
       throw error;

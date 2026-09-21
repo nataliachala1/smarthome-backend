@@ -11,6 +11,9 @@ import { UpdateMyPreferencesUseCase } from '../../application/use-cases/update-m
 import { UpdateMyProfileDto } from '../../application/dto/update-my-profile.dto';
 import { GetMyProfileUseCase } from '../../application/use-cases/get-my-profile.use-case';
 import { UpdateMyProfileUseCase } from '../../application/use-cases/update-my-profile.use-case';
+import { DeactivateMyAccountDto } from '../../application/dto/deactivate-my-account.dto';
+
+import { DeactivateMyAccountUseCase } from '../../application/use-cases/deactivate-my-account.use-case';
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -22,6 +25,7 @@ export class UsersController {
     private readonly updateMyProfileUseCase: UpdateMyProfileUseCase,
     private readonly getMyPreferencesUseCase: GetMyPreferencesUseCase,
     private readonly updateMyPreferencesUseCase: UpdateMyPreferencesUseCase,
+    private readonly deactivateMyAccountUseCase: DeactivateMyAccountUseCase,
   ) {}
 
   @Get('me')
@@ -48,5 +52,22 @@ export class UsersController {
     @Body() dto: UpdateMyPreferencesDto,
   ) {
     return this.updateMyPreferencesUseCase.execute(user.userId, dto);
+  }
+  @Patch('me/deactivate')
+  async deactivateMyAccount(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Body()
+    dto: DeactivateMyAccountDto,
+  ) {
+    /*
+    * La validación DTO ya exige true.
+    */
+    void dto;
+
+    return this.deactivateMyAccountUseCase.execute(
+      user.userId,
+    );
   }
 }

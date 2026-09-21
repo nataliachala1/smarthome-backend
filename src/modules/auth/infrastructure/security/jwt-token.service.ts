@@ -25,6 +25,7 @@ export class JwtTokenService implements TokenService {
       {
         sub: payload.userId,
         role: payload.globalRole,
+        sv: payload.sessionVersion
       },
       {
         expiresIn: expiresIn as SignOptions['expiresIn'],
