@@ -90,35 +90,37 @@ export class PrismaUserRepository implements UserRepository {
           ${data.passwordHash}
         )
         RETURNING
-          id_user,
-          id_role,
-          name,
-          email,
-          password_hash,
-          status,
-          email_verified,
-          failed_login_attempts,
-          locked_until,
-          last_login_at,
-          deactivated_at,
-          created_at,
-          updated_at
+        id_user,
+        id_role,
+        name,
+        email,
+        password_hash,
+        status,
+        email_verified,
+        failed_login_attempts,
+        locked_until,
+        last_login_at,
+        deactivated_at,
+        session_version,
+        created_at,
+        updated_at
       )
       SELECT
-        i.id_user,
-        i.id_role,
-        i.name,
-        i.email,
-        i.password_hash,
-        i.status,
-        i.email_verified,
-        i.failed_login_attempts,
-        i.locked_until,
-        i.last_login_at,
-        i.deactivated_at,
-        i.created_at,
-        i.updated_at,
-        r.name AS role_name
+      i.id_user,
+      i.id_role,
+      i.name,
+      i.email,
+      i.password_hash,
+      i.status,
+      i.email_verified,
+      i.failed_login_attempts,
+      i.locked_until,
+      i.last_login_at,
+      i.deactivated_at,
+      i.session_version,
+      i.created_at,
+      i.updated_at,
+      r.name AS role_name    
       FROM inserted i
       JOIN auth.role r
         ON r.id_role = i.id_role

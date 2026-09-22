@@ -186,9 +186,6 @@ export class ShellyController {
         shellyIp: dto.shellyIp,
 
         name: dto.name,
-
-        deviceTypeId:
-          dto.deviceTypeId,
       },
     );
   }

@@ -1,10 +1,10 @@
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
 import {
   IsIP,
   IsNotEmpty,
   IsString,
-  IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -12,7 +12,8 @@ import {
 export class ProvisionShellyDeviceDto {
   @ApiProperty({
     example: '10.3.234.97',
-    description: 'Dirección IPv4 local del Shelly',
+    description:
+      'Dirección IPv4 local del dispositivo Shelly',
   })
   @IsString()
   @IsNotEmpty()
@@ -21,20 +22,18 @@ export class ProvisionShellyDeviceDto {
 
   @ApiProperty({
     example: 'Lámpara sala',
+    description:
+      'Nombre que el usuario desea asignar al dispositivo',
     maxLength: 100,
   })
   @IsString()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
+  @Transform(
+    ({ value }: { value: unknown }) =>
+      typeof value === 'string'
+        ? value.trim()
+        : value,
   )
   @MinLength(1)
   @MaxLength(100)
   name!: string;
-
-  @ApiProperty({
-    format: 'uuid',
-    description: 'Tipo de dispositivo SmartHome',
-  })
-  @IsUUID()
-  deviceTypeId!: string;
 }

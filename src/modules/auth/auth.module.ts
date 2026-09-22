@@ -122,6 +122,7 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
     JwtAuthGuard,
     JwtModule,
     RolesGuard,
+    UsersModule,
   ],
 })
 export class AuthModule {}

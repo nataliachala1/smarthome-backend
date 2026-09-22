@@ -58,19 +58,49 @@ export class PrismaDeviceRepository implements DeviceRepository {
     deviceId: string,
   ): Promise<Device | null> {
     try {
-      return await this.prismaRls.withUserContext(userId, async (tx) => {
-        await this.authorize(tx, homeId, false);
-        const row = await tx.device.findFirst({
-          where: {
-            id_device: deviceId,
-            id_home: homeId,
-            ...((await this.isOwner(tx, homeId))
-              ? {}
-              : { status: 'ACTIVE', deleted_at: null }),
-          },
-        });
-        return row ? PrismaDeviceMapper.toDomain(row) : null;
-      });
+      return await this.prismaRls.withUserContext(
+        userId,
+        async (tx) => {
+          await this.authorize(
+            tx,
+            homeId,
+            false,
+          );
+
+          const isOwner =
+            await this.isOwner(
+              tx,
+              homeId,
+            );
+
+          const row =
+            await tx.device.findFirst({
+              where: {
+                id_device:
+                  deviceId,
+
+                id_home:
+                  homeId,
+
+                deleted_at:
+                  null,
+
+                ...(isOwner
+                  ? {}
+                  : {
+                      status:
+                        'ACTIVE',
+                    }),
+              },
+            });
+
+          return row
+            ? PrismaDeviceMapper.toDomain(
+                row,
+              )
+            : null;
+        },
+      );
     } catch (error) {
       this.translateError(error);
     }
@@ -139,7 +169,7 @@ export class PrismaDeviceRepository implements DeviceRepository {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
         await this.authorize(tx, homeId, true);
         const current = await tx.device.findFirst({
-          where: { id_device: deviceId, id_home: homeId },
+          where: { id_device: deviceId, id_home: homeId, deleted_at: null, },
         });
         if (!current) throw new DeviceAccessDeniedError();
         if (data.deviceTypeId) {
@@ -180,7 +210,7 @@ export class PrismaDeviceRepository implements DeviceRepository {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
         await this.authorize(tx, homeId, true);
         const current = await tx.device.findFirst({
-          where: { id_device: deviceId, id_home: homeId },
+          where: { id_device: deviceId, id_home: homeId, deleted_at: null, },
         });
         if (!current) throw new DeviceAccessDeniedError();
         const raw = await tx.device.update({

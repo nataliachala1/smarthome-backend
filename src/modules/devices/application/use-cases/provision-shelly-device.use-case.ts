@@ -13,6 +13,8 @@ import { CreateDeviceUseCase } from './create-device.use-case';
 
 import { ShellyRpcClientService } from '../../infrastructure/shelly/shelly-rpc-client.service';
 
+import { DeviceTypeRepository } from '../../domain/repositories/device-type.repository';
+
 export interface ProvisionShellyDeviceInput {
   userId: string;
 
@@ -21,14 +23,13 @@ export interface ProvisionShellyDeviceInput {
   shellyIp: string;
 
   name: string;
-
-  deviceTypeId: string;
 }
 
 @Injectable()
 export class ProvisionShellyDeviceUseCase {
   constructor(
-    private readonly configService: ConfigService,
+    private readonly configService:
+      ConfigService,
 
     private readonly identifyShellyDeviceUseCase:
       IdentifyShellyDeviceUseCase,
@@ -38,20 +39,17 @@ export class ProvisionShellyDeviceUseCase {
 
     private readonly createDeviceUseCase:
       CreateDeviceUseCase,
+
+    private readonly deviceTypeRepository:
+      DeviceTypeRepository,
   ) {}
 
   async execute(
     input: ProvisionShellyDeviceInput,
   ) {
     /*
-     * 1. Volvemos a identificar.
-     *
-     * Esto también valida:
-     * - usuario
-     * - hogar
-     * - permisos
-     * - IP privada
-     * - modelo Shelly 1PM Gen4
+     * 1. Identificamos nuevamente el
+     * dispositivo antes de configurarlo.
      */
     const shelly =
       await this.identifyShellyDeviceUseCase.execute(
@@ -60,17 +58,37 @@ export class ProvisionShellyDeviceUseCase {
         input.shellyIp,
       );
 
-    if (shelly.authenticationRequired) {
+    if (
+      shelly.authenticationRequired
+    ) {
       throw new UnprocessableEntityException(
         'El Shelly tiene autenticación habilitada. La primera versión del provisionamiento requiere que la autenticación local del dispositivo esté deshabilitada.',
       );
     }
 
     /*
-     * IMPORTANTE:
+     * 2. El tipo de dispositivo es un
+     * detalle interno.
      *
-     * No podemos enviar localhost al Shelly.
-     * La dirección debe poder ser alcanzada desde
+     * El usuario NO debe seleccionarlo.
+     *
+     * Shelly 1PM puede controlar diferentes
+     * tipos de carga, por eso inicialmente
+     * utilizamos la categoría genérica "Otro".
+     */
+    const deviceType =
+      await this.deviceTypeRepository.findByName(
+        'Otro',
+      );
+
+    if (!deviceType) {
+      throw new InternalServerErrorException(
+        'No existe el tipo interno de dispositivo "Otro"',
+      );
+    }
+
+    /*
+     * 3. Broker MQTT alcanzable por
      * el dispositivo físico.
      */
     const brokerServer =
@@ -94,23 +112,24 @@ export class ProvisionShellyDeviceUseCase {
         'MQTT_PASSWORD',
       ) || undefined;
 
-    if (username && !password) {
+    if (
+      username &&
+      !password
+    ) {
       throw new InternalServerErrorException(
         'MQTT_USERNAME está configurado pero MQTT_PASSWORD no',
       );
     }
 
     /*
-     * 2. Configuramos MQTT.
-     *
-     * Dejamos manufacturerDeviceId como topic_prefix
-     * porque todo el backend ya trabaja con ese ID.
+     * 4. Configuramos MQTT en el Shelly.
      */
     const mqttConfiguration =
       await this.shellyRpcClient.configureMqtt(
         input.shellyIp,
         {
-          server: brokerServer,
+          server:
+            brokerServer,
 
           topicPrefix:
             shelly.manufacturerDeviceId,
@@ -122,17 +141,20 @@ export class ProvisionShellyDeviceUseCase {
       );
 
     /*
-     * 3. Aplicamos configuración.
+     * 5. Reiniciamos cuando Shelly
+     * indique que es necesario.
      */
-    if (mqttConfiguration.restartRequired) {
+    if (
+      mqttConfiguration.restartRequired
+    ) {
       await this.shellyRpcClient.reboot(
         input.shellyIp,
       );
     }
 
     /*
-     * 4. Esperamos a que MQTT quede realmente
-     * conectado antes de registrar el dispositivo.
+     * 6. Verificamos que MQTT quede
+     * realmente conectado.
      */
     const mqttConnected =
       await this.shellyRpcClient.waitForMqttConnection(
@@ -146,56 +168,74 @@ export class ProvisionShellyDeviceUseCase {
     }
 
     /*
-     * 5. Solo cuando MQTT funciona registramos el
-     * dispositivo en SmartHome.
+     * 7. Registramos el dispositivo
+     * en SmartHome.
+     *
+     * El frontend no necesita conocer:
+     * - deviceTypeId
+     * - manufacturerDeviceId
+     * - WIFI
+     * - MQTT
      */
     const device =
       await this.createDeviceUseCase.execute({
-        userId: input.userId,
+        userId:
+          input.userId,
 
-        homeId: input.homeId,
+        homeId:
+          input.homeId,
 
-        deviceTypeId: input.deviceTypeId,
+        deviceTypeId:
+          deviceType.id,
 
-        name: input.name,
+        name:
+          input.name,
 
         manufacturerDeviceId:
           shelly.manufacturerDeviceId,
 
-        transportType: 'WIFI',
+        transportType:
+          'WIFI',
 
-        messagingProtocol: 'MQTT',
+        messagingProtocol:
+          'MQTT',
       });
 
     return {
       message:
-        'Shelly configurado y registrado correctamente',
+        'Shelly configurado y vinculado correctamente',
 
       device,
 
       shelly: {
-        ip: input.shellyIp,
+        ip:
+          input.shellyIp,
 
         manufacturerDeviceId:
           shelly.manufacturerDeviceId,
 
-        mac: shelly.mac,
+        mac:
+          shelly.mac,
 
-        model: shelly.model,
+        model:
+          shelly.model,
 
-        modelCode: shelly.modelCode,
+        modelCode:
+          shelly.modelCode,
 
         firmwareVersion:
           shelly.firmwareVersion,
       },
 
       mqtt: {
-        server: brokerServer,
+        server:
+          brokerServer,
 
         topicPrefix:
           shelly.manufacturerDeviceId,
 
-        connected: true,
+        connected:
+          true,
       },
     };
   }
