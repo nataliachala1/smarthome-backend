@@ -32,7 +32,7 @@ import { GetHomeDailyConsumptionUseCase } from '../../application/use-cases/get-
 
 @Controller('api/v1/homes/:homeId/consumption')
 @ApiTags('consumption')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class HomeConsumptionController {
   constructor(

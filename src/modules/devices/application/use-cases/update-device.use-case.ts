@@ -7,7 +7,6 @@ export interface UpdateDeviceInput {
   userId: string;
   homeId: string;
   deviceId: string;
-  deviceTypeId?: string;
   name?: string;
   transportType?: 'WIFI' | 'BLUETOOTH';
   messagingProtocol?: 'MQTT';
@@ -20,7 +19,6 @@ export class UpdateDeviceUseCase {
   async execute(input: UpdateDeviceInput) {
     const device = await this.deviceRepository
       .update(input.userId, input.homeId, input.deviceId, {
-        deviceTypeId: input.deviceTypeId,
         name: input.name,
         transportType: input.transportType ?? undefined,
         messagingProtocol: input.messagingProtocol ?? undefined,
@@ -30,7 +28,6 @@ export class UpdateDeviceUseCase {
     return {
       id: device.id,
       homeId: device.homeId,
-      deviceTypeId: device.deviceTypeId,
       name: device.name,
       status: device.status,
       connectivityStatus: device.connectivityStatus,

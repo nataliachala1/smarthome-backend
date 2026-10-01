@@ -260,18 +260,22 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async updateProfile(
-    id: string,
-    data: UpdateUserProfileData,
+  id: string,
+  data: UpdateUserProfileData,
   ): Promise<User> {
-    const normalizedEmail = data.email?.trim().toLowerCase();
     const raw = await this.prisma.user.update({
-      where: { id_user: id },
+      where: {
+        id_user: id,
+      },
       data: {
-        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
-        ...(normalizedEmail !== undefined ? { email: normalizedEmail } : {}),
+        ...(data.name !== undefined
+          ? { name: data.name.trim() }
+          : {}),
         updated_at: new Date(),
       },
-      include: { role: true },
+      include: {
+        role: true,
+      },
     });
 
     return PrismaUserMapper.toDomain(raw);

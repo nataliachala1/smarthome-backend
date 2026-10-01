@@ -6,7 +6,6 @@ import { DeviceRepository } from '../../domain/repositories/device.repository';
 export interface CreateDeviceInput {
   userId: string;
   homeId: string;
-  deviceTypeId: string;
   name: string;
   manufacturerDeviceId?: string;
   transportType?: 'WIFI' | 'BLUETOOTH';
@@ -21,7 +20,6 @@ export class CreateDeviceUseCase {
     const device = await this.deviceRepository
       .create(input.userId, {
         homeId: input.homeId,
-        deviceTypeId: input.deviceTypeId,
         name: input.name,
         manufacturerDeviceId: input.manufacturerDeviceId ?? null,
         transportType: input.transportType ?? null,
@@ -32,7 +30,6 @@ export class CreateDeviceUseCase {
     return {
       id: device.id,
       homeId: device.homeId,
-      deviceTypeId: device.deviceTypeId,
       name: device.name,
       status: device.status,
       connectivityStatus: device.connectivityStatus,

@@ -58,7 +58,7 @@ import { ControlDeviceUseCase } from '../../application/use-cases/control-device
 @ApiBearerAuth('access-token')
 @ApiBadRequestResponse({
   description:
-    'UUID, datos o tipo de dispositivo inválidos',
+    'UUID o datos del dispositivo inválidos',
 })
 @ApiForbiddenResponse({
   description:
@@ -263,9 +263,6 @@ export class DevicesController {
 
       homeId,
 
-      deviceTypeId:
-        dto.deviceTypeId,
-
       name:
         dto.name,
 
@@ -329,9 +326,6 @@ export class DevicesController {
       homeId,
 
       deviceId,
-
-      deviceTypeId:
-        dto.deviceTypeId,
 
       name:
         dto.name,
@@ -449,7 +443,7 @@ export class DevicesController {
   @Patch(':deviceId/control')
   @ApiOperation({
     summary:
-      'Enviar comando ON/OFF al dispositivo: OWNER',
+      'Enviar comando ON/OFF al dispositivo: OWNER o MEMBER',
   })
   @ApiParam({
     name: 'homeId',

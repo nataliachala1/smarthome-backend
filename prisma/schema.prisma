@@ -39,27 +39,27 @@ model role {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model user {
-  id_user                                  String               @id(map: "pk_user") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  id_role                                  String               @default(dbgenerated("'a1b2c3d4-0001-0000-0000-000000000002'::uuid")) @db.Uuid
-  name                                     String               @db.VarChar(100)
-  email                                    String               @db.VarChar(255)
+  id_user                                  String           @id(map: "pk_user") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id_role                                  String           @default(dbgenerated("'a1b2c3d4-0001-0000-0000-000000000002'::uuid")) @db.Uuid
+  name                                     String           @db.VarChar(100)
+  email                                    String           @db.VarChar(255)
   password_hash                            String
-  status                                   String               @default("PENDING") @db.VarChar(20)
-  email_verified                           Boolean              @default(false)
-  failed_login_attempts                    Int                  @default(0) @db.SmallInt
-  locked_until                             DateTime?            @db.Timestamptz(6)
-  last_login_at                            DateTime?            @db.Timestamptz(6)
-  deactivated_at                           DateTime?            @db.Timestamptz(6)
-  session_version                          Int                  @default(0)
-  created_at                               DateTime             @default(now()) @db.Timestamptz(6)
-  updated_at                               DateTime             @default(now()) @db.Timestamptz(6)
+  status                                   String           @default("PENDING") @db.VarChar(20)
+  email_verified                           Boolean          @default(false)
+  failed_login_attempts                    Int              @default(0) @db.SmallInt
+  locked_until                             DateTime?        @db.Timestamptz(6)
+  last_login_at                            DateTime?        @db.Timestamptz(6)
+  deactivated_at                           DateTime?        @db.Timestamptz(6)
+  session_version                          Int              @default(0)
+  created_at                               DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at                               DateTime         @default(now()) @db.Timestamptz(6)
   recovery_token                           recovery_token[]
   refresh_token                            refresh_token[]
-  role                                     role                 @relation(fields: [id_role], references: [id_role], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_role")
+  role                                     role             @relation(fields: [id_role], references: [id_role], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_role")
   user_preference                          user_preference?
   home                                     home[]
-  home_member_home_member_invited_byTouser home_member[]        @relation("home_member_invited_byTouser")
-  home_member_home_member_id_userTouser    home_member[]        @relation("home_member_id_userTouser")
+  home_member_home_member_invited_byTouser home_member[]    @relation("home_member_invited_byTouser")
+  home_member_home_member_id_userTouser    home_member[]    @relation("home_member_id_userTouser")
   audit_log                                audit_log[]
   notification                             notification[]
   backup                                   backup[]
@@ -67,6 +67,7 @@ model user {
   @@index([status], map: "idx_user_status")
   @@schema("auth")
 }
+
 model refresh_token {
   id_refresh_token       String    @id(map: "pk_refresh_token") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_user                String    @db.Uuid
@@ -163,7 +164,6 @@ model consumption_metric {
 model device {
   id_device              String                 @id(map: "pk_device") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_home                String                 @db.Uuid
-  id_device_type         String                 @db.Uuid
   name                   String                 @db.VarChar(100)
   status                 String                 @default("ACTIVE") @db.VarChar(20)
   connectivity_status    String                 @default("OFFLINE") @db.VarChar(20)
@@ -177,8 +177,7 @@ model device {
   deleted_at             DateTime?              @db.Timestamptz(6)
   consumption            consumption[]
   consumption_metric     consumption_metric[]
-  home                   home @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_home")
-  device_type            device_type            @relation(fields: [id_device_type], references: [id_device_type], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_type")
+  home                   home                   @relation(fields: [id_home], references: [id_home], onDelete: NoAction, onUpdate: NoAction, map: "fk_device_home")
   device_schedule        device_schedule[]
   device_telemetry_raw   device_telemetry_raw[]
   smart_device           smart_device?
@@ -209,22 +208,6 @@ model device_schedule {
   @@schema("devices")
 }
 
-model device_type {
-  id_device_type String    @id(map: "pk_device_type") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String    @unique(map: "uq_device_type_name") @db.VarChar(100)
-  description    String?
-  icon           String?   @db.VarChar(100)
-  created_at     DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
-  deleted_at     DateTime? @db.Timestamptz(6)
-  device         device[]
-
-  @@index([id_device_type], map: "idx_device_type_active", where: raw("(deleted_at IS NULL)"))
-  @@schema("devices")
-}
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model smart_device {
   id_smart_device  String   @id(map: "pk_smart_device") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_device        String   @unique(map: "uq_smart_device_device") @db.Uuid
@@ -243,18 +226,18 @@ model smart_device {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model home {
-  device device[]
-  id_home                        String                          @id(map: "pk_home") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_by                     String                          @db.Uuid
-  name                           String                          @db.VarChar(100)
-  status                         String                          @default("ACTIVE") @db.VarChar(20)
-  created_at                     DateTime                        @default(now()) @db.Timestamptz(6)
-  updated_at                     DateTime                        @default(now()) @db.Timestamptz(6)
-  deleted_at                     DateTime?                       @db.Timestamptz(6)
-  user                           user                            @relation(fields: [created_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_home_created_by")
-  home_member                    home_member?
-  audit_log                      audit_log[]
-  notification                   notification[]
+  device       device[]
+  id_home      String         @id(map: "pk_home") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_by   String         @db.Uuid
+  name         String         @db.VarChar(100)
+  status       String         @default("ACTIVE") @db.VarChar(20)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @db.Timestamptz(6)
+  deleted_at   DateTime?      @db.Timestamptz(6)
+  user         user           @relation(fields: [created_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_home_created_by")
+  home_member  home_member?
+  audit_log    audit_log[]
+  notification notification[]
 
   @@unique([created_by, name], map: "uq_home_name")
   @@index([created_by, status], map: "idx_home_created_by_status")

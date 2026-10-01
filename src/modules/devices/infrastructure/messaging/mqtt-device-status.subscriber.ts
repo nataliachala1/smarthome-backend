@@ -7,7 +7,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { connect, IClientOptions, MqttClient } from 'mqtt';
 
-import { PrismaService } from '../../../../infrastructure/database/prisma/prisma.service';
+import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
+
+import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
 import { Prisma } from '../../../../../generated/prisma/client';
 import { RealtimeEventsService } from '../../../realtime/realtime-events.service';
 
@@ -60,7 +62,8 @@ export class MqttDeviceStatusSubscriber
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaIotService,
+    private readonly prismaRls: PrismaRlsService,
     private readonly realtimeEventsService: RealtimeEventsService,
   ) {}
 
@@ -219,10 +222,7 @@ export class MqttDeviceStatusSubscriber
       connectivity_status?: DeviceConnectivityStatus;
       is_on?: boolean;
       current_power_w?: number | null;
-      updated_at: Date;
-    } = {
-      updated_at: now,
-    };
+    } = {};
 
     if (message.connectivityStatus !== undefined) {
       deviceData.connectivity_status = message.connectivityStatus;
@@ -461,12 +461,16 @@ export class MqttDeviceStatusSubscriber
         },
       );
 
-      const unreadCount = await this.prisma.notification.count({
-        where: {
-          id_user: notification.id_user,
-          status: 'UNREAD',
-        },
-      });
+      const unreadCount = await this.prismaRls.withUserContext(
+        notification.id_user,
+        async (tx) =>
+          tx.notification.count({
+            where: {
+              id_user: notification.id_user,
+              status: 'UNREAD',
+            },
+          }),
+      );
 
       this.realtimeEventsService.emitToUser(
         notification.id_user,
@@ -829,13 +833,11 @@ export class MqttDeviceStatusSubscriber
       },
     });
 
-    const metricData = {
-      end_at: endAt,
+    const metricValues = {
       kwh_total: aggregate._sum.energy_delta_kwh ?? 0,
       average_watts: aggregate._avg.power_w,
       max_watts: aggregate._max.power_w,
       min_watts: aggregate._min.power_w,
-      updated_at: new Date(),
     };
 
     const existingMetric = await tx.consumption_metric.findFirst({
@@ -855,7 +857,7 @@ export class MqttDeviceStatusSubscriber
           id_consumption_metric:
             existingMetric.id_consumption_metric,
         },
-        data: metricData,
+        data: metricValues,
       });
 
       return;
@@ -867,7 +869,8 @@ export class MqttDeviceStatusSubscriber
         id_home: homeId,
         period: 'dia',
         start_at: startAt,
-        ...metricData,
+        end_at: endAt,
+        ...metricValues,
       },
     });
   }

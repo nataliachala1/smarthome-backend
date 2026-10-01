@@ -4,8 +4,10 @@ import {
   Param,
   Patch,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/presentation/http/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../auth/presentation/http/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
@@ -15,6 +17,7 @@ import { AcceptInvitationUseCase } from '../../application/use-cases/accept-invi
 import { RejectInvitationUseCase } from '../../application/use-cases/reject-invitation.use-case';
 
 @Controller('api/v1/invitations')
+@ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class InvitationsController {
   constructor(
@@ -40,7 +43,7 @@ export class InvitationsController {
   @Patch(':memberId/accept')
   async accept(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('memberId') memberId: string,
+    @Param('memberId',  new ParseUUIDPipe({ version: '4' })) memberId: string,
   ) {
     return this.acceptInvitationUseCase.execute(
       user.userId,
@@ -51,7 +54,7 @@ export class InvitationsController {
   @Patch(':memberId/reject')
   async reject(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('memberId') memberId: string,
+    @Param('memberId',  new ParseUUIDPipe({ version: '4' })) memberId: string,
   ) {
     return this.rejectInvitationUseCase.execute(
       user.userId,

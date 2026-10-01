@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
@@ -87,7 +88,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async findById(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ): Promise<GetHomeByIdOutput> {
     const home = await this.getHomeByIdUseCase.execute({
       userId: user.userId,
@@ -105,7 +106,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async listMembers(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ) {
     return this.listHomeMembersUseCase.execute({
       userId: user.userId,
@@ -117,7 +118,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async createInvitation(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
     @Body() dto: CreateHomeInvitationDto,
   ) {
     return this.createHomeInvitationUseCase.execute({
@@ -132,8 +133,8 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async updateMemberRole(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-    @Param('memberId') memberId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
+    @Param('memberId', new ParseUUIDPipe({ version: '4' })) memberId: string,
     @Body() dto: UpdateHomeMemberRoleDto,
   ) {
     return this.updateHomeMemberRoleUseCase.execute({
@@ -148,7 +149,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async delete(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ): Promise<DeleteHomeOutput> {
     try {
       return await this.deleteHomeUseCase.execute({
@@ -172,8 +173,8 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async revokeMember(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-    @Param('memberId') memberId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
+    @Param('memberId', new ParseUUIDPipe({ version: '4'})) memberId: string,
   ) {
     return this.revokeHomeMemberUseCase.execute(user.userId, homeId, memberId);
   }
@@ -182,7 +183,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async leaveHome(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ) {
     return this.leaveHomeUseCase.execute(user.userId, homeId);
   }
@@ -191,7 +192,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
     @Body() dto: UpdateHomeDto,
   ): Promise<UpdateHomeOutput> {
     return this.updateHomeUseCase.execute({

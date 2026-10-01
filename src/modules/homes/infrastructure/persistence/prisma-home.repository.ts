@@ -24,14 +24,37 @@ export class PrismaHomeRepository
     private readonly prismaRls: PrismaRlsService,
   ) {}
 
-  async findAllByUser(
-    userId: string,
+ async findAllByUser(
+  userId: string,
   ): Promise<Home[]> {
     return this.prismaRls.withUserContext(
       userId,
       async (tx) => {
+        const memberships =
+          await tx.home_member.findMany({
+            where: {
+              id_user: userId,
+              status: 'ACTIVE',
+            },
+            select: {
+              id_home: true,
+            },
+          });
+
+        const homeIds = memberships.map(
+          (membership) => membership.id_home,
+        );
+
+        if (homeIds.length === 0) {
+          return [];
+        }
+
         const rows = await tx.home.findMany({
           where: {
+            id_home: {
+              in: homeIds,
+            },
+            status: 'ACTIVE',
             deleted_at: null,
           },
           orderBy: {
@@ -46,108 +69,108 @@ export class PrismaHomeRepository
     );
   }
 
- async findById(
-  userId: string,
-  homeId: string,
-): Promise<Home | null> {
-  return this.prismaRls.withUserContext(
-    userId,
-    async (tx) => {
-      const raw = await tx.home.findFirst({
-        where: {
-          id_home: homeId,
-        },
-      });
+  async findById(
+    userId: string,
+    homeId: string,
+  ): Promise<Home | null> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const raw = await tx.home.findFirst({
+          where: {
+            id_home: homeId,
+          },
+        });
 
-      return raw
-        ? PrismaHomeMapper.toDomain(raw)
-        : null;
-    },
-  );
-}
+        return raw
+          ? PrismaHomeMapper.toDomain(raw)
+          : null;
+      },
+    );
+  }
 
-async deactivate(
-  userId: string,
-  homeId: string,
-): Promise<Home> {
-  return this.prismaRls.withUserContext(
-    userId,
-    async (tx) => {
-      const raw = await tx.home.update({
-        where: {
-          id_home: homeId,
-        },
-        data: {
-          status: 'DEACTIVATED',
-          deleted_at: new Date(),
-        },
-      });
-
-      return PrismaHomeMapper.toDomain(raw);
-    },
-  );
-}
-
-async reactivate(
-  userId: string,
-  homeId: string,
-): Promise<Home> {
-  return this.prismaRls.withUserContext(
-    userId,
-    async (tx) => {
-      const raw = await tx.home.update({
-        where: {
-          id_home: homeId,
-        },
-        data: {
-          status: 'ACTIVE',
-          deleted_at: null,
-        },
-      });
-
-      return PrismaHomeMapper.toDomain(raw);
-    },
-  );
-}
-
-async update(
-  data: UpdateHomeData,
-): Promise<Home> {
-  try {
-    return await this.prismaRls.withUserContext(
-      data.userId,
+  async deactivate(
+    userId: string,
+    homeId: string,
+  ): Promise<Home> {
+    return this.prismaRls.withUserContext(
+      userId,
       async (tx) => {
         const raw = await tx.home.update({
           where: {
-            id_home: data.homeId,
+            id_home: homeId,
           },
           data: {
-            ...(data.name !== undefined && {
-              name: data.name,
-            }),
+            status: 'DEACTIVATED',
+            deleted_at: new Date(),
           },
         });
 
         return PrismaHomeMapper.toDomain(raw);
       },
     );
-  } catch (error: unknown) {
-  if (isPostgresAccessDeniedError(error)) {
-    throw new HomeAccessDeniedError();
   }
 
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'P2025'
-  ) {
-    throw new HomeAccessDeniedError();
+  async reactivate(
+    userId: string,
+    homeId: string,
+  ): Promise<Home> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const raw = await tx.home.update({
+          where: {
+            id_home: homeId,
+          },
+          data: {
+            status: 'ACTIVE',
+            deleted_at: null,
+          },
+        });
+
+        return PrismaHomeMapper.toDomain(raw);
+      },
+    );
   }
 
-  throw error;
-}
-}
+  async update(
+    data: UpdateHomeData,
+  ): Promise<Home> {
+    try {
+      return await this.prismaRls.withUserContext(
+        data.userId,
+        async (tx) => {
+          const raw = await tx.home.update({
+            where: {
+              id_home: data.homeId,
+            },
+            data: {
+              ...(data.name !== undefined && {
+                name: data.name,
+              }),
+            },
+          });
+
+          return PrismaHomeMapper.toDomain(raw);
+        },
+      );
+    } catch (error: unknown) {
+    if (isPostgresAccessDeniedError(error)) {
+      throw new HomeAccessDeniedError();
+    }
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2025'
+    ) {
+      throw new HomeAccessDeniedError();
+    }
+
+    throw error;
+  }
+  }
 
   async create(
     data: CreateHomeData,
@@ -177,73 +200,74 @@ async update(
       },
     );
   }
+
   async deleteIfNoDevices(
-  userId: string,
-  homeId: string,
-): Promise<void> {
-  try {
-    await this.prismaRls.withUserContext(
-      userId,
-      async (tx) => {
-        const ownerMembership = await tx.home_member.findFirst({
-          where: {
-            id_home: homeId,
-            id_user: userId,
-            role: 'OWNER',
-            status: 'ACTIVE',
-          },
-          select: {
-            id_home_member: true,
-          },
-        });
+    userId: string,
+    homeId: string,
+  ): Promise<void> {
+    try {
+      await this.prismaRls.withUserContext(
+        userId,
+        async (tx) => {
+          const ownerMembership = await tx.home_member.findFirst({
+            where: {
+              id_home: homeId,
+              id_user: userId,
+              role: 'OWNER',
+              status: 'ACTIVE',
+            },
+            select: {
+              id_home_member: true,
+            },
+          });
 
-        if (!ownerMembership) {
-          throw new HomeAccessDeniedError();
-        }
+          if (!ownerMembership) {
+            throw new HomeAccessDeniedError();
+          }
 
-        const devicesCount = await tx.device.count({
-          where: {
-            id_home: homeId,
-          },
-        });
+          const devicesCount = await tx.device.count({
+            where: {
+              id_home: homeId,
+            },
+          });
 
-        if (devicesCount > 0) {
-          throw new HomeHasDevicesError();
-        }
+          if (devicesCount > 0) {
+            throw new HomeHasDevicesError();
+          }
 
-        await tx.home.update({
-          where: {
-            id_home: homeId,
-          },
-          data: {
-            deleted_at: new Date(),
-            status: 'DEACTIVATED',
-          },
-        });
-      },
-    );
-  } catch (error: unknown) {
-    if (
-      error instanceof HomeHasDevicesError ||
-      error instanceof HomeAccessDeniedError
-    ) {
+          await tx.home.update({
+            where: {
+              id_home: homeId,
+            },
+            data: {
+              deleted_at: new Date(),
+              status: 'DEACTIVATED',
+            },
+          });
+        },
+      );
+    } catch (error: unknown) {
+      if (
+        error instanceof HomeHasDevicesError ||
+        error instanceof HomeAccessDeniedError
+      ) {
+        throw error;
+      }
+
+      if (isPostgresAccessDeniedError(error)) {
+        throw new HomeAccessDeniedError();
+      }
+
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2025'
+      ) {
+        throw new HomeAccessDeniedError();
+      }
+
       throw error;
     }
-
-    if (isPostgresAccessDeniedError(error)) {
-      throw new HomeAccessDeniedError();
-    }
-
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'P2025'
-    ) {
-      throw new HomeAccessDeniedError();
-    }
-
-    throw error;
   }
-}
 }

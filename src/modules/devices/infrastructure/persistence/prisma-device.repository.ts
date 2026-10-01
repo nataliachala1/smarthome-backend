@@ -37,6 +37,31 @@ export class PrismaDeviceRepository implements DeviceRepository {
     if (!access?.allowed) throw new DeviceAccessDeniedError();
   }
 
+  private async authorizeControl(
+  tx: Prisma.TransactionClient,
+  homeId: string,
+  ): Promise<void> {
+    const [access] =
+      await tx.$queryRaw<
+        { allowed: boolean }[]
+      >`
+        SELECT (
+          homes.fn_is_home_owner(${homeId}::uuid)
+          OR (
+            homes.fn_is_home_active(${homeId}::uuid)
+            AND homes.fn_is_home_member(
+              ${homeId}::uuid,
+              ARRAY['MEMBER']::text[]
+            )
+          )
+        ) AS allowed
+      `;
+
+    if (!access?.allowed) {
+      throw new DeviceAccessDeniedError();
+    }
+  }
+
   async findAllByHome(userId: string, homeId: string): Promise<Device[]> {
     try {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
@@ -105,25 +130,45 @@ export class PrismaDeviceRepository implements DeviceRepository {
       this.translateError(error);
     }
   }
-    
+
   async findForControl(
-    userId: string,
-    homeId: string,
-    deviceId: string,
+  userId: string,
+  homeId: string,
+  deviceId: string,
   ): Promise<Device | null> {
     try {
-      return await this.prismaRls.withUserContext(userId, async (tx) => {
-        await this.authorize(tx, homeId, true);
+      return await this.prismaRls.withUserContext(
+        userId,
+        async (tx) => {
+          await this.authorizeControl(
+            tx,
+            homeId,
+          );
 
-        const row = await tx.device.findFirst({
-          where: {
-            id_device: deviceId,
-            id_home: homeId,
-          },
-        });
+          const row =
+            await tx.device.findFirst({
+              where: {
+                id_device:
+                  deviceId,
 
-        return row ? PrismaDeviceMapper.toDomain(row) : null;
-      });
+                id_home:
+                  homeId,
+
+                deleted_at:
+                  null,
+
+                status:
+                  'ACTIVE',
+              },
+            });
+
+          return row
+            ? PrismaDeviceMapper.toDomain(
+                row,
+              )
+            : null;
+        },
+      );
     } catch (error) {
       this.translateError(error);
     }
@@ -133,14 +178,9 @@ export class PrismaDeviceRepository implements DeviceRepository {
     try {
       return await this.prismaRls.withUserContext(userId, async (tx) => {
         await this.authorize(tx, data.homeId, true);
-        const type = await tx.device_type.findFirst({
-          where: { id_device_type: data.deviceTypeId, deleted_at: null },
-        });
-        if (!type) throw new InvalidDeviceReferenceError();
         const raw = await tx.device.create({
           data: {
             id_home: data.homeId,
-            id_device_type: data.deviceTypeId,
             name: data.name.trim(),
             status: 'ACTIVE',
             connectivity_status: 'OFFLINE',
@@ -172,16 +212,8 @@ export class PrismaDeviceRepository implements DeviceRepository {
           where: { id_device: deviceId, id_home: homeId, deleted_at: null, },
         });
         if (!current) throw new DeviceAccessDeniedError();
-        if (data.deviceTypeId) {
-          const type = await tx.device_type.findFirst({
-            where: { id_device_type: data.deviceTypeId, deleted_at: null },
-          });
-          if (!type) throw new InvalidDeviceReferenceError();
-        }
+
         const normalized = {
-          ...(data.deviceTypeId !== undefined && {
-            id_device_type: data.deviceTypeId,
-          }),
           ...(data.name !== undefined && { name: data.name.trim() }),
           ...(data.transportType !== undefined && {
             transport_type: data.transportType,
@@ -221,8 +253,6 @@ export class PrismaDeviceRepository implements DeviceRepository {
             is_on: false,
             connectivity_status:
               'OFFLINE',
-            updated_at:
-              new Date(),
           },
         });
         return PrismaDeviceMapper.toDomain(raw);
@@ -285,9 +315,6 @@ export class PrismaDeviceRepository implements DeviceRepository {
 
                 is_on:
                   false,
-
-                updated_at:
-                  new Date(),
               },
             });
 
@@ -355,9 +382,6 @@ export class PrismaDeviceRepository implements DeviceRepository {
 
               connectivity_status:
                 'OFFLINE',
-
-              updated_at:
-                now,
             },
           });
         },

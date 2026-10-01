@@ -4,16 +4,11 @@ import {
   IsIn,
   IsOptional,
   IsString,
-  IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class UpdateDeviceDto {
-  @IsOptional()
-  @IsUUID()
-  @ApiPropertyOptional({ format: 'uuid' })
-  deviceTypeId?: string;
 
   @IsOptional()
   @IsString()

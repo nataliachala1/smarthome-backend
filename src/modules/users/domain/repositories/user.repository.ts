@@ -9,7 +9,6 @@ export interface CreateUserData {
 
 export interface UpdateUserProfileData {
   name?: string;
-  email?: string;
 }
 
 export abstract class UserRepository {

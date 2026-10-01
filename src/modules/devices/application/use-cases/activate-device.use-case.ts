@@ -38,9 +38,6 @@ export class ActivateDeviceUseCase {
       homeId:
         device.homeId,
 
-      deviceTypeId:
-        device.deviceTypeId,
-
       name:
         device.name,
 

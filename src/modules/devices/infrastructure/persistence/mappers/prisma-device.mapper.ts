@@ -7,7 +7,6 @@ export class PrismaDeviceMapper {
     return new Device({
       id: raw.id_device,
       homeId: raw.id_home,
-      deviceTypeId: raw.id_device_type,
       name: raw.name,
       status: raw.status,
       connectivityStatus: raw.connectivity_status,

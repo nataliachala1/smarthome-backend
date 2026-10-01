@@ -13,7 +13,6 @@ import { CreateDeviceUseCase } from './create-device.use-case';
 
 import { ShellyRpcClientService } from '../../infrastructure/shelly/shelly-rpc-client.service';
 
-import { DeviceTypeRepository } from '../../domain/repositories/device-type.repository';
 
 export interface ProvisionShellyDeviceInput {
   userId: string;
@@ -39,9 +38,6 @@ export class ProvisionShellyDeviceUseCase {
 
     private readonly createDeviceUseCase:
       CreateDeviceUseCase,
-
-    private readonly deviceTypeRepository:
-      DeviceTypeRepository,
   ) {}
 
   async execute(
@@ -63,27 +59,6 @@ export class ProvisionShellyDeviceUseCase {
     ) {
       throw new UnprocessableEntityException(
         'El Shelly tiene autenticación habilitada. La primera versión del provisionamiento requiere que la autenticación local del dispositivo esté deshabilitada.',
-      );
-    }
-
-    /*
-     * 2. El tipo de dispositivo es un
-     * detalle interno.
-     *
-     * El usuario NO debe seleccionarlo.
-     *
-     * Shelly 1PM puede controlar diferentes
-     * tipos de carga, por eso inicialmente
-     * utilizamos la categoría genérica "Otro".
-     */
-    const deviceType =
-      await this.deviceTypeRepository.findByName(
-        'Otro',
-      );
-
-    if (!deviceType) {
-      throw new InternalServerErrorException(
-        'No existe el tipo interno de dispositivo "Otro"',
       );
     }
 
@@ -172,7 +147,6 @@ export class ProvisionShellyDeviceUseCase {
      * en SmartHome.
      *
      * El frontend no necesita conocer:
-     * - deviceTypeId
      * - manufacturerDeviceId
      * - WIFI
      * - MQTT
@@ -184,9 +158,6 @@ export class ProvisionShellyDeviceUseCase {
 
         homeId:
           input.homeId,
-
-        deviceTypeId:
-          deviceType.id,
 
         name:
           input.name,

@@ -2,7 +2,6 @@ import { Device } from '../entities/device.entity';
 
 export interface CreateDeviceData {
   homeId: string;
-  deviceTypeId: string;
   name: string;
   manufacturerDeviceId: string | null;
   transportType: 'WIFI' | 'BLUETOOTH' | null;
@@ -10,7 +9,6 @@ export interface CreateDeviceData {
 }
 
 export interface UpdateDeviceData {
-  deviceTypeId?: string;
   name?: string;
   transportType?: 'WIFI' | 'BLUETOOTH' | null;
   messagingProtocol?: 'MQTT' | null;
