@@ -222,6 +222,7 @@ export class MqttDeviceStatusSubscriber
       connectivity_status?: DeviceConnectivityStatus;
       is_on?: boolean;
       current_power_w?: number | null;
+      last_seen_at?: Date;
     } = {};
 
     if (message.connectivityStatus !== undefined) {

@@ -170,6 +170,7 @@ model device {
   is_on                  Boolean                @default(false)
   current_power_w        Decimal?               @db.Decimal(10, 2)
   manufacturer_device_id String?                @unique(map: "uq_device_manufacturer_id") @db.VarChar(100)
+  last_seen_at           DateTime?              @db.Timestamptz
   transport_type         String?                @db.VarChar(20)
   messaging_protocol     String?                @db.VarChar(20)
   created_at             DateTime               @default(now()) @db.Timestamptz(6)
