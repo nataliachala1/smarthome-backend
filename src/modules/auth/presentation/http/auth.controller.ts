@@ -101,6 +101,56 @@ import {
 } from '../../application/use-cases/reactivate-account.use-case';
 
 
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error('COOKIE_SECURE debe ser un valor booleano.');
+}
+
+function getRefreshCookieOptions() {
+  const secure = parseBoolean(
+    process.env.COOKIE_SECURE,
+    process.env.NODE_ENV === 'production',
+  );
+  const configuredSameSite = (
+    process.env.COOKIE_SAME_SITE ??
+    (process.env.NODE_ENV === 'production' ? 'none' : 'lax')
+  )
+    .trim()
+    .toLowerCase();
+  let sameSite: 'lax' | 'strict' | 'none';
+
+  switch (configuredSameSite) {
+    case 'lax':
+    case 'strict':
+    case 'none':
+      sameSite = configuredSameSite;
+      break;
+    default:
+      throw new Error('COOKIE_SAME_SITE debe ser lax, strict o none.');
+  }
+
+  const domain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: '/api/v1/auth',
+    domain,
+  } as const;
+}
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(
@@ -237,19 +287,8 @@ export class AuthController {
         'refresh_token',
         result.refreshToken,
         {
-          httpOnly: true,
-
-          secure:
-            process.env.NODE_ENV ===
-            'production',
-
-          sameSite: 'lax',
-
-          path:
-            '/api/v1/auth',
-
-          expires:
-            result.refreshTokenExpiresAt,
+          ...getRefreshCookieOptions(),
+          expires: result.refreshTokenExpiresAt,
         },
       );
 
@@ -330,19 +369,8 @@ export class AuthController {
         'refresh_token',
         result.refreshToken,
         {
-          httpOnly: true,
-
-          secure:
-            process.env.NODE_ENV ===
-            'production',
-
-          sameSite: 'lax',
-
-          path:
-            '/api/v1/auth',
-
-          expires:
-            result.refreshTokenExpiresAt,
+          ...getRefreshCookieOptions(),
+          expires: result.refreshTokenExpiresAt,
         },
       );
 
@@ -360,19 +388,7 @@ export class AuthController {
       ) {
         response.clearCookie(
           'refresh_token',
-          {
-            httpOnly: true,
-
-            secure:
-              process.env.NODE_ENV ===
-              'production',
-
-            sameSite:
-              'lax',
-
-            path:
-              '/api/v1/auth',
-          },
+          getRefreshCookieOptions(),
         );
 
         throw new UnauthorizedException(
@@ -406,19 +422,7 @@ export class AuthController {
 
     response.clearCookie(
       'refresh_token',
-      {
-        httpOnly: true,
-
-        secure:
-          process.env.NODE_ENV ===
-          'production',
-
-        sameSite:
-          'lax',
-
-        path:
-          '/api/v1/auth',
-      },
+      getRefreshCookieOptions(),
     );
 
     return {
@@ -446,19 +450,7 @@ export class AuthController {
 
     response.clearCookie(
       'refresh_token',
-      {
-        httpOnly: true,
-
-        secure:
-          process.env.NODE_ENV ===
-          'production',
-
-        sameSite:
-          'lax',
-
-        path:
-          '/api/v1/auth',
-      },
+      getRefreshCookieOptions(),
     );
 
     return {
