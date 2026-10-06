@@ -225,6 +225,8 @@ export class MqttDeviceStatusSubscriber
       last_seen_at?: Date;
     } = {};
 
+    deviceData.last_seen_at = readAt ?? now;
+
     if (message.connectivityStatus !== undefined) {
       deviceData.connectivity_status = message.connectivityStatus;
     }

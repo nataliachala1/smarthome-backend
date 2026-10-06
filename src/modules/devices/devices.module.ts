@@ -34,6 +34,8 @@ import { DiscoverShellyDevicesUseCase } from './application/use-cases/discover-s
 import { DevicesController } from './presentation/controllers/devices.controller';
 import { ShellyController } from './presentation/controllers/shelly.controller';
 
+import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
+
 @Module({
   imports: [
     AuthModule,
@@ -60,6 +62,7 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
     ControlDeviceUseCase,
 
     MqttDeviceStatusSubscriber,
+    DeviceOfflineWatcherService,
 
     IdentifyShellyDeviceUseCase,
     ShellyRpcClientService,
