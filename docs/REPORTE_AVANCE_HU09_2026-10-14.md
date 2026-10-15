@@ -8,6 +8,8 @@
 
 **Actualización posterior:** el segundo incremento incorpora límites de solicitudes HTTP. Sus cambios, pruebas y pendientes se registran en [HU09 — límites de solicitudes](HU09_RATE_LIMITING.md). Las tablas de este reporte conservan el corte del primer incremento.
 
+El tercer incremento incorpora [seguridad de sesiones y eventos Socket.IO](HU09_REALTIME_SECURITY.md), con su evidencia y pendientes de integración.
+
 Este reporte registra el trabajo realizado después de la autorización para construir y publicar avances mediante commits. Complementa el [Informe 01 de auditoría, con corte al 12/10/2026](INFORME_01_AUDITORIA_BACKEND_BD_2026-10-12.md); no sustituye su evidencia histórica ni constituye una certificación de producción.
 
 ## 1. Resultado del avance

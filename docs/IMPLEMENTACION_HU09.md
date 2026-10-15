@@ -45,7 +45,9 @@ Validación acumulada: 82 pruebas unitarias y 17 pruebas HTTP aisladas aprobadas
 
 ## Límites y siguientes avances
 
-BD-02 no se declara cerrado: faltan privilegios instalados, correo y configuración efectiva del despliegue. Los límites HTTP ya tienen evidencia local; faltan validación detrás del proxy real y protección compartida si se usan múltiples instancias. BD-17 queda pendiente para revalidación/revocación de Socket.IO y su CORS. MQTT/TLS y pairing corresponden a las HU siguientes y necesitan las decisiones y pruebas indicadas en el informe.
+Tercer incremento: [seguridad de sesiones y eventos Socket.IO](HU09_REALTIME_SECURITY.md). Se valida la cuenta y versión de sesión al conectar y antes de entregar eventos, se desconectan sockets por expiración y `logout-all` local, se restringen orígenes y se comprueba la membresía para detalles de hogar. La evidencia incluye 49 casos nuevos de realtime/concurrencia/integración de módulo, con repositorios sustituidos; no cierra las dependencias reales de BD-03/BD-04.
+
+BD-02 no se declara cerrado: faltan privilegios instalados, correo y configuración efectiva del despliegue. Los límites HTTP ya tienen evidencia local; faltan validación detrás del proxy real y protección compartida si se usan múltiples instancias. BD-17 ya dispone de controles y pruebas aisladas de sesión/origen/permisos, pero sigue pendiente de validación integral, clientes, WSS y operación distribuida; el logout individual no revoca inmediatamente el access token. MQTT/TLS y pairing corresponden a las HU siguientes y necesitan las decisiones y pruebas indicadas en el informe.
 
 Cada incremento registra HU/BD-ID, diff, validación y commits compatibles. La autorización de commit/push no autoriza migraciones operativas ni intervención física. No se hace merge a `main`/`dev`, force-push ni despliegue automático.
 

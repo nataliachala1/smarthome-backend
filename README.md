@@ -4,6 +4,8 @@ Implementación por HU: [baseline coordinado y validación de configuración de 
 
 Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxies](docs/HU09_RATE_LIMITING.md).
 
+Tercer incremento HU09: [sesiones Socket.IO, revocación y permisos de eventos](docs/HU09_REALTIME_SECURITY.md).
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>

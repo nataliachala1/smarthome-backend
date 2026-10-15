@@ -30,6 +30,7 @@ import { PrismaAccountActivationRepository } from './infrastructure/persistence/
 import { JwtAuthGuard } from './presentation/http/guards/jwt-auth.guard';
 import { RolesGuard } from './presentation/http/guards/roles.guard';
 import { UsersModule } from '../users/users.module';
+import { SessionRevocationModule } from '../../security/session-revocation.module';
 
 import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
@@ -50,6 +51,7 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
 @Module({
   imports: [
     ConfigModule,
+    SessionRevocationModule,
     forwardRef(() => UsersModule),
 
     JwtModule.registerAsync({
@@ -61,9 +63,7 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
     }),
   ],
 
-  controllers: [
-    AuthController,
-  ],
+  controllers: [AuthController],
 
   providers: [
     RegisterUserUseCase,
@@ -111,18 +111,11 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
       useClass: PrismaAccountActivationRepository,
     },
     {
-      provide:
-        RefreshTokenRepository,
-      useClass:
-        PrismaRefreshTokenRepository,
+      provide: RefreshTokenRepository,
+      useClass: PrismaRefreshTokenRepository,
     },
   ],
 
-  exports: [
-    JwtAuthGuard,
-    JwtModule,
-    RolesGuard,
-    UsersModule,
-  ],
+  exports: [JwtAuthGuard, JwtModule, RolesGuard, UsersModule],
 })
 export class AuthModule {}

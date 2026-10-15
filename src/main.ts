@@ -7,11 +7,13 @@ import cookieParser from 'cookie-parser';
 import type { Express } from 'express';
 import { getCorsOrigins } from './config/runtime-config';
 import { getTrustedProxies } from './config/trusted-proxies';
+import { SecureIoAdapter } from './modules/realtime/secure-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const isProduction = process.env.NODE_ENV === 'production';
   const corsOrigins = getCorsOrigins();
+  app.useWebSocketAdapter(new SecureIoAdapter(app, corsOrigins));
   const swaggerSetting = process.env.SWAGGER_ENABLED?.trim().toLowerCase();
   const swaggerEnabled =
     swaggerSetting === 'true' ||
