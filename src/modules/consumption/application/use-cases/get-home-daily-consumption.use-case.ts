@@ -1,8 +1,5 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { authorizeConsumptionDetail } from '../consumption-access';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
 
@@ -17,9 +14,9 @@ interface HomeDailyConsumptionRow {
   period_start: Date;
   readings_count: number;
   total_energy_delta_kwh: unknown;
-  average_power_w: unknown | null;
-  max_power_w: unknown | null;
-  min_power_w: unknown | null;
+  average_power_w: unknown;
+  max_power_w: unknown;
+  min_power_w: unknown;
 }
 
 @Injectable()
@@ -38,20 +35,7 @@ export class GetHomeDailyConsumptionUseCase {
     const toValue = to ?? null;
 
     return await this.prismaRls.withUserContext(input.userId, async (tx) => {
-      const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
-        SELECT (
-          homes.fn_is_home_owner(${input.homeId}::uuid) OR (
-            homes.fn_is_home_active(${input.homeId}::uuid) AND
-            homes.fn_is_home_member(${input.homeId}::uuid, ARRAY['MEMBER', 'GUEST']::text[])
-          )
-        ) AS allowed
-      `;
-
-      if (!access?.allowed) {
-        throw new ForbiddenException(
-          'Sin permisos para consultar consumo de este hogar',
-        );
-      }
+      await authorizeConsumptionDetail(tx, input.homeId);
 
       const rows = await tx.$queryRaw<HomeDailyConsumptionRow[]>`
         SELECT

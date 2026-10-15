@@ -1,5 +1,7 @@
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 
+HU16: [resumen GUEST aprobado, permisos de consumo e históricos con RLS](docs/HU16_CONSUMPTION_ACCESS.md). Esta versión requiere los changesets nuevos de sesiones y consumo del repositorio BD `16-dev`.
+
 Implementación por HU: [baseline coordinado y validación de configuración de HU 09-dev](docs/IMPLEMENTACION_HU09.md). Consultar los límites y verificaciones pendientes antes de aplicar cambios a una instalación existente.
 
 Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxies](docs/HU09_RATE_LIMITING.md).

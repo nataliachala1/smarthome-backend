@@ -2,6 +2,8 @@
 
 **Fecha:** 14/10/2026. **Rama:** `09-dev`. **Estado:** cuarto incremento implementado y probado; HU09 continúa abierta.
 
+**Evidencia posterior HU16:** la prueba del historial Liquibase original desde cero detectó que faltaban los objetos de sesión que las fixtures de este incremento creaban. El [incremento HU16](HU16_CONSUMPTION_ACCESS.md) agrega un changeset de compatibilidad y verifica el historial completo con un LOGIN sujeto a RLS. La compatibilidad indicada aquí describe el contrato Prisma/fixture; no prueba que esos objetos estuvieran creados por los changesets originales o en una instalación real.
+
 Cerrar sesión ahora revoca su familia de refresh tokens, invalida sus access tokens para solicitudes HTTP posteriores y desconecta sus sockets del mismo proceso. Otro login del mismo usuario conserva su propia familia. Se utiliza `auth.refresh_token.family_id`, ya existente; no se requiere una migración de esquema.
 
 ## Contrato de autenticación

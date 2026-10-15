@@ -12,6 +12,8 @@ El tercer incremento incorpora [seguridad de sesiones y eventos Socket.IO](HU09_
 
 El cuarto incremento incorpora [logout individual y familias de sesión](HU09_SESSION_FAMILIES.md), con pruebas de concurrencia y flujo HTTP/Socket.IO sobre PostgreSQL desechable.
 
+Avance posterior en `16-dev`: [resumen GUEST, permisos e históricos con RLS y camino Liquibase](HU16_CONSUMPTION_ACCESS.md), incluida la corrección de la dependencia de esquema de sesiones descubierta en las pruebas desde cero.
+
 Este reporte registra el trabajo realizado después de la autorización para construir y publicar avances mediante commits. Complementa el [Informe 01 de auditoría, con corte al 12/10/2026](INFORME_01_AUDITORIA_BACKEND_BD_2026-10-12.md); no sustituye su evidencia histórica ni constituye una certificación de producción.
 
 ## 1. Resultado del avance
