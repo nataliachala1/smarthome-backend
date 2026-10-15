@@ -28,6 +28,12 @@ La ficha del 1PM Gen4 enumera BLE, Wi-Fi y MQTT; falta validar su combinación e
 
 La documentación de Shelly OS indica que BLE RPC requiere bonding fuera de la ventana inicial de provisión. Desde firmware 2.0.0, el bonding usa el método Bluetooth `Just Works`, admite hasta 20 clientes y persiste tras reinicios. La ventana inicial acepta BLE RPC mientras la provisión está `pending` o `confirmed`; en `complete` y `locked` exige bonding. Por ello la POC debe registrar el estado de provisión y el resultado de conexión/bonding sin interpretar ese resultado como autorización OWNER ni como prueba criptográfica de posesión. No invocará `BLE.StartPairing`, `BLE.SetConfig` ni llamadas de aprovisionamiento hasta tener una prueba de lectura acordada y el hardware disponible. [BLE oficial de Shelly](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/BLE/).
 
+### Perfil GATT de RPC: dato pendiente
+
+La documentación oficial confirma que el 1PM Gen4 incluye el componente BLE y que BLE RPC existe con controles de seguridad y bonding. Sin embargo, la página [RPC Channels](https://shelly-api-docs.shelly.cloud/gen2/General/RPCChannels/) describe HTTP, WebSocket, MQTT y UDP; no especifica el servicio/características GATT ni el framing de RPC sobre BLE. La [página BLE](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/BLE/) documenta el comportamiento RPC/bonding y métodos del componente, pero tampoco publica ese perfil de transporte para un cliente Android. La [ficha del 1PM Gen4](https://shelly-api-docs.shelly.cloud/gen2/Devices/Gen4/Shelly1PMG4/) enumera BLE sin detallar el perfil GATT.
+
+La página de [características comunes de Shelly BLU](https://shelly-api-docs.shelly.cloud/docs-ble/common/) limita expresamente su alcance a dispositivos BLU alimentados por batería. Sus UUID, características y formato de anuncios no se deben reutilizar para el Shelly 1PM Gen4. Hasta obtener una especificación oficial aplicable o validar de forma controlada el perfil del equipo real, la app se limita al escaneo de anuncios: no conecta, no hace bonding y no envía RPC. El caso POC-03 permanece bloqueado por este dato más la prueba con firmware confirmado.
+
 La app usa Expo SDK 57 y React Native 0.86.3. El upstream `react-native-ble-plx` documenta pruebas hasta Expo 51/RN 0.74.1, por lo que no se selecciona para esta app sin adaptación. Existe `@sfourdrinier/react-native-ble-plx` que declara RN 0.86/Expo 57 y CNG, pero es un fork comunitario que requiere evaluación de mantenimiento, licencia, build limpio, Expo Doctor y prueba BLE en Android antes de adoptarlo. La presencia del paquete o un build exitoso no valida la interacción con Shelly. [Compatibilidad upstream](https://github.com/dotintent/react-native-ble-plx), [fork para RN 0.86/Expo 57](https://www.npmjs.com/package/@sfourdrinier/react-native-ble-plx).
 
 ## Preparación y orden de operaciones
@@ -38,7 +44,7 @@ Shelly documenta protección de provisión desde 1.7.5: AP abierto/BLE RPC puede
 
 Desde 2.0.0, la documentación distingue ventana inicial de conexiones BLE con bonding, describe “Just Works” y métodos de gestión de emparejamientos. Validar su disponibilidad en el firmware instalado. El bonding local no constituye automáticamente evidencia verificable por NestJS. [BLE](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/BLE/).
 
-No adoptar UUID GATT/framing de otros productos BLU por analogía. Contrastar el perfil documentado con servicios/características del 1PM Gen4 real; nombre anunciado y RSSI solo seleccionan candidatos, no autentican identidad.
+No adoptar UUID GATT/framing de otros productos BLU por analogía. El perfil de transporte BLE RPC del 1PM Gen4 sigue sin estar especificado en las fuentes públicas consultadas (2026-10-15); contrastarlo con una especificación oficial aplicable o medirlo en el equipo real antes de implementar conexión. Nombre anunciado y RSSI solo seleccionan candidatos, no autentican identidad.
 
 ## Pruebas y aceptación
 
