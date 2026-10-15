@@ -2,6 +2,8 @@
 
 **Fecha:** 14/10/2026. **Rama:** `09-dev`. **Estado:** tercer incremento de HU09; aceptación integral de BD-17 pendiente.
 
+**Actualización:** el [cuarto incremento](HU09_SESSION_FAMILIES.md) añade `sid` obligatorio, revocación individual y pruebas de familias persistidas en PostgreSQL. Los resultados de este documento corresponden al tercer incremento.
+
 El namespace `/realtime` ahora comprueba el usuario activo, la versión de sesión y la expiración del JWT al conectar y antes de entregar eventos. `logout-all` desconecta las sesiones anteriores del usuario en el mismo proceso. Los eventos con detalles de hogar requieren una membresía OWNER o MEMBER vigente; los destinatarios calculados previamente por el publicador ya no bastan para autorizar su entrega.
 
 ## Comportamiento implementado
@@ -93,7 +95,7 @@ BD-17 permanece abierto por estas condiciones:
 - Validar API, RLS y realtime con usuarios reales de prueba y conexiones sin privilegios elevados. Los filtros de este incremento no certifican la instalación de BD-03/BD-04.
 - Validar WSS, proxy y renovación con web y móvil en staging. La prueba local usa HTTP en loopback.
 - Resolver revocación y distribución de eventos entre réplicas. El aviso inmediato de `logout-all` y el registro de sockets son locales al proceso; las otras instancias dependen de sus consultas de cuenta.
-- El logout individual revoca el refresh token, pero el access token actual no identifica su familia de sesión. Por tanto, no hay revocación individual inmediata del socket: el cliente debe desconectarlo y el servidor mantiene los controles de expiración y versión global.
+- La revocación individual se implementó en el cuarto incremento enlazado arriba: HTTP y Socket.IO exigen `sid` y familia activa. Su integración con clientes y la notificación inmediata entre instancias siguen pendientes de validar.
 - Las consultas de cuenta y membresía no son atómicas con la entrega de red. Se filtran los cambios visibles en esas lecturas; una modificación concurrente posterior a la lectura o un paquete ya enviado no puede retirarse. Las pruebas de concurrencia cubren la revocación local de sesión, no una garantía transaccional distribuida para cambios de membresía.
 - Medir la carga de consultas por evento y establecer protección de conexiones Socket.IO. Los límites HTTP anteriores no limitan handshakes ni eventos de este transporte.
 

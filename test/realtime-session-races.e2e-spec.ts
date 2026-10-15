@@ -7,6 +7,7 @@ import { SessionRevocationService } from '../src/security/session-revocation.mod
 import { UserRepository } from '../src/modules/users/domain/repositories/user.repository';
 import { User } from '../src/modules/users/domain/entities/user.entity';
 import { UserStatus } from '../src/modules/users/domain/entities/user-status.enum';
+import { RefreshTokenRepository } from '../src/modules/auth/domain/repositories/refresh-token.repository';
 
 const userId = '10000000-0000-4000-8000-000000000001';
 
@@ -14,6 +15,7 @@ describe('Realtime authorization concurrency (isolated)', () => {
   let service: RealtimeSessionService;
   let revocations: SessionRevocationService;
   let findById: jest.Mock;
+  let hasActiveFamily: jest.Mock;
   const snapshot = {
     status: UserStatus.ACTIVE,
     sessionVersion: 0,
@@ -29,6 +31,7 @@ describe('Realtime authorization concurrency (isolated)', () => {
           userId,
           role: 'USER',
           sessionVersion: 0,
+          sessionId: '30000000-0000-4000-8000-000000000001',
           expiresAt: Date.now() + 300_000,
         },
       },
@@ -51,10 +54,14 @@ describe('Realtime authorization concurrency (isolated)', () => {
   beforeEach(() => {
     findById = jest.fn().mockResolvedValue(snapshot);
     revocations = new SessionRevocationService();
+    hasActiveFamily = jest.fn().mockResolvedValue(true);
     service = new RealtimeSessionService(
       new JwtService({ secret: 'synthetic' }),
       { findById } as unknown as UserRepository,
       revocations,
+      {
+        hasActiveFamily,
+      } as unknown as RefreshTokenRepository,
     );
     service.onModuleInit();
   });
@@ -63,6 +70,31 @@ describe('Realtime authorization concurrency (isolated)', () => {
     service.onModuleDestroy();
     jest.restoreAllMocks();
   });
+
+  it.each(['registration', 'delivery'])(
+    'does not reactivate a family revoked during %s lookup',
+    async (phase) => {
+      const client = socket();
+      if (phase === 'delivery') await service.register(client);
+      const pending = deferred<boolean>();
+      const started = deferred<void>();
+      hasActiveFamily.mockImplementationOnce(() => {
+        started.resolve();
+        return pending.promise;
+      });
+      const authorized =
+        phase === 'delivery'
+          ? service.authorizedSockets(userId)
+          : service.register(client);
+      await started.promise;
+      revocations.revokeFamily(userId, client.data.identity!.sessionId);
+      pending.resolve(true);
+      await expect(authorized).resolves.toEqual(
+        phase === 'delivery' ? [] : false,
+      );
+      expect(client.connected).toBe(false);
+    },
+  );
 
   it('does not resurrect a connection revoked while its initial lookup was pending', async () => {
     const pending = deferred<User>();

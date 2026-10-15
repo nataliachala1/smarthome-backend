@@ -7,6 +7,7 @@ import { RealtimeEventsService } from '../src/modules/realtime/realtime-events.s
 import { RealtimeSessionService } from '../src/modules/realtime/realtime-session.service';
 import { UserRepository } from '../src/modules/users/domain/repositories/user.repository';
 import { PrismaRlsService } from '../src/infrastructure/database/prisma/prisma-rls.service';
+import { RefreshTokenRepository } from '../src/modules/auth/domain/repositories/refresh-token.repository';
 
 jest.mock('../src/infrastructure/database/prisma/prisma-rls.service', () => ({
   PrismaRlsService: class PrismaRlsService {},
@@ -14,8 +15,11 @@ jest.mock('../src/infrastructure/database/prisma/prisma-rls.service', () => ({
 
 @Module({
   imports: [JwtModule.register({ secret: 'synthetic-module-test' })],
-  providers: [{ provide: UserRepository, useValue: {} }],
-  exports: [UserRepository, JwtModule],
+  providers: [
+    { provide: UserRepository, useValue: {} },
+    { provide: RefreshTokenRepository, useValue: {} },
+  ],
+  exports: [UserRepository, JwtModule, RefreshTokenRepository],
 })
 class FixtureAuthModule {}
 

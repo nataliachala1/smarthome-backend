@@ -29,6 +29,7 @@ const userA = '10000000-0000-4000-8000-000000000001';
 const userB = '10000000-0000-4000-8000-000000000002';
 const homeA = '20000000-0000-4000-8000-000000000001';
 const homeB = '20000000-0000-4000-8000-000000000002';
+const familyId = '30000000-0000-4000-8000-000000000001';
 const origin = 'https://app.example.test';
 const secret = 'synthetic-realtime-test-secret-not-for-deployment';
 
@@ -162,7 +163,10 @@ describe('Realtime security with signed JWT and real Socket.IO clients', () => {
         },
         {
           provide: RefreshTokenRepository,
-          useValue: { revokeAllByUser: revokeRefresh },
+          useValue: {
+            revokeAllByUser: revokeRefresh,
+            hasActiveFamily: jest.fn().mockResolvedValue(true),
+          },
         },
         {
           provide: PrismaRlsService,
@@ -199,6 +203,7 @@ describe('Realtime security with signed JWT and real Socket.IO clients', () => {
       sub: id,
       role: 'USER',
       sv: users.get(id)?.sessionVersion ?? 0,
+      sid: familyId,
       exp: Math.floor(Date.now() / 1000) + 300,
       ...overrides,
     };

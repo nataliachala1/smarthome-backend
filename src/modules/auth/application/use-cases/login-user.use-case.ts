@@ -50,15 +50,10 @@ export class LoginUserUseCase {
     private readonly configService: ConfigService,
   ) {}
 
-  async execute(
-    input: LoginUserInput,
-  ): Promise<LoginUserOutput> {
-    const normalizedEmail = input.email
-      .trim()
-      .toLowerCase();
+  async execute(input: LoginUserInput): Promise<LoginUserOutput> {
+    const normalizedEmail = input.email.trim().toLowerCase();
 
-    const user =
-      await this.userRepository.findByEmail(normalizedEmail);
+    const user = await this.userRepository.findByEmail(normalizedEmail);
 
     if (!user) {
       throw new InvalidCredentialsError();
@@ -74,10 +69,7 @@ export class LoginUserUseCase {
 
     let failedLoginAttempts = user.failedLoginAttempts;
 
-    if (
-      user.status === UserStatus.LOCKED &&
-      user.lockedUntil
-    ) {
+    if (user.status === UserStatus.LOCKED && user.lockedUntil) {
       if (user.lockedUntil > new Date()) {
         throw new AccountLockedError();
       }
@@ -87,19 +79,16 @@ export class LoginUserUseCase {
       failedLoginAttempts = 0;
     }
 
-    const passwordMatches =
-      await this.passwordHasher.verify(
-        user.passwordHash,
-        input.password,
-      );
+    const passwordMatches = await this.passwordHasher.verify(
+      user.passwordHash,
+      input.password,
+    );
 
     if (!passwordMatches) {
-      const failedAttempts =
-        failedLoginAttempts + 1;
+      const failedAttempts = failedLoginAttempts + 1;
 
       if (failedAttempts >= this.maxFailedAttempts) {
-        const lockedUntil =
-          new Date(Date.now() + this.lockDurationMs);
+        const lockedUntil = new Date(Date.now() + this.lockDurationMs);
 
         await this.userRepository.registerFailedLogin(
           user.id,
@@ -121,48 +110,35 @@ export class LoginUserUseCase {
       throw new InvalidCredentialsError();
     }
 
-    await this.userRepository.registerSuccessfulLogin(
-      user.id,
+    await this.userRepository.registerSuccessfulLogin(user.id);
+
+    const familyId = randomUUID();
+
+    const refreshToken = this.secureToken.generate();
+
+    const refreshTokenHash = this.secureToken.hash(refreshToken);
+
+    const refreshTokenDays = Number(
+      this.configService.get<string>('REFRESH_TOKEN_EXPIRES_DAYS') ?? '30',
     );
 
-    const accessToken =
-      await this.tokenService.generateAccessToken({
-        userId: user.id,
-        globalRole: user.roleName,
-        sessionVersion: user.sessionVersion,
-      });
-
-    const refreshToken =
-      this.secureToken.generate();
-
-    const refreshTokenHash =
-      this.secureToken.hash(
-        refreshToken,
-      );
-
-    const refreshTokenDays =
-      Number(
-        this.configService.get<string>(
-          'REFRESH_TOKEN_EXPIRES_DAYS',
-        ) ?? '30',
-      );
-
-    const refreshTokenExpiresAt =
-      new Date(
-        Date.now() +
-          refreshTokenDays *
-            24 *
-            60 *
-            60 *
-            1000,
-      );
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000,
+    );
 
     await this.refreshTokenRepository.create({
       userId: user.id,
       tokenHash: refreshTokenHash,
-      familyId: randomUUID(),
+      familyId,
       sessionVersion: user.sessionVersion,
       expiresAt: refreshTokenExpiresAt,
+    });
+
+    const accessToken = await this.tokenService.generateAccessToken({
+      userId: user.id,
+      globalRole: user.roleName,
+      sessionVersion: user.sessionVersion,
+      sessionId: familyId,
     });
 
     return {
@@ -178,5 +154,4 @@ export class LoginUserUseCase {
       },
     };
   }
-  
 }

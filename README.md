@@ -6,6 +6,8 @@ Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxie
 
 Tercer incremento HU09: [sesiones Socket.IO, revocación y permisos de eventos](docs/HU09_REALTIME_SECURITY.md).
 
+Cuarto incremento HU09: [logout individual, familias de sesión y pruebas PostgreSQL](docs/HU09_SESSION_FAMILIES.md). Los access tokens requieren `sid`; revisar la compatibilidad con clientes antes de integrar.
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>

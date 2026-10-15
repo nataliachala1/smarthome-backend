@@ -10,6 +10,7 @@ import { UserRepository } from '../../../users/domain/repositories/user.reposito
 import { UserStatus } from '../../../users/domain/entities/user-status.enum';
 
 import { InvalidRefreshTokenError } from '../../domain/errors/invalid-refresh-token.error';
+import { SessionRevocationService } from '../../../../security/session-revocation.module';
 
 export interface RefreshSessionOutput {
   accessToken: string;
@@ -22,38 +23,26 @@ export interface RefreshSessionOutput {
 @Injectable()
 export class RefreshSessionUseCase {
   constructor(
-    private readonly refreshTokenRepository:
-      RefreshTokenRepository,
+    private readonly refreshTokenRepository: RefreshTokenRepository,
 
-    private readonly userRepository:
-      UserRepository,
+    private readonly userRepository: UserRepository,
 
-    private readonly secureToken:
-      SecureToken,
+    private readonly secureToken: SecureToken,
 
-    private readonly tokenService:
-      TokenService,
+    private readonly tokenService: TokenService,
 
-    private readonly configService:
-      ConfigService,
+    private readonly configService: ConfigService,
+    private readonly revocations: SessionRevocationService,
   ) {}
 
-  async execute(
-    rawRefreshToken: string,
-  ): Promise<RefreshSessionOutput> {
+  async execute(rawRefreshToken: string): Promise<RefreshSessionOutput> {
     if (!rawRefreshToken) {
       throw new InvalidRefreshTokenError();
     }
 
-    const tokenHash =
-      this.secureToken.hash(
-        rawRefreshToken,
-      );
+    const tokenHash = this.secureToken.hash(rawRefreshToken);
 
-    const storedToken =
-      await this.refreshTokenRepository.findByHash(
-        tokenHash,
-      );
+    const storedToken = await this.refreshTokenRepository.findByHash(tokenHash);
 
     if (!storedToken) {
       throw new InvalidRefreshTokenError();
@@ -64,9 +53,8 @@ export class RefreshSessionUseCase {
      * ya revocado, invalidamos toda su familia.
      */
     if (storedToken.isRevoked) {
-      await this.refreshTokenRepository.revokeFamily(
-        storedToken.familyId,
-      );
+      await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
+      this.revocations.revokeFamily(storedToken.userId, storedToken.familyId);
 
       throw new InvalidRefreshTokenError(
         'Se detectó reutilización de un refresh token revocado',
@@ -74,31 +62,20 @@ export class RefreshSessionUseCase {
     }
 
     if (storedToken.isExpired) {
-      await this.refreshTokenRepository.revoke(
-        storedToken.id,
-      );
+      await this.refreshTokenRepository.revoke(storedToken.id);
 
-      throw new InvalidRefreshTokenError(
-        'El refresh token ha expirado',
-      );
+      throw new InvalidRefreshTokenError('El refresh token ha expirado');
     }
 
-    const user =
-      await this.userRepository.findById(
-        storedToken.userId,
-      );
+    const user = await this.userRepository.findById(storedToken.userId);
 
     if (!user) {
       throw new InvalidRefreshTokenError();
     }
 
-    if (
-      user.status !==
-      UserStatus.ACTIVE
-    ) {
-      await this.refreshTokenRepository.revokeFamily(
-        storedToken.familyId,
-      );
+    if (user.status !== UserStatus.ACTIVE) {
+      await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
+      this.revocations.revokeFamily(storedToken.userId, storedToken.familyId);
 
       throw new InvalidRefreshTokenError(
         'La cuenta asociada al refresh token no está activa',
@@ -109,97 +86,62 @@ export class RefreshSessionUseCase {
      * Si session_version cambió, el refresh
      * pertenece a una sesión revocada.
      */
-    if (
-      storedToken.sessionVersion !==
-      user.sessionVersion
-    ) {
-      await this.refreshTokenRepository.revokeFamily(
-        storedToken.familyId,
-      );
+    if (storedToken.sessionVersion !== user.sessionVersion) {
+      await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
+      this.revocations.revokeFamily(storedToken.userId, storedToken.familyId);
 
-      throw new InvalidRefreshTokenError(
-        'La sesión fue revocada',
-      );
+      throw new InvalidRefreshTokenError('La sesión fue revocada');
     }
 
-    const newRefreshToken =
-      this.secureToken.generate();
+    const newRefreshToken = this.secureToken.generate();
 
-    const newRefreshTokenHash =
-      this.secureToken.hash(
-        newRefreshToken,
-      );
+    const newRefreshTokenHash = this.secureToken.hash(newRefreshToken);
 
-    const refreshTokenDays =
-      Number(
-        this.configService.get<string>(
-          'REFRESH_TOKEN_EXPIRES_DAYS',
-        ) ?? '30',
-      );
+    const refreshTokenDays = Number(
+      this.configService.get<string>('REFRESH_TOKEN_EXPIRES_DAYS') ?? '30',
+    );
 
-    const refreshTokenExpiresAt =
-      new Date(
-        Date.now() +
-          refreshTokenDays *
-            24 *
-            60 *
-            60 *
-            1000,
-      );
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000,
+    );
 
     /*
      * El nuevo refresh conserva el mismo
      * familyId.
      */
-    await this.refreshTokenRepository.create({
-      userId:
-        user.id,
+    const rotated = await this.refreshTokenRepository.rotate(storedToken.id, {
+      userId: user.id,
 
-      tokenHash:
-        newRefreshTokenHash,
+      tokenHash: newRefreshTokenHash,
 
-      familyId:
-        storedToken.familyId,
+      familyId: storedToken.familyId,
 
-      sessionVersion:
-        user.sessionVersion,
+      sessionVersion: user.sessionVersion,
 
-      expiresAt:
-        refreshTokenExpiresAt,
+      expiresAt: refreshTokenExpiresAt,
     });
 
-    /*
-     * Marcamos el anterior como reemplazado.
-     */
-    await this.refreshTokenRepository.revoke(
-      storedToken.id,
-      newRefreshTokenHash,
-    );
+    if (!rotated) {
+      await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
+      this.revocations.revokeFamily(storedToken.userId, storedToken.familyId);
+      throw new InvalidRefreshTokenError();
+    }
 
-    await this.refreshTokenRepository.markAsUsed(
-      storedToken.id,
-    );
+    const accessToken = await this.tokenService.generateAccessToken({
+      userId: user.id,
 
-    const accessToken =
-      await this.tokenService.generateAccessToken({
-        userId:
-          user.id,
+      globalRole: user.roleName,
 
-        globalRole:
-          user.roleName,
-
-        sessionVersion:
-          user.sessionVersion,
-      });
+      sessionVersion: user.sessionVersion,
+      sessionId: storedToken.familyId,
+    });
 
     return {
       accessToken,
 
-      tokenType:
-        'Bearer',
+      tokenType: 'Bearer',
 
-      refreshToken:
-        newRefreshToken,
+      refreshToken: newRefreshToken,
 
       refreshTokenExpiresAt,
     };
