@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import type { Express } from 'express';
 import { getCorsOrigins } from './config/runtime-config';
+import { getTrustedProxies } from './config/trusted-proxies';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -18,12 +19,17 @@ async function bootstrap() {
 
   const expressApp = app.getHttpAdapter().getInstance() as Express;
   expressApp.disable('x-powered-by');
+  expressApp.set(
+    'trust proxy',
+    getTrustedProxies(process.env.TRUSTED_PROXY_CIDRS),
+  );
   app.use(cookieParser());
 
   app.enableCors({
     origin: corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Retry-After'],
     credentials: true,
   });
 

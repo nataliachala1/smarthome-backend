@@ -17,6 +17,8 @@ import {
 
 import type { Request, Response } from 'express';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../../../../security/rate-limit.policy';
 
 import { RegisterUserDto } from '../../application/dto/register-user.dto';
 import { ActivateAccountDto } from '../../application/dto/activate-account.dto';
@@ -36,10 +38,7 @@ import { InvalidActivationTokenError } from '../../domain/errors/invalid-activat
 
 import { LoginDto } from '../../application/dto/login.dto';
 
-import {
-  LoginUserOutput,
-  LoginUserUseCase,
-} from '../../application/use-cases/login-user.use-case';
+import { LoginUserUseCase } from '../../application/use-cases/login-user.use-case';
 
 import { InvalidCredentialsError } from '../../domain/errors/invalid-credentials.error';
 import { AccountNotActiveError } from '../../domain/errors/account-not-active.error';
@@ -99,7 +98,6 @@ import {
   ReactivateAccountUseCase,
   ReactivateAccountOutput,
 } from '../../application/use-cases/reactivate-account.use-case';
-
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -171,11 +169,12 @@ export class AuthController {
   @Get('me')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
-  async me(@CurrentUser() user: AuthenticatedUser) {
+  me(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 
   @Post('register')
+  @Throttle({ default: RATE_LIMITS.email })
   async register(@Body() dto: RegisterUserDto): Promise<RegisterUserOutput> {
     try {
       return await this.registerUserUseCase.execute(dto);
@@ -193,6 +192,7 @@ export class AuthController {
   }
 
   @Post('activate')
+  @Throttle({ default: RATE_LIMITS.token })
   async activate(
     @Body() dto: ActivateAccountDto,
   ): Promise<ActivateAccountOutput> {
@@ -208,6 +208,7 @@ export class AuthController {
   }
 
   @Post('resend-activation')
+  @Throttle({ default: RATE_LIMITS.email })
   async resendActivation(
     @Body() dto: ResendActivationDto,
   ): Promise<ResendActivationOutput> {
@@ -215,6 +216,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle({ default: RATE_LIMITS.email })
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,
   ): Promise<ForgotPasswordOutput> {
@@ -222,6 +224,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Throttle({ default: RATE_LIMITS.token })
   async resetPassword(
     @Body() dto: ResetPasswordDto,
   ): Promise<ResetPasswordOutput> {
@@ -241,6 +244,7 @@ export class AuthController {
   }
 
   @Patch('change-password')
+  @Throttle({ default: RATE_LIMITS.password })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   async changePassword(
@@ -268,6 +272,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: RATE_LIMITS.login })
   async login(
     @Body()
     dto: LoginDto,
@@ -278,66 +283,40 @@ export class AuthController {
     response: Response,
   ) {
     try {
-      const result =
-        await this.loginUserUseCase.execute(
-          dto,
-        );
+      const result = await this.loginUserUseCase.execute(dto);
 
-      response.cookie(
-        'refresh_token',
-        result.refreshToken,
-        {
-          ...getRefreshCookieOptions(),
-          expires: result.refreshTokenExpiresAt,
-        },
-      );
+      response.cookie('refresh_token', result.refreshToken, {
+        ...getRefreshCookieOptions(),
+        expires: result.refreshTokenExpiresAt,
+      });
 
       /*
-      * Nunca enviamos el refresh token
-      * dentro del JSON.
-      */
-      const {
-        refreshToken: _refreshToken,
-
-        refreshTokenExpiresAt:
-          _refreshTokenExpiresAt,
-
-        ...publicResult
-      } = result;
-
-      return publicResult;
+       * Nunca enviamos el refresh token
+       * dentro del JSON.
+       */
+      return {
+        accessToken: result.accessToken,
+        tokenType: result.tokenType,
+        user: result.user,
+      };
     } catch (error) {
-      if (
-        error instanceof
-        InvalidCredentialsError
-      ) {
-        throw new UnauthorizedException(
-          error.message,
-        );
+      if (error instanceof InvalidCredentialsError) {
+        throw new UnauthorizedException(error.message);
       }
 
-      if (
-        error instanceof
-        AccountNotActiveError
-      ) {
-        throw new ForbiddenException(
-          error.message,
-        );
+      if (error instanceof AccountNotActiveError) {
+        throw new ForbiddenException(error.message);
       }
 
-      if (
-        error instanceof
-        AccountLockedError
-      ) {
-        throw new ForbiddenException(
-          error.message,
-        );
+      if (error instanceof AccountLockedError) {
+        throw new ForbiddenException(error.message);
       }
 
       throw error;
     }
   }
   @Post('refresh')
+  @Throttle({ default: RATE_LIMITS.refresh })
   async refresh(
     @Req()
     request: Request,
@@ -347,53 +326,30 @@ export class AuthController {
     })
     response: Response,
   ) {
-    const refreshToken =
-      request.cookies?.refresh_token;
+    const refreshToken: unknown = request.cookies?.refresh_token;
 
-    if (
-      !refreshToken ||
-      typeof refreshToken !== 'string'
-    ) {
-      throw new UnauthorizedException(
-        'Refresh token requerido',
-      );
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Refresh token requerido');
     }
 
     try {
-      const result =
-        await this.refreshSessionUseCase.execute(
-          refreshToken,
-        );
+      const result = await this.refreshSessionUseCase.execute(refreshToken);
 
-      response.cookie(
-        'refresh_token',
-        result.refreshToken,
-        {
-          ...getRefreshCookieOptions(),
-          expires: result.refreshTokenExpiresAt,
-        },
-      );
+      response.cookie('refresh_token', result.refreshToken, {
+        ...getRefreshCookieOptions(),
+        expires: result.refreshTokenExpiresAt,
+      });
 
       return {
-        accessToken:
-          result.accessToken,
+        accessToken: result.accessToken,
 
-        tokenType:
-          result.tokenType,
+        tokenType: result.tokenType,
       };
     } catch (error) {
-      if (
-        error instanceof
-        InvalidRefreshTokenError
-      ) {
-        response.clearCookie(
-          'refresh_token',
-          getRefreshCookieOptions(),
-        );
+      if (error instanceof InvalidRefreshTokenError) {
+        response.clearCookie('refresh_token', getRefreshCookieOptions());
 
-        throw new UnauthorizedException(
-          error.message,
-        );
+        throw new UnauthorizedException(error.message);
       }
 
       throw error;
@@ -411,23 +367,16 @@ export class AuthController {
     response: Response,
   ) {
     const refreshToken =
-      typeof request.cookies?.refresh_token ===
-      'string'
+      typeof request.cookies?.refresh_token === 'string'
         ? request.cookies.refresh_token
         : undefined;
 
-    await this.logoutUseCase.execute(
-      refreshToken,
-    );
+    await this.logoutUseCase.execute(refreshToken);
 
-    response.clearCookie(
-      'refresh_token',
-      getRefreshCookieOptions(),
-    );
+    response.clearCookie('refresh_token', getRefreshCookieOptions());
 
     return {
-      message:
-        'Sesión cerrada correctamente',
+      message: 'Sesión cerrada correctamente',
     };
   }
 
@@ -444,48 +393,35 @@ export class AuthController {
     })
     response: Response,
   ) {
-    await this.logoutAllUseCase.execute(
-      user.userId,
-    );
+    await this.logoutAllUseCase.execute(user.userId);
 
-    response.clearCookie(
-      'refresh_token',
-      getRefreshCookieOptions(),
-    );
+    response.clearCookie('refresh_token', getRefreshCookieOptions());
 
     return {
-      message:
-        'Todas las sesiones fueron cerradas correctamente',
+      message: 'Todas las sesiones fueron cerradas correctamente',
     };
   }
 
   @Post('request-reactivation')
+  @Throttle({ default: RATE_LIMITS.email })
   async requestReactivation(
     @Body()
     dto: RequestReactivationDto,
   ): Promise<RequestReactivationOutput> {
-    return this.requestReactivationUseCase.execute(
-      dto,
-    );
+    return this.requestReactivationUseCase.execute(dto);
   }
 
   @Post('reactivate')
+  @Throttle({ default: RATE_LIMITS.token })
   async reactivate(
     @Body()
     dto: ReactivateAccountDto,
   ): Promise<ReactivateAccountOutput> {
     try {
-      return await this.reactivateAccountUseCase.execute(
-        dto,
-      );
+      return await this.reactivateAccountUseCase.execute(dto);
     } catch (error) {
-      if (
-        error instanceof
-        InvalidActivationTokenError
-      ) {
-        throw new BadRequestException(
-          error.message,
-        );
+      if (error instanceof InvalidActivationTokenError) {
+        throw new BadRequestException(error.message);
       }
 
       throw error;

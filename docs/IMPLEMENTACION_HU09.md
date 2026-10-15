@@ -37,9 +37,15 @@ Validación del incremento: 47 pruebas unitarias aprobadas, compilación NestJS 
 
 Ninguna prueba usa credenciales reales, una base en uso, broker o Shelly. La prueba SQL valida el diagnóstico de catálogos con fixtures; no certifica las políticas o usuarios de una instalación real.
 
+## Segundo incremento de BD-02: límites de solicitudes
+
+Se incorporó protección HTTP por IP y método del controlador, con cuotas específicas para autenticación, respuesta `429` con código estable y tiempo de reintento, configuración explícita de proxies y almacenamiento acotado por proceso. Detalle, contrato para clientes y límites operativos en [HU09 — límites de solicitudes](HU09_RATE_LIMITING.md).
+
+Validación acumulada: 82 pruebas unitarias y 17 pruebas HTTP aisladas aprobadas; compilación, TypeScript y ESLint de los archivos cambiados aprobados. Los casos de uso, Prisma y el guard JWT se sustituyen en la suite HTTP; estos resultados no certifican autenticación ni RLS reales. El incremento continúa siendo compatible con BD `f097a0a` y no requiere changesets.
+
 ## Límites y siguientes avances
 
-BD-02 no se declara cerrado: faltan privilegios instalados, correo, rate limiting y configuración efectiva del despliegue. BD-17 queda pendiente para revalidación/revocación de Socket.IO y su CORS. MQTT/TLS y pairing corresponden a las HU siguientes y necesitan las decisiones y pruebas indicadas en el informe.
+BD-02 no se declara cerrado: faltan privilegios instalados, correo y configuración efectiva del despliegue. Los límites HTTP ya tienen evidencia local; faltan validación detrás del proxy real y protección compartida si se usan múltiples instancias. BD-17 queda pendiente para revalidación/revocación de Socket.IO y su CORS. MQTT/TLS y pairing corresponden a las HU siguientes y necesitan las decisiones y pruebas indicadas en el informe.
 
 Cada incremento registra HU/BD-ID, diff, validación y commits compatibles. La autorización de commit/push no autoriza migraciones operativas ni intervención física. No se hace merge a `main`/`dev`, force-push ni despliegue automático.
 

@@ -1,3 +1,5 @@
+import { getTrustedProxies } from './trusted-proxies';
+
 type Environment = Record<string, unknown>;
 
 function setting(environment: Environment, name: string): string | undefined {
@@ -92,6 +94,7 @@ export function validateRuntimeConfig(environment: Environment): Environment {
     throw new Error('NODE_ENV debe ser development, test o production.');
   }
   const isProduction = nodeEnv === 'production';
+  getTrustedProxies(environment.TRUSTED_PROXY_CIDRS);
   const required = ['DATABASE_URL', 'DATABASE_IOT_URL', 'JWT_SECRET'];
   const missing = required.filter(
     (name) => !setting(environment, name)?.trim(),
