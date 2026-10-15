@@ -1,4 +1,6 @@
-HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Primer incremento local; broker cloud, ACL y alta con identidad individual pendientes.
+HU11: [identidades MQTT, ACL y revocación probadas con broker desechable](docs/HU11_MQTT_IDENTITIES.md). Adaptador interno; integración con persistencia, pairing y baja de dispositivo pendiente.
+
+HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Broker cloud y alta con identidad individual todavía requieren integración.
 
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 

@@ -87,7 +87,7 @@ export class MqttDeviceControlPublisher
 
     const payload = JSON.stringify({
       id: Date.now(),
-      src: this.mqtt.config.rpcSource,
+      src: this.mqtt.topics.rpcSource(input.manufacturerDeviceId),
       method: 'Switch.Set',
       params: {
         id: this.mqtt.config.switchId,
