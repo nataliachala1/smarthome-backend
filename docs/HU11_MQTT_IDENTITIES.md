@@ -1,5 +1,7 @@
 # HU11 — Identidad MQTT y ACL: primer incremento
 
+Este documento conserva el alcance del primer incremento. El [segundo incremento](HU11_MQTT_REVOCATION.md) añade registro persistente y revocación durable para identidades registradas; describe los nuevos resultados y los límites de integración vigentes.
+
 Fecha: 2026-10-15. Rama `11-dev`, desde `10-dev` / `63f4bf56a203ddb514fb53e935dc5860944f2e0a`. La rama coordinada de base de datos parte de `10-dev` / `9b9742b6d8f344440145d5b233e33161f9ac1d56`. Esta dependencia se debe al contrato de namespace y TLS implementado en HU10, no al orden numérico. Diff y resultados de pruebas presentados; commit/push autorizados por el usuario el 2026-10-15.
 
 ## Resultado y alcance

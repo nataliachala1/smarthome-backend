@@ -214,6 +214,9 @@ async function main() {
         '--runInBand',
         '--runTestsByPath',
         'test/mqtt-identity-broker.e2e-spec.ts',
+        ...(process.argv[3] === '--with-revocation'
+          ? ['test/mqtt-revocation-postgres.e2e-spec.ts']
+          : []),
       ],
       {
         cwd: root,

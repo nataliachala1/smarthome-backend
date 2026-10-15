@@ -1,4 +1,4 @@
-HU11: [identidades MQTT, ACL y revocación probadas con broker desechable](docs/HU11_MQTT_IDENTITIES.md). Adaptador interno; integración con persistencia, pairing y baja de dispositivo pendiente.
+HU11: [registro persistente y revocación durable al dar de baja](docs/HU11_MQTT_REVOCATION.md), sobre el [adaptador de identidades y ACL](docs/HU11_MQTT_IDENTITIES.md). Trabajador interno probado con PostgreSQL y broker TLS; activación operativa y pairing pendientes.
 
 HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Broker cloud y alta con identidad individual todavía requieren integración.
 
