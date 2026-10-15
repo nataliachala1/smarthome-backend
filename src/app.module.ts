@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { validateRuntimeConfig } from './config/runtime-config';
 import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -14,6 +15,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
+      validate: validateRuntimeConfig,
     }),
 
     PrismaModule,
