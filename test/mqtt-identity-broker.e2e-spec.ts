@@ -5,7 +5,11 @@ import { resolve, sep } from 'node:path';
 import type { ConnectionOptions } from 'node:tls';
 import { connect, IClientOptions, MqttClient, Packet } from 'mqtt';
 import { DeviceMqttPolicy } from '../src/modules/devices/infrastructure/messaging/identity/device-mqtt-policy';
-import { MosquittoAdminTransport } from '../src/modules/devices/infrastructure/messaging/identity/mosquitto-admin.transport';
+import {
+  AdminCommand,
+  BrokerAdminError,
+  MosquittoAdminTransport,
+} from '../src/modules/devices/infrastructure/messaging/identity/mosquitto-admin.transport';
 import { MosquittoDeviceIdentityAdmin } from '../src/modules/devices/infrastructure/messaging/identity/mosquitto-device-identity.admin';
 
 // Only the harness can supply a fresh loopback broker and temporary CA.
@@ -24,6 +28,22 @@ brokerSuite('HU11 real Mosquitto TLS/ACL with two simulated devices', () => {
   let a: Issued;
   let b: Issued;
   let servicePassword: string;
+  const preparationPasswords: string[] = [];
+
+  function observedAdmin(after?: (command: AdminCommand) => void) {
+    return new MosquittoDeviceIdentityAdmin(
+      {
+        execute: async (command) => {
+          if (typeof command.password === 'string')
+            preparationPasswords.push(command.password);
+          const response = await transport.execute(command);
+          after?.(command);
+          return response;
+        },
+      },
+      policy,
+    );
+  }
 
   function open(options: IClientOptions = {}): Promise<MqttClient> {
     return new Promise((resolveClient, reject) => {
@@ -337,6 +357,269 @@ brokerSuite('HU11 real Mosquitto TLS/ACL with two simulated devices', () => {
     expect((await asDevice(a)).connected).toBe(true);
   });
 
+  it('prepares a credential that stays disabled under MQTT 5 and 3.1.1 until explicit test activation', async () => {
+    const id = randomUUID();
+    const manufacturer = `shelly-prepared-${id}`;
+    const start = preparationPasswords.length;
+    const prepared = await observedAdmin().prepare(id, manufacturer);
+    expect(prepared.brokerState).toBe('DISABLED');
+    expect((await identities.inspect(id, manufacturer)).brokerState).toBe(
+      'DISABLED',
+    );
+    await expect(asDevice(prepared)).rejects.toThrow(
+      'MQTT_TEST_CONNECT_FAILED:135',
+    );
+    await expect(asDevice(prepared, { protocolVersion: 4 })).rejects.toThrow(
+      'MQTT_TEST_CONNECT_FAILED:5',
+    );
+    const bootstrap = preparationPasswords[start];
+    expect(bootstrap === prepared.password).toBe(false);
+    // Test-only activation proves the final credential/ACL without introducing
+    // a production activation API or claiming possession/pairing completion.
+    await transport.execute({
+      command: 'enableClient',
+      username: prepared.identity.username,
+    });
+    await expect(asDevice(prepared, { password: bootstrap })).rejects.toThrow(
+      'MQTT_TEST_CONNECT_FAILED:135',
+    );
+    const live = await asDevice(prepared);
+    expect(
+      await subscribeCode(live, `${prepared.identity.topicPrefix}/rpc`),
+    ).toBe(1);
+    expect(
+      await publishCode(live, `${prepared.identity.topicPrefix}/events/rpc`),
+    ).toBeLessThan(128);
+    expect(
+      await publishCode(live, `${b.identity.topicPrefix}/events/rpc`),
+    ).toBe(135);
+    const disconnected = closed(live);
+    await identities.revoke(id);
+    await disconnected;
+    await expect(asDevice(prepared)).rejects.toThrow(
+      'MQTT_TEST_CONNECT_FAILED:135',
+    );
+  });
+
+  it('inspects an enabled identity without changing its session or ACL', async () => {
+    const live = await asDevice(b);
+    expect(
+      await identities.inspect(b.identity.identityId, b.identity.clientId),
+    ).toEqual({ identity: b.identity, brokerState: 'ENABLED' });
+    expect(live.connected).toBe(true);
+    expect(
+      await publishCode(live, `${b.identity.topicPrefix}/events/rpc`),
+    ).toBeLessThan(128);
+  });
+
+  it('refuses duplicate preparation without changing an existing enabled identity', async () => {
+    const live = await asDevice(b);
+    await expect(
+      observedAdmin().prepare(b.identity.identityId, b.identity.clientId),
+    ).rejects.toMatchObject({ code: 'MQTT_ADMIN_REJECTED' });
+    expect(live.connected).toBe(true);
+    expect(
+      (await identities.inspect(b.identity.identityId, b.identity.clientId))
+        .brokerState,
+    ).toBe('ENABLED');
+  });
+
+  it('keeps a lost create acknowledgement uncertain even when inspection finds an enabled temporary identity', async () => {
+    const id = randomUUID();
+    const manufacturer = `shelly-create-uncertain-${id}`;
+    const start = preparationPasswords.length;
+    const commands: string[] = [];
+    const uncertain = observedAdmin((command) => {
+      commands.push(command.command);
+      if (command.command === 'createClient')
+        throw new BrokerAdminError('MQTT_ADMIN_OUTCOME_UNKNOWN');
+    });
+    await expect(uncertain.prepare(id, manufacturer)).rejects.toMatchObject({
+      code: 'MQTT_ADMIN_OUTCOME_UNKNOWN',
+    });
+    expect(commands).toEqual([
+      'getDefaultACLAccess',
+      'createRole',
+      'createClient',
+    ]);
+    expect(preparationPasswords.length - start).toBe(1);
+    expect((await identities.inspect(id, manufacturer)).brokerState).toBe(
+      'ENABLED',
+    );
+    await expect(identities.prepare(id, manufacturer)).rejects.toMatchObject({
+      code: 'MQTT_ADMIN_REJECTED',
+    });
+    // Preparation returned no credential, but this outcome still needs durable
+    // reconciliation. Only this isolated test explicitly disables the orphan.
+    await identities.revoke(id);
+    expect((await identities.inspect(id, manufacturer)).brokerState).toBe(
+      'DISABLED',
+    );
+  });
+
+  it.each(['disableClient', 'setClientPassword'])(
+    'does not deliver credentials after a lost %s acknowledgement, and a fresh inspection recovers disabled state',
+    async (stage) => {
+      const id = randomUUID();
+      const manufacturer = `shelly-uncertain-${id}`;
+      const start = preparationPasswords.length;
+      const uncertain = observedAdmin((command) => {
+        if (command.command === stage)
+          throw new BrokerAdminError('MQTT_ADMIN_OUTCOME_UNKNOWN');
+      });
+      await expect(uncertain.prepare(id, manufacturer)).rejects.toMatchObject({
+        code: 'MQTT_ADMIN_OUTCOME_UNKNOWN',
+      });
+      expect(preparationPasswords.length - start).toBe(
+        stage === 'disableClient' ? 1 : 2,
+      );
+      const observed = await identities.inspect(id, manufacturer);
+      expect(observed.brokerState).toBe('DISABLED');
+      for (const password of preparationPasswords.slice(start)) {
+        await expect(
+          asDevice({ identity: observed.identity, password }),
+        ).rejects.toThrow('MQTT_TEST_CONNECT_FAILED:135');
+      }
+      // No automatic adoption/reissuance when the previous outcome was uncertain.
+      await expect(identities.prepare(id, manufacturer)).rejects.toMatchObject({
+        code: 'MQTT_ADMIN_REJECTED',
+      });
+    },
+  );
+
+  it('does not report successful preparation when an administrator re-enables before final inspection', async () => {
+    const id = randomUUID();
+    const manufacturer = `shelly-race-${id}`;
+    const racing = new MosquittoDeviceIdentityAdmin(
+      {
+        execute: async (command) => {
+          const response = await transport.execute(command);
+          if (command.command === 'setClientPassword')
+            await transport.execute({
+              command: 'enableClient',
+              username: command.username,
+            });
+          return response;
+        },
+      },
+      policy,
+    );
+    await expect(racing.prepare(id, manufacturer)).rejects.toMatchObject({
+      code: 'MQTT_IDENTITY_POLICY_MISMATCH',
+    });
+    expect((await identities.inspect(id, manufacturer)).brokerState).toBe(
+      'ENABLED',
+    );
+    // The caller must reconcile failures; only this isolated test invokes cleanup.
+    await identities.revoke(id);
+  });
+
+  it.each(['client-id', 'role', 'group', 'acl'])(
+    'rejects observed %s drift without repairing or enabling the identity',
+    async (drift) => {
+      const id = randomUUID();
+      const manufacturer = `shelly-drift-${id}`;
+      const prepared = await observedAdmin().prepare(id, manufacturer);
+      const username = prepared.identity.username;
+      if (drift === 'client-id') {
+        await transport.execute({
+          command: 'setClientId',
+          username,
+          clientid: 'different-device',
+        });
+      } else if (drift === 'role') {
+        await transport.execute({
+          command: 'createRole',
+          rolename: `extra-${id}`,
+          acls: [],
+        });
+        await transport.execute({
+          command: 'addClientRole',
+          username,
+          rolename: `extra-${id}`,
+          priority: 0,
+        });
+      } else if (drift === 'group') {
+        await transport.execute({
+          command: 'createGroup',
+          groupname: `extra-${id}`,
+        });
+        await transport.execute({
+          command: 'addGroupClient',
+          username,
+          groupname: `extra-${id}`,
+          priority: 0,
+        });
+      } else {
+        await transport.execute({
+          command: 'modifyRole',
+          rolename: prepared.identity.roleName,
+          acls: [
+            ...prepared.identity.acls,
+            {
+              acltype: 'publishClientSend',
+              topic: '#',
+              priority: 0,
+              allow: true,
+            },
+          ],
+        });
+      }
+      await expect(identities.inspect(id, manufacturer)).rejects.toMatchObject({
+        code: 'MQTT_IDENTITY_POLICY_MISMATCH',
+      });
+      await expect(asDevice(prepared)).rejects.toThrow(
+        'MQTT_TEST_CONNECT_FAILED:135',
+      );
+      const raw = (await transport.execute({
+        command: 'getClient',
+        username,
+      })) as { client: { disabled: boolean } };
+      expect(raw.client.disabled).toBe(true);
+    },
+  );
+
+  it('rejects permissive default ACLs during inspection without changing them or enabling the identity', async () => {
+    const id = randomUUID();
+    const manufacturer = `shelly-defaults-${id}`;
+    const prepared = await observedAdmin().prepare(id, manufacturer);
+    try {
+      await transport.execute({
+        command: 'setDefaultACLAccess',
+        acls: [{ acltype: 'publishClientSend', allow: true }],
+      });
+      await expect(identities.inspect(id, manufacturer)).rejects.toMatchObject({
+        code: 'MQTT_ADMIN_UNSAFE_DEFAULT_ACL',
+      });
+      const defaults = (await transport.execute({
+        command: 'getDefaultACLAccess',
+      })) as {
+        acls: { acltype: string; allow: boolean }[];
+      };
+      expect(defaults.acls).toContainEqual({
+        acltype: 'publishClientSend',
+        allow: true,
+      });
+      await expect(asDevice(prepared)).rejects.toThrow(
+        'MQTT_TEST_CONNECT_FAILED:135',
+      );
+    } finally {
+      await transport.execute({
+        command: 'setDefaultACLAccess',
+        acls: [{ acltype: 'publishClientSend', allow: false }],
+      });
+    }
+    expect((await identities.inspect(id, manufacturer)).brokerState).toBe(
+      'DISABLED',
+    );
+  });
+
+  it('does not equate an inspection rejection with an absent or safely revoked identity', async () => {
+    await expect(
+      identities.inspect(randomUUID(), 'shelly-missing'),
+    ).rejects.toMatchObject({ code: 'MQTT_ADMIN_REJECTED' });
+  });
+
   it('rotates A by disconnecting it and rejecting the old password', async () => {
     const client = await asDevice(a);
     const disconnect = closed(client);
@@ -380,6 +663,7 @@ brokerSuite('HU11 real Mosquitto TLS/ACL with two simulated devices', () => {
       b.password,
       servicePassword,
       process.env.HU11_TEST_ADMIN_PASSWORD!,
+      ...preparationPasswords,
     ]) {
       expect(state.includes(password)).toBe(false);
     }
