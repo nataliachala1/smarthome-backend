@@ -21,6 +21,7 @@ describe('revocation runtime lifecycle', () => {
   const environment = () => ({
     NODE_ENV: 'test',
     MQTT_REVOCATION_ENABLED: 'true',
+    MQTT_IDENTITY_PROVIDER: 'mosquitto-dynamic-security',
     DATABASE_URL: 'postgresql://app:fixture@db.test/smarthome',
     DATABASE_IOT_URL: 'postgresql://ingest:fixture@db.test/smarthome',
     DATABASE_MQTT_REVOKE_URL: 'postgresql://revoker:fixture@db.test/smarthome',
@@ -61,6 +62,7 @@ describe('revocation runtime lifecycle', () => {
   it('opens no database or broker resource while disabled', async () => {
     const f = fixture({
       MQTT_REVOCATION_ENABLED: 'false',
+      MQTT_IDENTITY_PROVIDER: 'emqx-serverless',
       DATABASE_MQTT_REVOKE_CA_FILE: 'absent.pem',
     });
     await f.runtime.onApplicationBootstrap();
@@ -71,6 +73,26 @@ describe('revocation runtime lifecycle', () => {
       enabled: false,
       running: false,
     });
+  });
+  it('rejects EMQX Serverless before allocating resources or scheduling work', () => {
+    const config = new ConfigService({
+      ...environment(),
+      MQTT_IDENTITY_PROVIDER: 'emqx-serverless',
+    });
+    const resources = new MqttRevocationResources();
+    const createPool = jest.spyOn(resources, 'pool');
+    const createBroker = jest.spyOn(resources, 'broker');
+    expect(
+      () =>
+        new MqttRevocationRuntimeService(
+          config,
+          new MqttRuntimeService(config),
+          resources,
+        ),
+    ).toThrow('MQTT_REVOCATION_PROVIDER_UNSUPPORTED');
+    expect(createPool).not.toHaveBeenCalled();
+    expect(createBroker).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
   it('fails closed on an unsafe database and cleans up exactly once', async () => {
     const f = fixture();

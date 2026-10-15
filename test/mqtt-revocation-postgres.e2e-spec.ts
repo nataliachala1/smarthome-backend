@@ -56,6 +56,7 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
     const config = new ConfigService({
       NODE_ENV: 'test',
       MQTT_REVOCATION_ENABLED: 'true',
+      MQTT_IDENTITY_PROVIDER: 'mosquitto-dynamic-security',
       MQTT_REVOCATION_POLL_MS: '250',
       DATABASE_URL: `postgresql://hu11_app:${password}@${base}`,
       DATABASE_IOT_URL: `postgresql://hu11_ingest:${password}@${base}`,

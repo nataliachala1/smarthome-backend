@@ -4,6 +4,7 @@ export const MQTT_REVOCATION_SETTINGS = [
   'DATABASE_URL',
   'DATABASE_IOT_URL',
   'MQTT_REVOCATION_ENABLED',
+  'MQTT_IDENTITY_PROVIDER',
   'DATABASE_MQTT_REVOKE_URL',
   'DATABASE_MQTT_REVOKE_TLS',
   'DATABASE_MQTT_REVOKE_CA_FILE',
@@ -55,6 +56,13 @@ export function parseMqttRevocationConfig(
   if (!['true', 'false'].includes(enabled))
     throw new Error('MQTT_REVOCATION_CONFIG_INVALID:MQTT_REVOCATION_ENABLED');
   if (enabled === 'false') return { enabled: false };
+  // MQTT connectivity does not imply support for Mosquitto Dynamic Security.
+  // Require an explicit administrative provider before any SQL or broker I/O.
+  const provider = required('MQTT_IDENTITY_PROVIDER');
+  if (provider === 'emqx-serverless')
+    throw new Error('MQTT_REVOCATION_PROVIDER_UNSUPPORTED');
+  if (provider !== 'mosquitto-dynamic-security')
+    throw new Error('MQTT_REVOCATION_CONFIG_INVALID:MQTT_IDENTITY_PROVIDER');
   const production = read('NODE_ENV') === 'production';
   const tls =
     read('DATABASE_MQTT_REVOKE_TLS') ?? (production ? 'true' : 'false');

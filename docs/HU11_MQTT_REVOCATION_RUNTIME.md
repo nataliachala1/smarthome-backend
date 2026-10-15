@@ -1,5 +1,7 @@
 # HU11 — Ejecución automática del trabajador de revocación
 
+Actualización: el [incremento de compatibilidad EMQX](HU11_EMQX_SERVERLESS_PAIRING_READINESS.md) exige `MQTT_IDENTITY_PROVIDER=mosquitto-dynamic-security` para habilitar este trabajador. `emqx-serverless` se rechaza antes de abrir recursos. La evidencia histórica siguiente corresponde exclusivamente a Mosquitto; la administración de identidades del proveedor de producción sigue pendiente.
+
 Este documento conserva la evidencia del tercer incremento. El [cuarto incremento](HU11_MQTT_IDENTITY_HISTORY.md) añade historial transaccional y amplía la auditoría operativa de ocho a nueve comprobaciones; consultar allí la revisión BD requerida.
 
 Fecha: 2026-10-15. Tercer incremento en `11-dev`, desde backend `20eee233274bf8d89c479fdb44a2679e2a2d157a` y BD `eeef0824a445e64d77fefcfaf0c60ca2a26eeaf2`. Diff y resultados de pruebas presentados; commit/push de este incremento autorizados por el usuario el 2026-10-15.

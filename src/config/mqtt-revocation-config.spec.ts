@@ -9,6 +9,7 @@ const enabled = () => ({
   DATABASE_MQTT_REVOKE_URL:
     'postgresql://revoker:fixture@db.test:5432/smarthome',
   MQTT_REVOCATION_ENABLED: 'true',
+  MQTT_IDENTITY_PROVIDER: 'mosquitto-dynamic-security',
   MQTT_BROKER_URL: 'mqtts://broker.test:8883',
   MQTT_USERNAME: 'service',
   MQTT_PASSWORD: 'fixture',
@@ -20,6 +21,58 @@ const enabled = () => ({
 });
 
 describe('MQTT revocation runtime configuration', () => {
+  it.each([undefined, ''])(
+    'requires an explicit identity provider when enabled',
+    (provider) => {
+      expect(() =>
+        parseMqttRevocationConfig({
+          ...enabled(),
+          MQTT_IDENTITY_PROVIDER: provider,
+        }),
+      ).toThrow('MQTT_REVOCATION_CONFIG_REQUIRED:MQTT_IDENTITY_PROVIDER');
+    },
+  );
+  it('rejects EMQX Serverless before reading database or admin credentials', () => {
+    expect(() =>
+      parseMqttRevocationConfig({
+        MQTT_REVOCATION_ENABLED: 'true',
+        MQTT_IDENTITY_PROVIDER: 'emqx-serverless',
+      }),
+    ).toThrow(new Error('MQTT_REVOCATION_PROVIDER_UNSUPPORTED'));
+  });
+  it.each([
+    'mosquitto',
+    'emqx',
+    ' mosquitto-dynamic-security',
+    'private-input',
+    1,
+  ])('rejects an unknown provider without disclosing its value', (provider) => {
+    expect(() =>
+      parseMqttRevocationConfig({
+        ...enabled(),
+        MQTT_IDENTITY_PROVIDER: provider,
+      }),
+    ).toThrow(
+      new Error('MQTT_REVOCATION_CONFIG_INVALID:MQTT_IDENTITY_PROVIDER'),
+    );
+  });
+  it('keeps ordinary MQTT startup available with the unsupported worker disabled', () => {
+    const config = {
+      ...enabled(),
+      MQTT_REVOCATION_ENABLED: 'false',
+      MQTT_IDENTITY_PROVIDER: 'emqx-serverless',
+    };
+    expect(validateRuntimeConfig(config)).toBe(config);
+    expect(parseMqttRevocationConfig(config)).toEqual({ enabled: false });
+  });
+  it('enforces the provider guard during normal application validation', () => {
+    expect(() =>
+      validateRuntimeConfig({
+        ...enabled(),
+        MQTT_IDENTITY_PROVIDER: 'emqx-serverless',
+      }),
+    ).toThrow('MQTT_REVOCATION_PROVIDER_UNSUPPORTED');
+  });
   it('is disabled by default and ignores unused credentials', () => {
     expect(
       parseMqttRevocationConfig({ DATABASE_MQTT_REVOKE_URL: 'invalid-secret' }),
