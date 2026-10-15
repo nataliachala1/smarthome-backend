@@ -1,4 +1,5 @@
 import { getTrustedProxies } from './trusted-proxies';
+import { parseMqttConfig } from './mqtt-config';
 
 type Environment = Record<string, unknown>;
 
@@ -155,5 +156,6 @@ export function validateRuntimeConfig(environment: Environment): Environment {
       'FRONTEND_URL o CORS_ALLOWED_ORIGINS es requerida en producción.',
     );
   }
+  parseMqttConfig(environment);
   return environment;
 }

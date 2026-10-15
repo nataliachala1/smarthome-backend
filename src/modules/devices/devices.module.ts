@@ -10,6 +10,7 @@ import { PrismaDeviceRepository } from './infrastructure/persistence/prisma-devi
 
 import { MqttDeviceControlPublisher } from './infrastructure/messaging/mqtt-device-control.publisher';
 import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
+import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.service';
 
 import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
 import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
@@ -37,15 +38,9 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
 import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
 
 @Module({
-  imports: [
-    AuthModule,
-    RealtimeModule,
-  ],
+  imports: [AuthModule, RealtimeModule],
 
-  controllers: [
-    DevicesController,
-    ShellyController,
-  ],
+  controllers: [DevicesController, ShellyController],
 
   providers: [
     ListHomeDevicesUseCase,
@@ -62,6 +57,7 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     ControlDeviceUseCase,
 
     MqttDeviceStatusSubscriber,
+    MqttRuntimeService,
     DeviceOfflineWatcherService,
 
     IdentifyShellyDeviceUseCase,
@@ -81,8 +77,6 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     },
   ],
 
-  exports: [
-    DeviceRepository,
-  ],
+  exports: [DeviceRepository],
 })
 export class DevicesModule {}

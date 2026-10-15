@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   Injectable,
   InternalServerErrorException,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 
@@ -12,7 +13,7 @@ import { IdentifyShellyDeviceUseCase } from './identify-shelly-device.use-case';
 import { CreateDeviceUseCase } from './create-device.use-case';
 
 import { ShellyRpcClientService } from '../../infrastructure/shelly/shelly-rpc-client.service';
-
+import { MqttRuntimeService } from '../../infrastructure/messaging/mqtt-runtime.service';
 
 export interface ProvisionShellyDeviceInput {
   userId: string;
@@ -27,36 +28,37 @@ export interface ProvisionShellyDeviceInput {
 @Injectable()
 export class ProvisionShellyDeviceUseCase {
   constructor(
-    private readonly configService:
-      ConfigService,
+    private readonly mqtt: MqttRuntimeService,
+    private readonly configService: ConfigService,
 
-    private readonly identifyShellyDeviceUseCase:
-      IdentifyShellyDeviceUseCase,
+    private readonly identifyShellyDeviceUseCase: IdentifyShellyDeviceUseCase,
 
-    private readonly shellyRpcClient:
-      ShellyRpcClientService,
+    private readonly shellyRpcClient: ShellyRpcClientService,
 
-    private readonly createDeviceUseCase:
-      CreateDeviceUseCase,
+    private readonly createDeviceUseCase: CreateDeviceUseCase,
   ) {}
 
-  async execute(
-    input: ProvisionShellyDeviceInput,
-  ) {
+  async execute(input: ProvisionShellyDeviceInput) {
+    // This legacy LAN flow shares the backend credential. Cloud bootstrap must
+    // wait for individual device identities; never distribute the service secret.
+    if (this.mqtt.config.tls || this.mqtt.config.namespace) {
+      throw new ServiceUnavailableException({
+        code: 'MQTT_DEVICE_BOOTSTRAP_REQUIRED',
+        message:
+          'El alta con TLS o namespace requiere credenciales MQTT individuales de dispositivo.',
+      });
+    }
     /*
      * 1. Identificamos nuevamente el
      * dispositivo antes de configurarlo.
      */
-    const shelly =
-      await this.identifyShellyDeviceUseCase.execute(
-        input.userId,
-        input.homeId,
-        input.shellyIp,
-      );
+    const shelly = await this.identifyShellyDeviceUseCase.execute(
+      input.userId,
+      input.homeId,
+      input.shellyIp,
+    );
 
-    if (
-      shelly.authenticationRequired
-    ) {
+    if (shelly.authenticationRequired) {
       throw new UnprocessableEntityException(
         'El Shelly tiene autenticación habilitada. La primera versión del provisionamiento requiere que la autenticación local del dispositivo esté deshabilitada.',
       );
@@ -66,10 +68,9 @@ export class ProvisionShellyDeviceUseCase {
      * 3. Broker MQTT alcanzable por
      * el dispositivo físico.
      */
-    const brokerServer =
-      this.configService.get<string>(
-        'MQTT_DEVICE_BROKER_SERVER',
-      );
+    const brokerServer = this.configService.get<string>(
+      'MQTT_DEVICE_BROKER_SERVER',
+    );
 
     if (!brokerServer) {
       throw new InternalServerErrorException(
@@ -78,19 +79,12 @@ export class ProvisionShellyDeviceUseCase {
     }
 
     const username =
-      this.configService.get<string>(
-        'MQTT_USERNAME',
-      ) || undefined;
+      this.configService.get<string>('MQTT_USERNAME') || undefined;
 
     const password =
-      this.configService.get<string>(
-        'MQTT_PASSWORD',
-      ) || undefined;
+      this.configService.get<string>('MQTT_PASSWORD') || undefined;
 
-    if (
-      username &&
-      !password
-    ) {
+    if (username && !password) {
       throw new InternalServerErrorException(
         'MQTT_USERNAME está configurado pero MQTT_PASSWORD no',
       );
@@ -99,42 +93,34 @@ export class ProvisionShellyDeviceUseCase {
     /*
      * 4. Configuramos MQTT en el Shelly.
      */
-    const mqttConfiguration =
-      await this.shellyRpcClient.configureMqtt(
-        input.shellyIp,
-        {
-          server:
-            brokerServer,
+    const mqttConfiguration = await this.shellyRpcClient.configureMqtt(
+      input.shellyIp,
+      {
+        server: brokerServer,
 
-          topicPrefix:
-            shelly.manufacturerDeviceId,
+        topicPrefix: shelly.manufacturerDeviceId,
 
-          username,
+        username,
 
-          password,
-        },
-      );
+        password,
+      },
+    );
 
     /*
      * 5. Reiniciamos cuando Shelly
      * indique que es necesario.
      */
-    if (
-      mqttConfiguration.restartRequired
-    ) {
-      await this.shellyRpcClient.reboot(
-        input.shellyIp,
-      );
+    if (mqttConfiguration.restartRequired) {
+      await this.shellyRpcClient.reboot(input.shellyIp);
     }
 
     /*
      * 6. Verificamos que MQTT quede
      * realmente conectado.
      */
-    const mqttConnected =
-      await this.shellyRpcClient.waitForMqttConnection(
-        input.shellyIp,
-      );
+    const mqttConnected = await this.shellyRpcClient.waitForMqttConnection(
+      input.shellyIp,
+    );
 
     if (!mqttConnected) {
       throw new BadGatewayException(
@@ -151,62 +137,45 @@ export class ProvisionShellyDeviceUseCase {
      * - WIFI
      * - MQTT
      */
-    const device =
-      await this.createDeviceUseCase.execute({
-        userId:
-          input.userId,
+    const device = await this.createDeviceUseCase.execute({
+      userId: input.userId,
 
-        homeId:
-          input.homeId,
+      homeId: input.homeId,
 
-        name:
-          input.name,
+      name: input.name,
 
-        manufacturerDeviceId:
-          shelly.manufacturerDeviceId,
+      manufacturerDeviceId: shelly.manufacturerDeviceId,
 
-        transportType:
-          'WIFI',
+      transportType: 'WIFI',
 
-        messagingProtocol:
-          'MQTT',
-      });
+      messagingProtocol: 'MQTT',
+    });
 
     return {
-      message:
-        'Shelly configurado y vinculado correctamente',
+      message: 'Shelly configurado y vinculado correctamente',
 
       device,
 
       shelly: {
-        ip:
-          input.shellyIp,
+        ip: input.shellyIp,
 
-        manufacturerDeviceId:
-          shelly.manufacturerDeviceId,
+        manufacturerDeviceId: shelly.manufacturerDeviceId,
 
-        mac:
-          shelly.mac,
+        mac: shelly.mac,
 
-        model:
-          shelly.model,
+        model: shelly.model,
 
-        modelCode:
-          shelly.modelCode,
+        modelCode: shelly.modelCode,
 
-        firmwareVersion:
-          shelly.firmwareVersion,
+        firmwareVersion: shelly.firmwareVersion,
       },
 
       mqtt: {
-        server:
-          brokerServer,
+        server: brokerServer,
 
-        topicPrefix:
-          shelly.manufacturerDeviceId,
+        topicPrefix: shelly.manufacturerDeviceId,
 
-        connected:
-          true,
+        connected: true,
       },
     };
   }

@@ -1,13 +1,17 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { connect, IClientOptions, MqttClient } from 'mqtt';
+import { connect, MqttClient } from 'mqtt';
+import { MqttRuntimeService } from './mqtt-runtime.service';
 
 import {
   DeviceControlPublisher,
   PublishDeviceControlCommandInput,
 } from '../../domain/services/device-control-publisher';
 
-import { DeviceControlPublisherUnavailableError } from '../../domain/errors/device-control.error';
+import {
+  DeviceControlPublisherUnavailableError,
+  DeviceControlNotConfiguredError,
+} from '../../domain/errors/device-control.error';
+import { mqttDeviceId } from '../../../../config/mqtt-config';
 
 interface MqttControlMessage {
   topic: string;
@@ -20,17 +24,20 @@ export class MqttDeviceControlPublisher
   implements OnModuleDestroy
 {
   private client: MqttClient | null = null;
+  private connecting: Promise<MqttClient> | null = null;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly mqtt: MqttRuntimeService) {
     super();
   }
 
   async publishControlCommand(
     input: PublishDeviceControlCommandInput,
   ): Promise<void> {
-    const client = await this.getClient();
-
+    if (!mqttDeviceId.test(input.manufacturerDeviceId)) {
+      throw new DeviceControlNotConfiguredError();
+    }
     const { topic, payload } = this.buildControlMessage(input);
+    const client = await this.getClient();
 
     await new Promise<void>((resolve, reject) => {
       client.publish(topic, payload, { qos: 1, retain: false }, (error) => {
@@ -57,11 +64,7 @@ export class MqttDeviceControlPublisher
   private buildSmartHomeControlMessage(
     input: PublishDeviceControlCommandInput,
   ): MqttControlMessage {
-    const topicPrefix =
-      this.configService.get<string>('MQTT_CONTROL_TOPIC_PREFIX') ??
-      'smarthome/devices';
-
-    const topic = `${topicPrefix}/${input.manufacturerDeviceId}/control`;
+    const topic = this.mqtt.topics.control(input.manufacturerDeviceId);
 
     const payload = JSON.stringify({
       command: input.action,
@@ -80,16 +83,14 @@ export class MqttDeviceControlPublisher
   private buildShellyControlMessage(
     input: PublishDeviceControlCommandInput,
   ): MqttControlMessage {
-    const topic = `${input.manufacturerDeviceId}/rpc`;
+    const topic = this.mqtt.topics.control(input.manufacturerDeviceId);
 
     const payload = JSON.stringify({
       id: Date.now(),
-      src:
-        this.configService.get<string>('MQTT_SHELLY_RPC_SOURCE') ??
-        'smarthome-backend',
+      src: this.mqtt.config.rpcSource,
       method: 'Switch.Set',
       params: {
-        id: this.getShellySwitchId(),
+        id: this.mqtt.config.switchId,
         on: input.action === 'TURN_ON',
       },
     });
@@ -104,50 +105,38 @@ export class MqttDeviceControlPublisher
     return manufacturerDeviceId.toLowerCase().startsWith('shelly');
   }
 
-  private getShellySwitchId(): number {
-    const rawSwitchId = this.configService.get<string>('MQTT_SHELLY_SWITCH_ID');
-
-    if (rawSwitchId === undefined || rawSwitchId === null || rawSwitchId === '') {
-      return 0;
-    }
-
-    const switchId = Number(rawSwitchId);
-
-    if (!Number.isInteger(switchId) || switchId < 0) {
-      return 0;
-    }
-
-    return switchId;
-  }
-
   private async getClient(): Promise<MqttClient> {
     if (this.client?.connected) {
       return this.client;
     }
+    if (this.connecting) return this.connecting;
 
-    const brokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
+    // Reuse the existing client while MQTT.js reconnects; concurrent HTTP
+    // commands must not create connections that evict one another's clientId.
+    this.connecting = this.waitForClient().finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  private async waitForClient(): Promise<MqttClient> {
+    const brokerUrl = this.mqtt.config.brokerUrl;
 
     if (!brokerUrl) {
       throw new DeviceControlPublisherUnavailableError();
     }
 
-    const options: IClientOptions = {
-      clientId:
-        this.configService.get<string>('MQTT_CLIENT_ID') ??
-        `smarthome-backend-${process.pid}`,
-      username: this.configService.get<string>('MQTT_USERNAME') || undefined,
-      password: this.configService.get<string>('MQTT_PASSWORD') || undefined,
-      clean: true,
-      reconnectPeriod: 1000,
-      connectTimeout: 5000,
-    };
-
-    const client = connect(brokerUrl, options);
+    let client: MqttClient;
+    try {
+      client =
+        this.client ?? connect(brokerUrl, this.mqtt.clientOptions('control'));
+    } catch {
+      throw new DeviceControlPublisherUnavailableError();
+    }
     this.client = client;
 
     return await new Promise<MqttClient>((resolve, reject) => {
       let settled = false;
-      let timeout: ReturnType<typeof setTimeout>;
 
       const cleanup = () => {
         clearTimeout(timeout);
@@ -177,7 +166,7 @@ export class MqttDeviceControlPublisher
         resolve(client);
       };
 
-      timeout = setTimeout(fail, 5000);
+      const timeout = setTimeout(fail, 5000);
 
       client.once('connect', success);
       client.once('error', fail);

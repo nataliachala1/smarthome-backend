@@ -18,6 +18,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -42,20 +43,16 @@ import { DiscoveredShellyDeviceDto } from '../../application/dto/discovered-shel
 @UseGuards(JwtAuthGuard)
 export class ShellyController {
   constructor(
-    private readonly identifyShellyDeviceUseCase:
-      IdentifyShellyDeviceUseCase,
+    private readonly identifyShellyDeviceUseCase: IdentifyShellyDeviceUseCase,
 
-    private readonly provisionShellyDeviceUseCase:
-      ProvisionShellyDeviceUseCase,
+    private readonly provisionShellyDeviceUseCase: ProvisionShellyDeviceUseCase,
 
-    private readonly discoverShellyDevicesUseCase:
-      DiscoverShellyDevicesUseCase,
+    private readonly discoverShellyDevicesUseCase: DiscoverShellyDevicesUseCase,
   ) {}
 
   @Get('discover')
   @ApiOperation({
-    summary:
-      'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
+    summary: 'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
   })
   @ApiParam({
     name: 'homeId',
@@ -63,37 +60,26 @@ export class ShellyController {
     format: 'uuid',
   })
   @ApiOkResponse({
-    description:
-      'Dispositivos Shelly 1PM Gen4 encontrados en la red local',
+    description: 'Dispositivos Shelly 1PM Gen4 encontrados en la red local',
     type: DiscoveredShellyDeviceDto,
     isArray: true,
   })
   @ApiForbiddenResponse({
-    description:
-      'El usuario no puede administrar el hogar',
+    description: 'El usuario no puede administrar el hogar',
   })
   async discover(
     @CurrentUser()
     user: AuthenticatedUser,
 
-    @Param(
-      'homeId',
-      ParseUUIDPipe,
-    )
+    @Param('homeId', ParseUUIDPipe)
     homeId: string,
-  ): Promise<
-    DiscoveredShellyDeviceDto[]
-  > {
-    return this.discoverShellyDevicesUseCase.execute(
-      user.userId,
-      homeId,
-    );
+  ): Promise<DiscoveredShellyDeviceDto[]> {
+    return this.discoverShellyDevicesUseCase.execute(user.userId, homeId);
   }
 
   @Post('identify')
   @ApiOperation({
-    summary:
-      'Identificar un Shelly 1PM Gen4 por IP local: OWNER',
+    summary: 'Identificar un Shelly 1PM Gen4 por IP local: OWNER',
   })
   @ApiParam({
     name: 'homeId',
@@ -108,16 +94,14 @@ export class ShellyController {
     description: 'IP o UUID inválido',
   })
   @ApiForbiddenResponse({
-    description:
-      'El usuario no puede administrar el hogar',
+    description: 'El usuario no puede administrar el hogar',
   })
   @ApiUnprocessableEntityResponse({
     description:
       'El dispositivo encontrado no es un Shelly 1PM Gen4 compatible',
   })
   @ApiBadGatewayResponse({
-    description:
-      'El Shelly no responde o no es accesible',
+    description: 'El Shelly no responde o no es accesible',
   })
   async identify(
     @CurrentUser() user: AuthenticatedUser,
@@ -132,6 +116,10 @@ export class ShellyController {
   }
 
   @Post('provision')
+  @ApiServiceUnavailableResponse({
+    description:
+      'MQTT_DEVICE_BOOTSTRAP_REQUIRED: TLS o namespace requieren alta con identidad individual; el flujo LAN heredado no entrega credenciales de servicio.',
+  })
   @ApiOperation({
     summary:
       'Configurar MQTT y registrar un Shelly 1PM Gen4 en el hogar: OWNER',
@@ -142,24 +130,19 @@ export class ShellyController {
     format: 'uuid',
   })
   @ApiCreatedResponse({
-    description:
-      'Shelly configurado y registrado correctamente',
+    description: 'Shelly configurado y registrado correctamente',
   })
   @ApiBadRequestResponse({
-    description:
-      'IP, UUID o datos inválidos',
+    description: 'IP, UUID o datos inválidos',
   })
   @ApiForbiddenResponse({
-    description:
-      'El usuario no puede administrar el hogar',
+    description: 'El usuario no puede administrar el hogar',
   })
   @ApiConflictResponse({
-    description:
-      'El Shelly o el nombre del dispositivo ya están registrados',
+    description: 'El Shelly o el nombre del dispositivo ya están registrados',
   })
   @ApiUnprocessableEntityResponse({
-    description:
-      'Shelly incompatible o con autenticación local habilitada',
+    description: 'Shelly incompatible o con autenticación local habilitada',
   })
   @ApiBadGatewayResponse({
     description:
@@ -168,26 +151,20 @@ export class ShellyController {
   async provision(
     @CurrentUser() user: AuthenticatedUser,
 
-    @Param(
-      'homeId',
-      ParseUUIDPipe,
-    )
+    @Param('homeId', ParseUUIDPipe)
     homeId: string,
 
     @Body()
     dto: ProvisionShellyDeviceDto,
   ) {
-    return this.provisionShellyDeviceUseCase.execute(
-      {
-        userId: user.userId,
+    return this.provisionShellyDeviceUseCase.execute({
+      userId: user.userId,
 
-        homeId,
+      homeId,
 
-        shellyIp: dto.shellyIp,
+      shellyIp: dto.shellyIp,
 
-        name: dto.name,
-      },
-    );
+      name: dto.name,
+    });
   }
-
 }
