@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
 import {
@@ -19,8 +31,6 @@ import { CurrentUser } from '../../../auth/presentation/http/decorators/current-
 
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
 
-import { NotFoundException, Param, Patch } from '@nestjs/common';
-
 import {
   GetHomeByIdOutput,
   GetHomeByIdUseCase,
@@ -32,8 +42,6 @@ import {
 } from '../../application/use-cases/update-home.use-case';
 
 import { UpdateHomeDto } from '../../application/dto/update-home.dto';
-import { DeactivateHomeUseCase } from '../../application/use-cases/deactivate-home.use-case';
-import { ReactivateHomeUseCase } from '../../application/use-cases/reactivate-home.use-case';
 
 import { CreateHomeInvitationDto } from '../../application/dto/create-home-invitation.dto';
 import { CreateHomeInvitationUseCase } from '../../application/use-cases/create-home-invitation.use-case';
@@ -42,22 +50,28 @@ import { LeaveHomeUseCase } from '../../application/use-cases/leave-home.use-cas
 import { UpdateHomeMemberRoleDto } from '../../application/dto/update-home-member-role.dto';
 import { UpdateHomeMemberRoleUseCase } from '../../application/use-cases/update-home-member-role.use-case';
 import { RevokeHomeMemberUseCase } from '../../application/use-cases/revoke-home-member.use-case';
+import {
+  DeleteHomeOutput,
+  DeleteHomeUseCase,
+} from '../../application/use-cases/delete-home.use-case';
+
+import { HomeHasDevicesError } from '../../domain/errors/home-has-devices.error';
+import { HomeAccessDeniedError } from '../../domain/errors/home-access-denied.error';
 
 @Controller('api/v1/homes')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class HomesController {
   constructor(
     private readonly listHomesUseCase: ListHomesUseCase,
     private readonly createHomeUseCase: CreateHomeUseCase,
     private readonly getHomeByIdUseCase: GetHomeByIdUseCase,
     private readonly updateHomeUseCase: UpdateHomeUseCase,
-    private readonly deactivateHomeUseCase: DeactivateHomeUseCase,
-    private readonly reactivateHomeUseCase: ReactivateHomeUseCase,
     private readonly listHomeMembersUseCase: ListHomeMembersUseCase,
     private readonly createHomeInvitationUseCase: CreateHomeInvitationUseCase,
     private readonly leaveHomeUseCase: LeaveHomeUseCase,
     private readonly updateHomeMemberRoleUseCase: UpdateHomeMemberRoleUseCase,
     private readonly revokeHomeMemberUseCase: RevokeHomeMemberUseCase,
+    private readonly deleteHomeUseCase: DeleteHomeUseCase,
   ) {}
 
   @Get()
@@ -74,7 +88,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async findById(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ): Promise<GetHomeByIdOutput> {
     const home = await this.getHomeByIdUseCase.execute({
       userId: user.userId,
@@ -92,7 +106,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async listMembers(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ) {
     return this.listHomeMembersUseCase.execute({
       userId: user.userId,
@@ -104,7 +118,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async createInvitation(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
     @Body() dto: CreateHomeInvitationDto,
   ) {
     return this.createHomeInvitationUseCase.execute({
@@ -119,8 +133,8 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async updateMemberRole(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-    @Param('memberId') memberId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
+    @Param('memberId', new ParseUUIDPipe({ version: '4' })) memberId: string,
     @Body() dto: UpdateHomeMemberRoleDto,
   ) {
     return this.updateHomeMemberRoleUseCase.execute({
@@ -131,12 +145,36 @@ export class HomesController {
     });
   }
 
+  @Delete(':homeId')
+  @UseGuards(JwtAuthGuard)
+  async delete(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
+  ): Promise<DeleteHomeOutput> {
+    try {
+      return await this.deleteHomeUseCase.execute({
+        userId: user.userId,
+        homeId,
+      });
+    } catch (error) {
+      if (error instanceof HomeHasDevicesError) {
+        throw new ConflictException(error.message);
+      }
+
+      if (error instanceof HomeAccessDeniedError) {
+        throw new NotFoundException('Hogar no encontrado');
+      }
+
+      throw error;
+    }
+  }
+
   @Patch(':homeId/members/:memberId/revoke')
   @UseGuards(JwtAuthGuard)
   async revokeMember(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-    @Param('memberId') memberId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
+    @Param('memberId', new ParseUUIDPipe({ version: '4'})) memberId: string,
   ) {
     return this.revokeHomeMemberUseCase.execute(user.userId, homeId, memberId);
   }
@@ -145,7 +183,7 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async leaveHome(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
   ) {
     return this.leaveHomeUseCase.execute(user.userId, homeId);
   }
@@ -154,37 +192,13 @@ export class HomesController {
   @UseGuards(JwtAuthGuard)
   async update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
+    @Param('homeId', new ParseUUIDPipe({ version: '4'})) homeId: string,
     @Body() dto: UpdateHomeDto,
   ): Promise<UpdateHomeOutput> {
     return this.updateHomeUseCase.execute({
       userId: user.userId,
       homeId,
       name: dto.name,
-    });
-  }
-
-  @Patch(':homeId/deactivate')
-  @UseGuards(JwtAuthGuard)
-  async deactivate(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-  ) {
-    return this.deactivateHomeUseCase.execute({
-      userId: user.userId,
-      homeId,
-    });
-  }
-
-  @Patch(':homeId/reactivate')
-  @UseGuards(JwtAuthGuard)
-  async reactivate(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('homeId') homeId: string,
-  ) {
-    return this.reactivateHomeUseCase.execute({
-      userId: user.userId,
-      homeId,
     });
   }
 

@@ -4,6 +4,7 @@ import { PrismaService } from '../../../../infrastructure/database/prisma/prisma
 
 import {
   CreateUserData,
+  UpdateUserProfileData,
   UserRepository,
 } from '../../domain/repositories/user.repository';
 
@@ -71,6 +72,7 @@ export class PrismaUserRepository implements UserRepository {
         locked_until: Date | null;
         last_login_at: Date | null;
         deactivated_at: Date | null;
+        session_version: number;
         created_at: Date;
         updated_at: Date;
         role_name: string;
@@ -88,35 +90,37 @@ export class PrismaUserRepository implements UserRepository {
           ${data.passwordHash}
         )
         RETURNING
-          id_user,
-          id_role,
-          name,
-          email,
-          password_hash,
-          status,
-          email_verified,
-          failed_login_attempts,
-          locked_until,
-          last_login_at,
-          deactivated_at,
-          created_at,
-          updated_at
+        id_user,
+        id_role,
+        name,
+        email,
+        password_hash,
+        status,
+        email_verified,
+        failed_login_attempts,
+        locked_until,
+        last_login_at,
+        deactivated_at,
+        session_version,
+        created_at,
+        updated_at
       )
       SELECT
-        i.id_user,
-        i.id_role,
-        i.name,
-        i.email,
-        i.password_hash,
-        i.status,
-        i.email_verified,
-        i.failed_login_attempts,
-        i.locked_until,
-        i.last_login_at,
-        i.deactivated_at,
-        i.created_at,
-        i.updated_at,
-        r.name AS role_name
+      i.id_user,
+      i.id_role,
+      i.name,
+      i.email,
+      i.password_hash,
+      i.status,
+      i.email_verified,
+      i.failed_login_attempts,
+      i.locked_until,
+      i.last_login_at,
+      i.deactivated_at,
+      i.session_version,
+      i.created_at,
+      i.updated_at,
+      r.name AS role_name    
       FROM inserted i
       JOIN auth.role r
         ON r.id_role = i.id_role
@@ -146,6 +150,7 @@ export class PrismaUserRepository implements UserRepository {
       deactivatedAt: raw.deactivated_at,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
+      sessionVersion: raw.session_version,
     });
   }
 
@@ -210,8 +215,8 @@ export class PrismaUserRepository implements UserRepository {
     });
   }
   async updatePassword(
-  id: string,
-  passwordHash: string,
+    id: string,
+    passwordHash: string,
   ): Promise<void> {
     await this.prisma.user.update({
       where: {
@@ -225,5 +230,125 @@ export class PrismaUserRepository implements UserRepository {
         updated_at: new Date(),
       },
     });
+  }
+
+  async reactivate(
+  id: string,
+  ): Promise<void> {
+    await this.prisma.user.update({
+      where: {
+        id_user: id,
+      },
+
+      data: {
+        status:
+          UserStatus.ACTIVE,
+
+        deactivated_at:
+          null,
+
+        failed_login_attempts:
+          0,
+
+        locked_until:
+          null,
+
+        updated_at:
+          new Date(),
+      },
+    });
+  }
+
+  async updateProfile(
+  id: string,
+  data: UpdateUserProfileData,
+  ): Promise<User> {
+    const raw = await this.prisma.user.update({
+      where: {
+        id_user: id,
+      },
+      data: {
+        ...(data.name !== undefined
+          ? { name: data.name.trim() }
+          : {}),
+        updated_at: new Date(),
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    return PrismaUserMapper.toDomain(raw);
+  }
+    async deactivate(
+    id: string,
+    ): Promise<{
+    deactivatedAt: Date;
+    sessionVersion: number;
+    }> {
+    const deactivatedAt = new Date();
+
+    const updated =
+      await this.prisma.user.update({
+        where: {
+          id_user: id,
+        },
+        data: {
+          status: UserStatus.DEACTIVATED,
+          deactivated_at: deactivatedAt,
+
+          /*
+          * Revoca todos los JWT emitidos
+          * anteriormente.
+          */
+          session_version: {
+            increment: 1,
+          },
+
+          locked_until: null,
+          failed_login_attempts: 0,
+          updated_at: deactivatedAt,
+        },
+        select: {
+          deactivated_at: true,
+          session_version: true,
+        },
+      });
+
+      return {
+        deactivatedAt:
+          updated.deactivated_at ??
+          deactivatedAt,
+
+        sessionVersion:
+          updated.session_version,
+      };
+    }
+
+  async incrementSessionVersion(
+    id: string,
+  ): Promise<number> {
+    const updated =
+      await this.prisma.user.update({
+        where: {
+          id_user: id,
+        },
+
+        data: {
+          session_version: {
+            increment: 1,
+          },
+
+          updated_at:
+            new Date(),
+        },
+
+        select: {
+          session_version:
+            true,
+        },
+      });
+
+    return updated.session_version;
   }
 }

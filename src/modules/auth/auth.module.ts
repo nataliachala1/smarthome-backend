@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -30,14 +30,29 @@ import { PrismaAccountActivationRepository } from './infrastructure/persistence/
 import { JwtAuthGuard } from './presentation/http/guards/jwt-auth.guard';
 import { RolesGuard } from './presentation/http/guards/roles.guard';
 import { UsersModule } from '../users/users.module';
+import { SessionRevocationModule } from '../../security/session-revocation.module';
 
 import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
 
+import { ChangePasswordUseCase } from './application/use-cases/change-password.use-case';
+import { RefreshTokenRepository } from './domain/repositories/refresh-token.repository';
+
+import { PrismaRefreshTokenRepository } from './infrastructure/persistence/prisma-refresh-token.repository';
+import { RefreshSessionUseCase } from './application/use-cases/refresh-session.use-case';
+
+import { LogoutUseCase } from './application/use-cases/logout.use-case';
+
+import { LogoutAllUseCase } from './application/use-cases/logout-all.use-case';
+import { RequestReactivationUseCase } from './application/use-cases/request-reactivation.use-case';
+
+import { ReactivateAccountUseCase } from './application/use-cases/reactivate-account.use-case';
+
 @Module({
   imports: [
     ConfigModule,
-    UsersModule,
+    SessionRevocationModule,
+    forwardRef(() => UsersModule),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -48,9 +63,7 @@ import { ResetPasswordUseCase } from './application/use-cases/reset-password.use
     }),
   ],
 
-  controllers: [
-    AuthController,
-  ],
+  controllers: [AuthController],
 
   providers: [
     RegisterUserUseCase,
@@ -59,9 +72,13 @@ import { ResetPasswordUseCase } from './application/use-cases/reset-password.use
     LoginUserUseCase,
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
-
+    ChangePasswordUseCase,
+    RefreshSessionUseCase,
+    LogoutUseCase,
+    LogoutAllUseCase,
+    RequestReactivationUseCase,
+    ReactivateAccountUseCase,
     RolesGuard,
-
     JwtAuthGuard,
 
     {
@@ -93,12 +110,18 @@ import { ResetPasswordUseCase } from './application/use-cases/reset-password.use
       provide: AccountActivationRepository,
       useClass: PrismaAccountActivationRepository,
     },
+    {
+      provide: RefreshTokenRepository,
+      useClass: PrismaRefreshTokenRepository,
+    },
   ],
 
   exports: [
     JwtAuthGuard,
     JwtModule,
     RolesGuard,
+    UsersModule,
+    RefreshTokenRepository,
   ],
 })
 export class AuthModule {}

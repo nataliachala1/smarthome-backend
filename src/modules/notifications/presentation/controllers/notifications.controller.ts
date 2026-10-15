@@ -26,7 +26,7 @@ import { MarkAllNotificationsAsReadUseCase } from '../../application/use-cases/m
 
 @Controller('api/v1/notifications')
 @ApiTags('notifications')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(

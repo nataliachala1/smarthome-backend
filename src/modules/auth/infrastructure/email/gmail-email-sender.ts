@@ -6,6 +6,7 @@ import {
   EmailSender,
   SendAccountActivationEmailInput,
   SendPasswordResetEmailInput,
+  SendAccountReactivationEmailInput,
 } from '../../domain/ports/email-sender.port';
 @Injectable()
 export class GmailEmailSender implements EmailSender {
@@ -76,6 +77,54 @@ export class GmailEmailSender implements EmailSender {
       `,
     });
   }
+
+  async sendAccountReactivationEmail(
+  input: SendAccountReactivationEmailInput,
+): Promise<void> {
+  await this.transporter.sendMail({
+    from: this.from,
+    to: input.to,
+    subject: 'Reactiva tu cuenta de Smart Home',
+
+    text: [
+      `Hola ${input.name},`,
+      '',
+      'Recibimos una solicitud para reactivar tu cuenta de Smart Home.',
+      'Utiliza el siguiente enlace:',
+      '',
+      input.reactivationUrl,
+      '',
+      'Este enlace tiene una vigencia limitada.',
+      '',
+      'Si no solicitaste esta reactivación, ignora este mensaje.',
+    ].join('\n'),
+
+    html: `
+      <h2>Reactiva tu cuenta de Smart Home</h2>
+
+      <p>Hola ${input.name},</p>
+
+      <p>
+        Recibimos una solicitud para reactivar tu cuenta.
+      </p>
+
+      <p>
+        <a href="${input.reactivationUrl}">
+          Reactivar cuenta
+        </a>
+      </p>
+
+      <p>
+        Este enlace tiene una vigencia limitada.
+      </p>
+
+      <p>
+        Si no solicitaste esta reactivación,
+        ignora este mensaje.
+      </p>
+    `,
+  });
+}
   async sendPasswordResetEmail(
   input: SendPasswordResetEmailInput,
 ): Promise<void> {
@@ -120,5 +169,7 @@ export class GmailEmailSender implements EmailSender {
       </p>
     `,
   });
+
+  
 }
 }

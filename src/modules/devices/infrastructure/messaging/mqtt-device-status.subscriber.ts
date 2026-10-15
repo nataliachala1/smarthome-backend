@@ -4,10 +4,12 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { connect, IClientOptions, MqttClient } from 'mqtt';
+import { connect, MqttClient } from 'mqtt';
+import { MqttRuntimeService } from './mqtt-runtime.service';
 
-import { PrismaService } from '../../../../infrastructure/database/prisma/prisma.service';
+import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
+
+import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
 import { Prisma } from '../../../../../generated/prisma/client';
 import { RealtimeEventsService } from '../../../realtime/realtime-events.service';
 
@@ -24,15 +26,6 @@ interface DeviceStatusMessage {
   frequencyHz?: number | null;
   temperatureC?: number | null;
   readAt?: string;
-}
-
-interface UpdatedDeviceStatus {
-  id_device: string;
-  id_home: string;
-  connectivity_status: DeviceConnectivityStatus;
-  is_on: boolean;
-  current_power_w: Prisma.Decimal | null;
-  updated_at: Date;
 }
 
 interface CreatedNotification {
@@ -59,13 +52,14 @@ export class MqttDeviceStatusSubscriber
   private client: MqttClient | null = null;
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly mqtt: MqttRuntimeService,
+    private readonly prisma: PrismaIotService,
+    private readonly prismaRls: PrismaRlsService,
     private readonly realtimeEventsService: RealtimeEventsService,
   ) {}
 
   onModuleInit(): void {
-    const brokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
+    const brokerUrl = this.mqtt.config.brokerUrl;
 
     if (!brokerUrl) {
       this.logger.warn(
@@ -74,46 +68,16 @@ export class MqttDeviceStatusSubscriber
       return;
     }
 
-    const options: IClientOptions = {
-      clientId:
-        this.configService.get<string>('MQTT_STATUS_CLIENT_ID') ??
-        `smarthome-backend-status-${process.pid}`,
-      username: this.configService.get<string>('MQTT_USERNAME') || undefined,
-      password: this.configService.get<string>('MQTT_PASSWORD') || undefined,
-      clean: true,
-      reconnectPeriod: 1000,
-      connectTimeout: 5000,
-    };
-
-    const client = connect(brokerUrl, options);
+    const client = connect(brokerUrl, this.mqtt.clientOptions('status'));
     this.client = client;
 
     client.on('connect', () => {
-      const smartHomeTopic =
-        this.configService.get<string>('MQTT_STATUS_TOPIC_FILTER') ??
-        'smarthome/devices/+/status';
-
-      const shellySwitchTopic =
-        this.configService.get<string>('MQTT_SHELLY_SWITCH_TOPIC_FILTER') ??
-        '+/status/switch:0';
-
-      const shellyRpcEventsTopic =
-        this.configService.get<string>(
-          'MQTT_SHELLY_RPC_EVENTS_TOPIC_FILTER',
-        ) ?? '+/events/rpc';
-
-      const topics = Array.from(
-        new Set([
-          smartHomeTopic,
-          shellySwitchTopic,
-          shellyRpcEventsTopic,
-        ]),
-      );
+      const topics = this.mqtt.topics.subscriptions();
 
       client.subscribe(topics, { qos: 1 }, (error) => {
         if (error) {
           this.logger.error(
-            `No se pudo suscribir a los tópicos MQTT de estado: ${error.message}`,
+            'MQTT_SUBSCRIBE_FAILED: no se pudo suscribir a los tópicos de estado.',
           );
           return;
         }
@@ -125,19 +89,15 @@ export class MqttDeviceStatusSubscriber
     });
 
     client.on('message', (topic, payload) => {
-      void this.handleStatusMessage(topic, payload).catch((error: unknown) => {
-        const message =
-          error instanceof Error ? error.message : 'Error desconocido';
-
+      void this.handleStatusMessage(topic, payload).catch(() => {
         this.logger.error(
-          `No se pudo procesar mensaje MQTT de estado: ${message}`,
-          error instanceof Error ? error.stack : undefined,
+          'MQTT_STATUS_PROCESSING_FAILED: no se pudo procesar el mensaje de estado.',
         );
       });
     });
 
-    client.on('error', (error) => {
-      this.logger.error(`Error MQTT de estado: ${error.message}`);
+    client.on('error', () => {
+      this.logger.error('MQTT_CONNECTION_FAILED: error de conexión de estado.');
     });
 
     client.on('reconnect', () => {
@@ -167,7 +127,9 @@ export class MqttDeviceStatusSubscriber
     const manufacturerDeviceId = this.extractManufacturerDeviceId(topic);
 
     if (!manufacturerDeviceId) {
-      this.logger.warn(`Tópico MQTT de estado inválido: ${topic}`);
+      this.logger.warn(
+        'MQTT_TOPIC_REJECTED: tópico fuera del contrato configurado.',
+      );
       return;
     }
 
@@ -219,10 +181,10 @@ export class MqttDeviceStatusSubscriber
       connectivity_status?: DeviceConnectivityStatus;
       is_on?: boolean;
       current_power_w?: number | null;
-      updated_at: Date;
-    } = {
-      updated_at: now,
-    };
+      last_seen_at?: Date;
+    } = {};
+
+    deviceData.last_seen_at = readAt ?? now;
 
     if (message.connectivityStatus !== undefined) {
       deviceData.connectivity_status = message.connectivityStatus;
@@ -240,171 +202,166 @@ export class MqttDeviceStatusSubscriber
 
     const shouldCreateConsumption = typeof powerW === 'number';
 
-    const transactionResult = await this.prisma.$transaction(
-      async (tx) => {
-        const updatedDevice = await tx.device.update({
-          where: {
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
+      const updatedDevice = await tx.device.update({
+        where: {
+          id_device: device.id_device,
+        },
+        data: deviceData,
+        select: {
+          id_device: true,
+          id_home: true,
+          connectivity_status: true,
+          is_on: true,
+          current_power_w: true,
+          updated_at: true,
+        },
+      });
+
+      const recipients = await this.findHomeRealtimeRecipients(
+        tx,
+        device.id_home,
+      );
+
+      const notifications: CreatedNotification[] = [];
+
+      let consumptionEvent: {
+        id: string;
+        homeId: string;
+        deviceId: string;
+        deviceName: string;
+        manufacturerDeviceId: string | null;
+        powerW: number;
+        energyDeltaKwh: number;
+        energyTotalKwh: number | null;
+        voltageV: number | null;
+        currentA: number | null;
+        frequencyHz: number | null;
+        temperatureC: number | null;
+        readAt: Date;
+      } | null = null;
+
+      let consumptionRecipients: { id_user: string }[] = [];
+
+      if (shouldCreateConsumption && powerW !== undefined) {
+        const previousConsumption =
+          message.energyTotalKwh === undefined ||
+          message.energyTotalKwh === null
+            ? null
+            : await tx.consumption.findFirst({
+                where: {
+                  id_device: device.id_device,
+                  id_home: device.id_home,
+                  energy_total_kwh: {
+                    not: null,
+                  },
+                },
+                orderBy: {
+                  read_at: 'desc',
+                },
+                select: {
+                  energy_total_kwh: true,
+                },
+              });
+
+        const energyDeltaKwh =
+          message.energyDeltaKwh ??
+          this.calculateEnergyDeltaKwh(
+            message.energyTotalKwh,
+            previousConsumption?.energy_total_kwh ?? null,
+          );
+
+        const createdConsumption = await tx.consumption.create({
+          data: {
             id_device: device.id_device,
+            id_home: device.id_home,
+            power_w: powerW,
+            energy_delta_kwh: energyDeltaKwh,
+            energy_total_kwh: message.energyTotalKwh ?? null,
+            voltage_v: message.voltageV ?? null,
+            current_a: message.currentA ?? null,
+            frequency_hz: message.frequencyHz ?? null,
+            temperature_c: message.temperatureC ?? null,
+            read_at: readAt,
           },
-          data: deviceData,
           select: {
+            id_consumption: true,
             id_device: true,
             id_home: true,
-            connectivity_status: true,
-            is_on: true,
-            current_power_w: true,
-            updated_at: true,
+            power_w: true,
+            energy_delta_kwh: true,
+            energy_total_kwh: true,
+            voltage_v: true,
+            current_a: true,
+            frequency_hz: true,
+            temperature_c: true,
+            read_at: true,
           },
         });
 
-        const recipients = await this.findHomeRealtimeRecipients(
+        consumptionRecipients = await this.findHomeRealtimeRecipients(
           tx,
           device.id_home,
         );
 
-        const notifications: CreatedNotification[] = [];
-
-        let consumptionEvent: {
-          id: string;
-          homeId: string;
-          deviceId: string;
-          deviceName: string;
-          manufacturerDeviceId: string | null;
-          powerW: number;
-          energyDeltaKwh: number;
-          energyTotalKwh: number | null;
-          voltageV: number | null;
-          currentA: number | null;
-          frequencyHz: number | null;
-          temperatureC: number | null;
-          readAt: Date;
-        } | null = null;
-
-        let consumptionRecipients: { id_user: string }[] = [];
-
-        if (shouldCreateConsumption && powerW !== undefined) {
-          const previousConsumption =
-            message.energyTotalKwh === undefined ||
-            message.energyTotalKwh === null
+        consumptionEvent = {
+          id: createdConsumption.id_consumption,
+          homeId: createdConsumption.id_home,
+          deviceId: createdConsumption.id_device,
+          deviceName: device.name,
+          manufacturerDeviceId: device.manufacturer_device_id,
+          powerW: Number(createdConsumption.power_w),
+          energyDeltaKwh: Number(createdConsumption.energy_delta_kwh),
+          energyTotalKwh:
+            createdConsumption.energy_total_kwh === null
               ? null
-              : await tx.consumption.findFirst({
-                  where: {
-                    id_device: device.id_device,
-                    id_home: device.id_home,
-                    energy_total_kwh: {
-                      not: null,
-                    },
-                  },
-                  orderBy: {
-                    read_at: 'desc',
-                  },
-                  select: {
-                    energy_total_kwh: true,
-                  },
-                });
-
-          const energyDeltaKwh =
-            message.energyDeltaKwh ??
-            this.calculateEnergyDeltaKwh(
-              message.energyTotalKwh,
-              previousConsumption?.energy_total_kwh ?? null,
-            );
-
-          const createdConsumption = await tx.consumption.create({
-            data: {
-              id_device: device.id_device,
-              id_home: device.id_home,
-              power_w: powerW,
-              energy_delta_kwh: energyDeltaKwh,
-              energy_total_kwh: message.energyTotalKwh ?? null,
-              voltage_v: message.voltageV ?? null,
-              current_a: message.currentA ?? null,
-              frequency_hz: message.frequencyHz ?? null,
-              temperature_c: message.temperatureC ?? null,
-              read_at: readAt,
-            },
-            select: {
-              id_consumption: true,
-              id_device: true,
-              id_home: true,
-              power_w: true,
-              energy_delta_kwh: true,
-              energy_total_kwh: true,
-              voltage_v: true,
-              current_a: true,
-              frequency_hz: true,
-              temperature_c: true,
-              read_at: true,
-            },
-          });
-
-          consumptionRecipients = await this.findHomeRealtimeRecipients(
-            tx,
-            device.id_home,
-          );
-
-          consumptionEvent = {
-            id: createdConsumption.id_consumption,
-            homeId: createdConsumption.id_home,
-            deviceId: createdConsumption.id_device,
-            deviceName: device.name,
-            manufacturerDeviceId: device.manufacturer_device_id,
-            powerW: Number(createdConsumption.power_w),
-            energyDeltaKwh: Number(
-              createdConsumption.energy_delta_kwh,
-            ),
-            energyTotalKwh:
-              createdConsumption.energy_total_kwh === null
-                ? null
-                : Number(createdConsumption.energy_total_kwh),
-            voltageV:
-              createdConsumption.voltage_v === null
-                ? null
-                : Number(createdConsumption.voltage_v),
-            currentA:
-              createdConsumption.current_a === null
-                ? null
-                : Number(createdConsumption.current_a),
-            frequencyHz:
-              createdConsumption.frequency_hz === null
-                ? null
-                : Number(createdConsumption.frequency_hz),
-            temperatureC:
-              createdConsumption.temperature_c === null
-                ? null
-                : Number(createdConsumption.temperature_c),
-            readAt: createdConsumption.read_at,
-          };
-
-          await this.refreshDailyDeviceMetric(
-            tx,
-            device.id_device,
-            device.id_home,
-            metricStartAt,
-            metricEndAt,
-          );
-
-          const anomalyNotifications =
-            await this.evaluateDailyConsumptionAnomaly(
-              tx,
-              device.id_device,
-              device.id_home,
-              metricStartAt,
-              metricEndAt,
-            );
-
-          notifications.push(...anomalyNotifications);
-        }
-
-        return {
-          updatedDevice,
-          recipients,
-          notifications,
-          consumptionEvent,
-          consumptionRecipients,
+              : Number(createdConsumption.energy_total_kwh),
+          voltageV:
+            createdConsumption.voltage_v === null
+              ? null
+              : Number(createdConsumption.voltage_v),
+          currentA:
+            createdConsumption.current_a === null
+              ? null
+              : Number(createdConsumption.current_a),
+          frequencyHz:
+            createdConsumption.frequency_hz === null
+              ? null
+              : Number(createdConsumption.frequency_hz),
+          temperatureC:
+            createdConsumption.temperature_c === null
+              ? null
+              : Number(createdConsumption.temperature_c),
+          readAt: createdConsumption.read_at,
         };
-      },
-    );
+
+        await this.refreshDailyDeviceMetric(
+          tx,
+          device.id_device,
+          device.id_home,
+          metricStartAt,
+          metricEndAt,
+        );
+
+        const anomalyNotifications = await this.evaluateDailyConsumptionAnomaly(
+          tx,
+          device.id_device,
+          device.id_home,
+          metricStartAt,
+          metricEndAt,
+        );
+
+        notifications.push(...anomalyNotifications);
+      }
+
+      return {
+        updatedDevice,
+        recipients,
+        notifications,
+        consumptionEvent,
+        consumptionRecipients,
+      };
+    });
 
     /*
      * Los eventos se emiten DESPUÉS de que la transacción termina
@@ -461,12 +418,16 @@ export class MqttDeviceStatusSubscriber
         },
       );
 
-      const unreadCount = await this.prisma.notification.count({
-        where: {
-          id_user: notification.id_user,
-          status: 'UNREAD',
-        },
-      });
+      const unreadCount = await this.prismaRls.withUserContext(
+        notification.id_user,
+        async (tx) =>
+          tx.notification.count({
+            where: {
+              id_user: notification.id_user,
+              status: 'UNREAD',
+            },
+          }),
+      );
 
       this.realtimeEventsService.emitToUser(
         notification.id_user,
@@ -483,37 +444,7 @@ export class MqttDeviceStatusSubscriber
   }
 
   private extractManufacturerDeviceId(topic: string): string | null {
-    const parts = topic.split('/');
-
-    // smarthome/devices/{manufacturerDeviceId}/status
-    if (
-      parts.length === 4 &&
-      parts[0] === 'smarthome' &&
-      parts[1] === 'devices' &&
-      parts[3] === 'status'
-    ) {
-      return parts[2]?.trim() || null;
-    }
-
-    // {shellyId}/status/switch:0
-    if (
-      parts.length === 3 &&
-      parts[1] === 'status' &&
-      parts[2] === 'switch:0'
-    ) {
-      return parts[0]?.trim() || null;
-    }
-
-    // {shellyId}/events/rpc
-    if (
-      parts.length === 3 &&
-      parts[1] === 'events' &&
-      parts[2] === 'rpc'
-    ) {
-      return parts[0]?.trim() || null;
-    }
-
-    return null;
+    return this.mqtt.topics.parseStatus(topic)?.manufacturerDeviceId ?? null;
   }
 
   private parsePayload(
@@ -528,16 +459,11 @@ export class MqttDeviceStatusSubscriber
         return null;
       }
 
-      const smartHomeMessage = this.parseSmartHomePayload(parsed);
-
-      if (smartHomeMessage) {
-        return smartHomeMessage;
+      if (this.mqtt.topics.parseStatus(topic)?.kind === 'internal') {
+        return this.parseSmartHomePayload(parsed);
       }
 
-      const shellySwitchStatus = this.extractShellySwitchStatus(
-        topic,
-        parsed,
-      );
+      const shellySwitchStatus = this.extractShellySwitchStatus(topic, parsed);
 
       if (!shellySwitchStatus) {
         return null;
@@ -576,10 +502,7 @@ export class MqttDeviceStatusSubscriber
       return null;
     }
 
-    if (
-      message.isOn !== undefined &&
-      typeof message.isOn !== 'boolean'
-    ) {
+    if (message.isOn !== undefined && typeof message.isOn !== 'boolean') {
       return null;
     }
 
@@ -628,30 +551,16 @@ export class MqttDeviceStatusSubscriber
     topic: string,
     parsed: Record<string, unknown>,
   ): Record<string, unknown> | null {
-    const parts = topic.split('/');
-
-    // shelly1pmg4-xxxx/status/switch:0
-    if (
-      parts.length === 3 &&
-      parts[1] === 'status' &&
-      parts[2] === 'switch:0'
-    ) {
+    const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+    if (kind === 'shelly-switch') {
       return parsed;
     }
 
-    // shelly1pmg4-xxxx/events/rpc
-    if (
-      parts.length === 3 &&
-      parts[1] === 'events' &&
-      parts[2] === 'rpc'
-    ) {
+    if (kind === 'shelly-events') {
       const method = parsed.method;
       const params = parsed.params;
 
-      if (
-        method !== 'NotifyStatus' &&
-        method !== 'NotifyFullStatus'
-      ) {
+      if (method !== 'NotifyStatus' && method !== 'NotifyFullStatus') {
         return null;
       }
 
@@ -659,7 +568,7 @@ export class MqttDeviceStatusSubscriber
         return null;
       }
 
-      const switchStatus = params['switch:0'];
+      const switchStatus = params[`switch:${this.mqtt.config.switchId}`];
 
       if (!this.isObjectRecord(switchStatus)) {
         return null;
@@ -693,8 +602,7 @@ export class MqttDeviceStatusSubscriber
           : undefined,
       currentPowerW: this.toOptionalNumber(switchStatus.apower),
       energyTotalKwh:
-        typeof energyTotalWh === 'number' &&
-        Number.isFinite(energyTotalWh)
+        typeof energyTotalWh === 'number' && Number.isFinite(energyTotalWh)
           ? energyTotalWh / 1000
           : undefined,
       voltageV: this.toOptionalNumber(switchStatus.voltage),
@@ -721,21 +629,12 @@ export class MqttDeviceStatusSubscriber
   }
 
   private isShellyTopic(topic: string): boolean {
-    const parts = topic.split('/');
-
-    return (
-      parts.length === 3 &&
-      ((parts[1] === 'status' && parts[2] === 'switch:0') ||
-        (parts[1] === 'events' && parts[2] === 'rpc'))
-    );
+    const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+    return kind === 'shelly-switch' || kind === 'shelly-events';
   }
 
   private isObjectRecord(value: unknown): value is Record<string, unknown> {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    );
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private toOptionalNumber(value: unknown): number | null | undefined {
@@ -783,11 +682,7 @@ export class MqttDeviceStatusSubscriber
 
   private getUtcDayStart(value: Date): Date {
     return new Date(
-      Date.UTC(
-        value.getUTCFullYear(),
-        value.getUTCMonth(),
-        value.getUTCDate(),
-      ),
+      Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
     );
   }
 
@@ -829,13 +724,11 @@ export class MqttDeviceStatusSubscriber
       },
     });
 
-    const metricData = {
-      end_at: endAt,
+    const metricValues = {
       kwh_total: aggregate._sum.energy_delta_kwh ?? 0,
       average_watts: aggregate._avg.power_w,
       max_watts: aggregate._max.power_w,
       min_watts: aggregate._min.power_w,
-      updated_at: new Date(),
     };
 
     const existingMetric = await tx.consumption_metric.findFirst({
@@ -852,10 +745,9 @@ export class MqttDeviceStatusSubscriber
     if (existingMetric) {
       await tx.consumption_metric.update({
         where: {
-          id_consumption_metric:
-            existingMetric.id_consumption_metric,
+          id_consumption_metric: existingMetric.id_consumption_metric,
         },
-        data: metricData,
+        data: metricValues,
       });
 
       return;
@@ -867,7 +759,8 @@ export class MqttDeviceStatusSubscriber
         id_home: homeId,
         period: 'dia',
         start_at: startAt,
-        ...metricData,
+        end_at: endAt,
+        ...metricValues,
       },
     });
   }
@@ -925,8 +818,7 @@ export class MqttDeviceStatusSubscriber
 
     const historicalAverageKwh =
       historicalMetrics.reduce(
-        (total, historicalMetric) =>
-          total + Number(historicalMetric.kwh_total),
+        (total, historicalMetric) => total + Number(historicalMetric.kwh_total),
         0,
       ) / historicalMetrics.length;
 

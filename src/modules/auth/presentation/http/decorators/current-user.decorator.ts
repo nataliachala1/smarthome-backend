@@ -19,3 +19,5 @@ export const CurrentUser =
       return request.user;
     },
   );
+
+export type { AuthenticatedUser };

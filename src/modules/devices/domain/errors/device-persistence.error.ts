@@ -10,6 +10,6 @@ export class DeviceConflictError extends Error {
 }
 export class InvalidDeviceReferenceError extends Error {
   constructor() {
-    super('El hogar o tipo de dispositivo no está disponible');
+    super('La referencia asociada al dispositivo no está disponible');
   }
 }

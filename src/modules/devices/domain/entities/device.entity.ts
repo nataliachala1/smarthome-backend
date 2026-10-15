@@ -1,7 +1,6 @@
 export interface DeviceProps {
   id: string;
   homeId: string;
-  deviceTypeId: string;
   name: string;
   status: string;
   connectivityStatus: string;
@@ -24,10 +23,6 @@ export class Device {
 
   get homeId() {
     return this.props.homeId;
-  }
-
-  get deviceTypeId() {
-    return this.props.deviceTypeId;
   }
 
   get name() {

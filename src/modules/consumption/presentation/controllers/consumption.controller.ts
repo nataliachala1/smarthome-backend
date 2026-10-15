@@ -33,7 +33,7 @@ import { GetDeviceDailyConsumptionUseCase } from '../../application/use-cases/ge
 
 @Controller('api/v1/homes/:homeId/devices/:deviceId/consumption')
 @ApiTags('consumption')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 export class ConsumptionController {
   constructor(

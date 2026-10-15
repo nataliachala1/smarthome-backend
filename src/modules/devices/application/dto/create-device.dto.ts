@@ -10,9 +10,6 @@ import {
 } from 'class-validator';
 
 export class CreateDeviceDto {
-  @IsUUID()
-  @ApiProperty({ format: 'uuid' })
-  deviceTypeId!: string;
 
   @IsString()
   @Transform(({ value }: { value: unknown }) =>

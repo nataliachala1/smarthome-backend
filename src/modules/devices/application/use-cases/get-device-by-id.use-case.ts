@@ -19,7 +19,6 @@ export class GetDeviceByIdUseCase {
     return {
       id: device.id,
       homeId: device.homeId,
-      deviceTypeId: device.deviceTypeId,
       name: device.name,
       status: device.status,
       connectivityStatus: device.connectivityStatus,

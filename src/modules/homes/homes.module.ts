@@ -14,9 +14,6 @@ import { PrismaHomeRepository } from './infrastructure/persistence/prisma-home.r
 import { GetHomeByIdUseCase } from './application/use-cases/get-home-by-id.use-case';
 import { UpdateHomeUseCase } from './application/use-cases/update-home.use-case';
 
-import { DeactivateHomeUseCase } from './application/use-cases/deactivate-home.use-case';
-import { ReactivateHomeUseCase } from './application/use-cases/reactivate-home.use-case';
-
 import { HomeMemberRepository } from './domain/repositories/home-member.repository';
 import { PrismaHomeMemberRepository } from './infrastructure/persistence/prisma-home-member.repository';
 import { ListHomeMembersUseCase } from './application/use-cases/list-home-members.use-case';
@@ -30,6 +27,7 @@ import { RejectInvitationUseCase } from './application/use-cases/reject-invitati
 import { LeaveHomeUseCase } from './application/use-cases/leave-home.use-case';
 import { RevokeHomeMemberUseCase } from './application/use-cases/revoke-home-member.use-case';
 import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home-member-role.use-case';
+import { DeleteHomeUseCase } from './application/use-cases/delete-home.use-case';
 
 @Module({
   imports: [AuthModule, UsersModule],
@@ -39,12 +37,8 @@ import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home
   providers: [
     ListHomesUseCase,
     CreateHomeUseCase,
-    ListHomesUseCase,
-    CreateHomeUseCase,
     GetHomeByIdUseCase,
     UpdateHomeUseCase,
-    DeactivateHomeUseCase,
-    ReactivateHomeUseCase,
     ListHomeMembersUseCase,
     CreateHomeInvitationUseCase,
     ListMyInvitationsUseCase,
@@ -53,7 +47,7 @@ import { UpdateHomeMemberRoleUseCase } from './application/use-cases/update-home
     LeaveHomeUseCase,
     UpdateHomeMemberRoleUseCase,
     RevokeHomeMemberUseCase,
-
+    DeleteHomeUseCase,
     {
       provide: HomeMemberRepository,
       useClass: PrismaHomeMemberRepository,

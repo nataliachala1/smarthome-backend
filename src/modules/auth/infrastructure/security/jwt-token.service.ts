@@ -15,16 +15,15 @@ export class JwtTokenService implements TokenService {
     private readonly configService: ConfigService,
   ) {}
 
-  async generateAccessToken(
-    payload: AccessTokenPayload,
-  ): Promise<string> {
-    const expiresIn =
-      this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m';
+  async generateAccessToken(payload: AccessTokenPayload): Promise<string> {
+    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m';
 
     return this.jwtService.signAsync(
       {
         sub: payload.userId,
         role: payload.globalRole,
+        sv: payload.sessionVersion,
+        sid: payload.sessionId,
       },
       {
         expiresIn: expiresIn as SignOptions['expiresIn'],

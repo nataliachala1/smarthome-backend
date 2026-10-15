@@ -25,7 +25,6 @@ export class MarkAllNotificationsAsReadUseCase {
         },
         data: {
           status: 'READ',
-          updated_at: new Date(),
         },
       });
 

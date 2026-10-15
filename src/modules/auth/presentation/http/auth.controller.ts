@@ -6,9 +6,19 @@ import {
   ForbiddenException,
   Get,
   Post,
+  Patch,
+  Res,
+  Req,
+  HttpCode,
+  HttpStatus,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+
+import type { Request, Response } from 'express';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../../../../security/rate-limit.policy';
 
 import { RegisterUserDto } from '../../application/dto/register-user.dto';
 import { ActivateAccountDto } from '../../application/dto/activate-account.dto';
@@ -28,10 +38,7 @@ import { InvalidActivationTokenError } from '../../domain/errors/invalid-activat
 
 import { LoginDto } from '../../application/dto/login.dto';
 
-import {
-  LoginUserOutput,
-  LoginUserUseCase,
-} from '../../application/use-cases/login-user.use-case';
+import { LoginUserUseCase } from '../../application/use-cases/login-user.use-case';
 
 import { InvalidCredentialsError } from '../../domain/errors/invalid-credentials.error';
 import { AccountNotActiveError } from '../../domain/errors/account-not-active.error';
@@ -64,6 +71,84 @@ import { CurrentUser } from './decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../domain/types/authenticated-user.type';
 
+import { ChangePasswordDto } from '../../application/dto/change-password.dto';
+
+import {
+  ChangePasswordOutput,
+  ChangePasswordUseCase,
+} from '../../application/use-cases/change-password.use-case';
+
+import { InvalidCurrentPasswordError } from '../../domain/errors/invalid-current-password.error';
+import { RefreshSessionUseCase } from '../../application/use-cases/refresh-session.use-case';
+
+import { InvalidRefreshTokenError } from '../../domain/errors/invalid-refresh-token.error';
+import { LogoutUseCase } from '../../application/use-cases/logout.use-case';
+
+import { LogoutAllUseCase } from '../../application/use-cases/logout-all.use-case';
+import { RequestReactivationDto } from '../../application/dto/request-reactivation.dto';
+
+import { ReactivateAccountDto } from '../../application/dto/reactivate-account.dto';
+
+import {
+  RequestReactivationUseCase,
+  RequestReactivationOutput,
+} from '../../application/use-cases/request-reactivation.use-case';
+
+import {
+  ReactivateAccountUseCase,
+  ReactivateAccountOutput,
+} from '../../application/use-cases/reactivate-account.use-case';
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error('COOKIE_SECURE debe ser un valor booleano.');
+}
+
+function getRefreshCookieOptions() {
+  const secure = parseBoolean(
+    process.env.COOKIE_SECURE,
+    process.env.NODE_ENV === 'production',
+  );
+  const configuredSameSite = (
+    process.env.COOKIE_SAME_SITE ??
+    (process.env.NODE_ENV === 'production' ? 'none' : 'lax')
+  )
+    .trim()
+    .toLowerCase();
+  let sameSite: 'lax' | 'strict' | 'none';
+
+  switch (configuredSameSite) {
+    case 'lax':
+    case 'strict':
+    case 'none':
+      sameSite = configuredSameSite;
+      break;
+    default:
+      throw new Error('COOKIE_SAME_SITE debe ser lax, strict o none.');
+  }
+
+  const domain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: '/api/v1/auth',
+    domain,
+  } as const;
+}
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(
@@ -73,15 +158,23 @@ export class AuthController {
     private readonly resendActivationUseCase: ResendActivationUseCase,
     private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
+    private readonly changePasswordUseCase: ChangePasswordUseCase,
+    private readonly refreshSessionUseCase: RefreshSessionUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
+    private readonly logoutAllUseCase: LogoutAllUseCase,
+    private readonly requestReactivationUseCase: RequestReactivationUseCase,
+    private readonly reactivateAccountUseCase: ReactivateAccountUseCase,
   ) {}
 
   @Get('me')
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
-  me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
+  me(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 
   @Post('register')
+  @Throttle({ default: RATE_LIMITS.email })
   async register(@Body() dto: RegisterUserDto): Promise<RegisterUserOutput> {
     try {
       return await this.registerUserUseCase.execute(dto);
@@ -99,6 +192,7 @@ export class AuthController {
   }
 
   @Post('activate')
+  @Throttle({ default: RATE_LIMITS.token })
   async activate(
     @Body() dto: ActivateAccountDto,
   ): Promise<ActivateAccountOutput> {
@@ -114,6 +208,7 @@ export class AuthController {
   }
 
   @Post('resend-activation')
+  @Throttle({ default: RATE_LIMITS.email })
   async resendActivation(
     @Body() dto: ResendActivationDto,
   ): Promise<ResendActivationOutput> {
@@ -121,6 +216,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle({ default: RATE_LIMITS.email })
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,
   ): Promise<ForgotPasswordOutput> {
@@ -128,6 +224,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Throttle({ default: RATE_LIMITS.token })
   async resetPassword(
     @Body() dto: ResetPasswordDto,
   ): Promise<ResetPasswordOutput> {
@@ -146,10 +243,62 @@ export class AuthController {
     }
   }
 
-  @Post('login')
-  async login(@Body() dto: LoginDto): Promise<LoginUserOutput> {
+  @Patch('change-password')
+  @Throttle({ default: RATE_LIMITS.password })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<ChangePasswordOutput> {
     try {
-      return await this.loginUserUseCase.execute(dto);
+      return await this.changePasswordUseCase.execute({
+        userId: user.userId,
+        currentPassword: dto.currentPassword,
+        newPassword: dto.newPassword,
+        newPasswordConfirmation: dto.newPasswordConfirmation,
+      });
+    } catch (error) {
+      if (error instanceof PasswordsDoNotMatchError) {
+        throw new BadRequestException(error.message);
+      }
+
+      if (error instanceof InvalidCurrentPasswordError) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw error;
+    }
+  }
+
+  @Post('login')
+  @Throttle({ default: RATE_LIMITS.login })
+  async login(
+    @Body()
+    dto: LoginDto,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    try {
+      const result = await this.loginUserUseCase.execute(dto);
+
+      response.cookie('refresh_token', result.refreshToken, {
+        ...getRefreshCookieOptions(),
+        expires: result.refreshTokenExpiresAt,
+      });
+
+      /*
+       * Nunca enviamos el refresh token
+       * dentro del JSON.
+       */
+      return {
+        accessToken: result.accessToken,
+        tokenType: result.tokenType,
+        user: result.user,
+      };
     } catch (error) {
       if (error instanceof InvalidCredentialsError) {
         throw new UnauthorizedException(error.message);
@@ -161,6 +310,118 @@ export class AuthController {
 
       if (error instanceof AccountLockedError) {
         throw new ForbiddenException(error.message);
+      }
+
+      throw error;
+    }
+  }
+  @Post('refresh')
+  @Throttle({ default: RATE_LIMITS.refresh })
+  async refresh(
+    @Req()
+    request: Request,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    const refreshToken: unknown = request.cookies?.refresh_token;
+
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Refresh token requerido');
+    }
+
+    try {
+      const result = await this.refreshSessionUseCase.execute(refreshToken);
+
+      response.cookie('refresh_token', result.refreshToken, {
+        ...getRefreshCookieOptions(),
+        expires: result.refreshTokenExpiresAt,
+      });
+
+      return {
+        accessToken: result.accessToken,
+
+        tokenType: result.tokenType,
+      };
+    } catch (error) {
+      if (error instanceof InvalidRefreshTokenError) {
+        response.clearCookie('refresh_token', getRefreshCookieOptions());
+
+        throw new UnauthorizedException(error.message);
+      }
+
+      throw error;
+    }
+  }
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(
+    @Req()
+    request: Request,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    const refreshToken =
+      typeof request.cookies?.refresh_token === 'string'
+        ? request.cookies.refresh_token
+        : undefined;
+
+    await this.logoutUseCase.execute(refreshToken);
+
+    response.clearCookie('refresh_token', getRefreshCookieOptions());
+
+    return {
+      message: 'Sesión cerrada correctamente',
+    };
+  }
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  async logoutAll(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Res({
+      passthrough: true,
+    })
+    response: Response,
+  ) {
+    await this.logoutAllUseCase.execute(user.userId);
+
+    response.clearCookie('refresh_token', getRefreshCookieOptions());
+
+    return {
+      message: 'Todas las sesiones fueron cerradas correctamente',
+    };
+  }
+
+  @Post('request-reactivation')
+  @Throttle({ default: RATE_LIMITS.email })
+  async requestReactivation(
+    @Body()
+    dto: RequestReactivationDto,
+  ): Promise<RequestReactivationOutput> {
+    return this.requestReactivationUseCase.execute(dto);
+  }
+
+  @Post('reactivate')
+  @Throttle({ default: RATE_LIMITS.token })
+  async reactivate(
+    @Body()
+    dto: ReactivateAccountDto,
+  ): Promise<ReactivateAccountOutput> {
+    try {
+      return await this.reactivateAccountUseCase.execute(dto);
+    } catch (error) {
+      if (error instanceof InvalidActivationTokenError) {
+        throw new BadRequestException(error.message);
       }
 
       throw error;

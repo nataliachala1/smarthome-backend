@@ -13,6 +13,7 @@ export interface PrismaUserWithRole {
   locked_until: Date | null;
   last_login_at: Date | null;
   deactivated_at: Date | null;
+  session_version: number;
   created_at: Date;
   updated_at: Date;
   role: {
@@ -35,6 +36,7 @@ export class PrismaUserMapper {
       lockedUntil: raw.locked_until,
       lastLoginAt: raw.last_login_at,
       deactivatedAt: raw.deactivated_at,
+      sessionVersion: raw.session_version,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
     });

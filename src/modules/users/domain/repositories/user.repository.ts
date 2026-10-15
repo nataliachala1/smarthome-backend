@@ -7,6 +7,10 @@ export interface CreateUserData {
   passwordHash: string;
 }
 
+export interface UpdateUserProfileData {
+  name?: string;
+}
+
 export abstract class UserRepository {
   abstract findByEmail(email: string): Promise<User | null>;
 
@@ -16,7 +20,9 @@ export abstract class UserRepository {
 
   abstract activate(id: string): Promise<void>;
 
-  abstract resetExpiredLock(id: string): Promise<void>;
+  abstract resetExpiredLock(
+    id: string
+  ): Promise<void>;
 
   abstract registerFailedLogin(
     id: string,
@@ -30,7 +36,27 @@ export abstract class UserRepository {
   ): Promise<void>;
 
   abstract updatePassword(
+    id: string,
+    passwordHash: string,
+  ): Promise<void>;
+
+  abstract updateProfile(
+    id: string,
+    data: UpdateUserProfileData,
+  ): Promise<User>;
+
+  abstract deactivate(
   id: string,
-  passwordHash: string,
+  ): Promise<{
+    deactivatedAt: Date;
+    sessionVersion: number;
+  }>;
+
+  abstract incrementSessionVersion(
+  id: string,
+  ): Promise<number>;
+
+  abstract reactivate(
+  id: string,
   ): Promise<void>;
 }
