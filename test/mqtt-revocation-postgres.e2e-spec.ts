@@ -1,4 +1,15 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
+import { Test, TestingModule } from '@nestjs/testing';
+import { MqttRuntimeService } from '../src/modules/devices/infrastructure/messaging/mqtt-runtime.service';
+import {
+  MqttRevocationResources,
+  MqttRevocationRuntimeService,
+} from '../src/modules/devices/infrastructure/messaging/mqtt-revocation-runtime.service';
+import {
+  assertMqttRevocationDatabase,
+  MQTT_REVOCATION_DATABASE_AUDIT_SQL,
+} from '../src/modules/devices/infrastructure/persistence/mqtt-revocation-database.audit';
 import { readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { escapeLiteral, Pool, PoolClient } from 'pg';
@@ -36,6 +47,48 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
   let broker: MosquittoDeviceIdentityAdmin;
   let transport: MosquittoAdminTransport;
   let ca: Buffer;
+  const contexts: TestingModule[] = [];
+  const runtimePassword = randomBytes(32).toString('base64url');
+
+  async function startRuntime() {
+    const base = `127.0.0.1:${process.env.HU11_TEST_PG_PORT}/hu11_upgrade`;
+    const password = encodeURIComponent(process.env.HU11_TEST_PG_PASSWORD!);
+    const config = new ConfigService({
+      NODE_ENV: 'test',
+      MQTT_REVOCATION_ENABLED: 'true',
+      MQTT_REVOCATION_POLL_MS: '250',
+      DATABASE_URL: `postgresql://hu11_app:${password}@${base}`,
+      DATABASE_IOT_URL: `postgresql://hu11_ingest:${password}@${base}`,
+      DATABASE_MQTT_REVOKE_URL: `postgresql://hu11_mqtt_revoke:${password}@${base}`,
+      MQTT_BROKER_URL: process.env.HU11_TEST_BROKER,
+      MQTT_TLS_CA_FILE: process.env.HU11_TEST_CA,
+      MQTT_TOPIC_NAMESPACE: 'smarthome/hu11-revocation/v1',
+      MQTT_ADMIN_USERNAME: 'hu11-runtime-admin',
+      MQTT_ADMIN_PASSWORD: runtimePassword,
+      MQTT_ADMIN_CLIENT_ID: 'hu11-runtime-admin',
+    });
+    const context = await Test.createTestingModule({
+      providers: [
+        { provide: ConfigService, useValue: config },
+        MqttRuntimeService,
+        MqttRevocationResources,
+        MqttRevocationRuntimeService,
+      ],
+    })
+      .setLogger({ log() {}, error() {}, warn() {} })
+      .compile();
+    contexts.push(context);
+    await context.init();
+    return { context, runtime: context.get(MqttRevocationRuntimeService) };
+  }
+  async function until(check: () => Promise<boolean>) {
+    const deadline = Date.now() + 7000;
+    while (Date.now() < deadline) {
+      if (await check()) return;
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    throw new Error('HU11_RUNTIME_EXPECTATION_TIMEOUT');
+  }
 
   function openMqtt(options: IClientOptions): Promise<MqttClient> {
     return new Promise((accept, reject) => {
@@ -206,10 +259,44 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       transport,
       new DeviceMqttPolicy('smarthome/hu11-revocation/v1'),
     );
+    await transport.execute({
+      command: 'createRole',
+      rolename: 'hu11-runtime-admin-role',
+      acls: [
+        {
+          acltype: 'publishClientSend',
+          topic: '$CONTROL/dynamic-security/v1',
+          allow: true,
+          priority: 0,
+        },
+        {
+          acltype: 'publishClientReceive',
+          topic: '$CONTROL/dynamic-security/v1/response',
+          allow: true,
+          priority: 0,
+        },
+        {
+          acltype: 'subscribeLiteral',
+          topic: '$CONTROL/dynamic-security/v1/response',
+          allow: true,
+          priority: 0,
+        },
+      ],
+    });
+    await transport.execute({
+      command: 'createClient',
+      username: 'hu11-runtime-admin',
+      clientid: 'hu11-runtime-admin',
+      password: runtimePassword,
+      roles: [{ rolename: 'hu11-runtime-admin-role', priority: 0 }],
+    });
   });
 
   beforeEach(async () => {
     await admin.query('TRUNCATE devices.mqtt_identity');
+  });
+  afterEach(async () => {
+    for (const context of contexts.splice(0)) await context.close();
   });
   afterAll(async () => {
     transport?.close();
@@ -220,6 +307,175 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       ),
     );
     await Promise.all(pools.map((pool) => pool.end()));
+  });
+
+  it('keeps the runtime audit identical to the database read-only script', () => {
+    const sql = readFileSync(
+      resolve(
+        process.env.HU11_TEST_DATABASE_REPO!,
+        'scripts/audit-mqtt-revocation.sql',
+      ),
+      'utf8',
+    );
+    expect(
+      MQTT_REVOCATION_DATABASE_AUDIT_SQL.trim().replace(/\r\n/g, '\n'),
+    ).toBe(sql.trim().replace(/\r\n/g, '\n'));
+  });
+
+  it('accepts only the isolated revocation login in the runtime audit', async () => {
+    await expect(
+      assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+    ).resolves.toBeUndefined();
+    await expect(assertMqttRevocationDatabase(admin)).rejects.toThrow(
+      'DATABASE_UNSAFE',
+    );
+  });
+
+  it.each(['app', 'ingest', 'readonly', 'worker', 'mqtt_registrar'])(
+    'refuses runtime startup privileges of %s',
+    async (role) => {
+      await expect(
+        assertMqttRevocationDatabase(logins.get(role)!),
+      ).rejects.toThrow('DATABASE_UNSAFE');
+    },
+  );
+
+  it('detects a direct column privilege that bypasses role isolation', async () => {
+    await admin.query(
+      'GRANT SELECT(id_mqtt_identity) ON devices.mqtt_identity TO hu11_mqtt_revoke',
+    );
+    try {
+      await expect(
+        assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+      ).rejects.toThrow('DATABASE_UNSAFE');
+    } finally {
+      await admin.query(
+        'REVOKE SELECT(id_mqtt_identity) ON devices.mqtt_identity FROM hu11_mqtt_revoke',
+      );
+    }
+  });
+
+  it('detects accidental PUBLIC execution of an administrative function', async () => {
+    await admin.query(
+      'GRANT EXECUTE ON FUNCTION devices.fn_finish_mqtt_revocation(uuid,uuid,text) TO PUBLIC',
+    );
+    try {
+      await expect(
+        assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+      ).rejects.toThrow('DATABASE_UNSAFE');
+    } finally {
+      await admin.query(
+        'REVOKE EXECUTE ON FUNCTION devices.fn_finish_mqtt_revocation(uuid,uuid,text) FROM PUBLIC',
+      );
+    }
+  });
+
+  it('does not accept a privileged session hidden behind SET ROLE', async () => {
+    const client = await admin.connect();
+    try {
+      await client.query('SET ROLE smarthome_mqtt_revoke');
+      const rows = await client.query<{ check_name: string; passed: boolean }>(
+        MQTT_REVOCATION_DATABASE_AUDIT_SQL,
+      );
+      expect(
+        rows.rows.find((row) => row.check_name === 'exact_runtime_login')
+          ?.passed,
+      ).toBe(false);
+      expect(
+        rows.rows.find((row) => row.check_name === 'nonprivileged_roles')
+          ?.passed,
+      ).toBe(false);
+    } finally {
+      await client.query('RESET ROLE');
+      client.release();
+    }
+  });
+
+  it('rejects a definer function without its pinned search_path', async () => {
+    await admin.query(
+      'ALTER FUNCTION devices.fn_claim_mqtt_revocation() RESET search_path',
+    );
+    try {
+      await expect(
+        assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+      ).rejects.toThrow('DATABASE_UNSAFE');
+    } finally {
+      await admin.query(
+        'ALTER FUNCTION devices.fn_claim_mqtt_revocation() SET search_path TO pg_catalog, pg_temp',
+      );
+    }
+  });
+
+  it('processes a durable job automatically through Nest lifecycle and closes its database connection', async () => {
+    const d = await device(false);
+    await broker.provision(d.identity, d.manufacturer);
+    await register(d);
+    await remove(d.id);
+    const { context, runtime } = await startRuntime();
+    await until(async () => (await state(d.identity)).state === 'REVOKED');
+    await context.close();
+    expect(runtime.status()).toMatchObject({ running: false, completed: 1 });
+    expect(
+      (
+        await admin.query<{ n: number }>(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE application_name='smarthome-mqtt-revocation'",
+        )
+      ).rows[0].n,
+    ).toBe(0);
+  });
+
+  it('recovers automatically with a new broker session after administrative login is restored', async () => {
+    const d = await device(false);
+    await broker.provision(d.identity, d.manufacturer);
+    await register(d);
+    await remove(d.id);
+    await transport.execute({
+      command: 'disableClient',
+      username: 'hu11-runtime-admin',
+    });
+    try {
+      await startRuntime();
+      await until(
+        async () =>
+          (await state(d.identity)).last_error_code ===
+          'MQTT_ADMIN_UNAVAILABLE',
+      );
+      expect((await state(d.identity)).state).toBe('REVOKE_PENDING');
+      await transport.execute({
+        command: 'enableClient',
+        username: 'hu11-runtime-admin',
+      });
+      await dueNow(d.identity);
+      await until(async () => (await state(d.identity)).state === 'REVOKED');
+      expect((await state(d.identity)).attempt_count).toBeGreaterThanOrEqual(2);
+    } finally {
+      await transport.execute({
+        command: 'enableClient',
+        username: 'hu11-runtime-admin',
+      });
+    }
+  });
+
+  it('suspends claims after a role change and resumes after permissions are repaired', async () => {
+    const { runtime } = await startRuntime();
+    await until(() => Promise.resolve(runtime.status().lastEvent === 'IDLE'));
+    await admin.query('GRANT smarthome_ingest TO hu11_mqtt_revoke');
+    try {
+      await until(() =>
+        Promise.resolve(
+          runtime.status().lastEvent === 'MQTT_REVOCATION_DATABASE_UNSAFE',
+        ),
+      );
+      const d = await device(false);
+      await broker.provision(d.identity, d.manufacturer);
+      await register(d);
+      await remove(d.id);
+      expect((await state(d.identity)).attempt_count).toBe(0);
+      await admin.query('REVOKE smarthome_ingest FROM hu11_mqtt_revoke');
+      await until(async () => (await state(d.identity)).state === 'REVOKED');
+    } finally {
+      await admin.query('REVOKE smarthome_ingest FROM hu11_mqtt_revoke');
+    }
   });
 
   it.each(roles)(

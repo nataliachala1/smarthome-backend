@@ -1,5 +1,7 @@
 # HU11 — Registro persistente y revocación durable
 
+Este documento conserva la evidencia del segundo incremento. El [tercer incremento](HU11_MQTT_REVOCATION_RUNTIME.md) incorpora ejecución automática optativa en Nest, conexión por tarea, auditoría de permisos y cierre ordenado; consultar allí el alcance operativo vigente.
+
 Fecha: 2026-10-15. Segundo incremento en `11-dev`. Bases publicadas: backend `a0d41581c7bd2f2bdb9ac289deb5054991214ba7`, BD `71443f27f38fc31ef08e29e8a0a60f40aad3f3db`. Diff y resultados de pruebas presentados; commit/push de este incremento autorizados por el usuario el 2026-10-15.
 
 ## Comportamiento implementado
