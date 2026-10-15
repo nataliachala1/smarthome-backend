@@ -32,7 +32,7 @@ describe('revocation runtime lifecycle', () => {
     MQTT_ADMIN_PASSWORD: 'admin-fixture',
     MQTT_ADMIN_CLIENT_ID: 'worker-1',
   });
-  const safe = { rows: Array.from({ length: 8 }, () => ({ passed: true })) };
+  const safe = { rows: Array.from({ length: 9 }, () => ({ passed: true })) };
   function fixture(overrides: Record<string, string> = {}) {
     const config = new ConfigService({ ...environment(), ...overrides });
     const query = jest

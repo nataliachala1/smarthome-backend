@@ -106,7 +106,7 @@ async function main() {
   migrate('hu11_clean', master, 'update');
   console.log('PASS: Liquibase clean update and validation.');
   phase = 'Liquibase empty-registry rollback and reapply';
-  migrate('hu11_clean', master, 'rollback-count', ['--count=1']);
+  migrate('hu11_clean', master, 'rollback-count', ['--count=2']);
   migrate('hu11_clean', master, 'update');
   console.log('PASS: empty-registry rollback and reapply.');
   phase = 'Liquibase baseline';
@@ -124,7 +124,67 @@ async function main() {
     INSERT INTO devices.device(id_device,id_home,name,manufacturer_device_id,messaging_protocol)
     VALUES ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',
     'Existing','shelly-existing-before-upgrade','MQTT');`);
-  phase = 'Liquibase incremental migration';
+  phase = 'Liquibase existing revocation baseline';
+  migrate('hu11_upgrade', 'tests/mqtt/hu11-revocation-baseline.yaml', 'update');
+  const revocationBaseline = (
+    await upgrade.query(
+      'SELECT id, md5sum FROM databasechangelog ORDER BY orderexecuted',
+    )
+  ).rows;
+  if (
+    revocationBaseline.length !== before.length + 1 ||
+    JSON.stringify(revocationBaseline.slice(0, -1)) !== JSON.stringify(before)
+  )
+    throw new Error('Baseline changesets changed or were reapplied');
+  // Populate all pre-existing states before adding technical history. This is
+  // disposable data only; production identities are never adopted by this test.
+  phase = 'pre-existing identity fixture';
+  for (const state of ['REGISTERED', 'REVOKE_PENDING', 'REVOKED']) {
+    const deviceId = randomUUID();
+    const identityId = randomUUID();
+    const manufacturer = `shelly-baseline-${deviceId}`;
+    await upgrade.query(
+      `INSERT INTO devices.device(id_device,id_home,name,manufacturer_device_id,messaging_protocol)
+      VALUES ($1,'22222222-2222-4222-8222-222222222222',$3,$2,'MQTT')`,
+      [deviceId, manufacturer, `Baseline-${state}`],
+    );
+    await upgrade.query('SELECT devices.fn_register_mqtt_identity($1,$2,$3)', [
+      deviceId,
+      identityId,
+      manufacturer,
+    ]);
+    if (state !== 'REGISTERED') {
+      await upgrade.query(
+        "UPDATE devices.device SET status='DEACTIVATED',deleted_at=clock_timestamp() WHERE id_device=$1",
+        [deviceId],
+      );
+      const claim = (
+        await upgrade.query('SELECT * FROM devices.fn_claim_mqtt_revocation()')
+      ).rows[0];
+      if (claim?.identity_id !== identityId)
+        throw new Error('Unexpected baseline claim');
+      await upgrade.query(
+        'SELECT devices.fn_finish_mqtt_revocation($1,$2,$3)',
+        [
+          identityId,
+          claim.claim_token,
+          state === 'REVOKED' ? null : 'MQTT_ADMIN_UNAVAILABLE',
+        ],
+      );
+      // Prevent the pending baseline job becoming due during image startup.
+      if (state === 'REVOKE_PENDING')
+        await upgrade.query(
+          "UPDATE devices.mqtt_identity SET retry_at=clock_timestamp()+interval '1 hour' WHERE id_mqtt_identity=$1",
+          [identityId],
+        );
+    }
+  }
+  const registrySql =
+    'SELECT * FROM devices.mqtt_identity ORDER BY id_mqtt_identity';
+  const registryBefore = JSON.stringify(
+    (await upgrade.query(registrySql)).rows,
+  );
+  phase = 'Liquibase identity history incremental migration';
   migrate('hu11_upgrade', master, 'update');
   const after = (
     await upgrade.query(
@@ -132,16 +192,59 @@ async function main() {
     )
   ).rows;
   if (
-    after.length !== before.length + 1 ||
-    JSON.stringify(after.slice(0, -1)) !== JSON.stringify(before)
+    after.length !== revocationBaseline.length + 1 ||
+    JSON.stringify(after.slice(0, -1)) !== JSON.stringify(revocationBaseline) ||
+    JSON.stringify((await upgrade.query(registrySql)).rows) !== registryBefore
   )
-    throw new Error('Baseline changesets changed or were reapplied');
+    throw new Error(
+      'History migration changed existing checksums or identities',
+    );
+  const snapshots =
+    await upgrade.query(`SELECT count(*)::int AS n FROM devices.mqtt_identity_event e
+    JOIN devices.mqtt_identity i USING(id_mqtt_identity)
+    WHERE e.event_type='BASELINE_SNAPSHOT' AND e.previous_state IS NULL
+      AND e.state=i.state AND e.attempt_count=i.attempt_count
+      AND e.error_code IS NOT DISTINCT FROM i.last_error_code`);
+  if (snapshots.rows[0].n !== 3)
+    throw new Error('Incorrect baseline observations');
+  phase = 'Liquibase populated history rollback refusal';
+  let refused = false;
+  try {
+    migrate('hu11_upgrade', master, 'rollback-count', ['--count=1']);
+  } catch (error) {
+    if (
+      !String(error.stderr).includes(
+        'MQTT_IDENTITY_HISTORY_ROLLBACK_REQUIRES_EMPTY_HISTORY',
+      )
+    )
+      throw error;
+    refused = true;
+  }
+  if (!refused)
+    throw new Error('Populated history rollback unexpectedly succeeded');
+  const retained = await upgrade.query(
+    'SELECT count(*)::int AS n FROM devices.mqtt_identity_event',
+  );
+  const retainedChangesets = (
+    await upgrade.query(
+      'SELECT id, md5sum FROM databasechangelog ORDER BY orderexecuted',
+    )
+  ).rows;
+  if (
+    retained.rows[0].n !== 3 ||
+    JSON.stringify(retainedChangesets) !== JSON.stringify(after)
+  )
+    throw new Error('Refused rollback changed history or changelog');
+  migrate('hu11_upgrade', master, 'validate');
+  console.log(
+    'PASS: existing identities preserved, three baseline observations, populated history rollback refused.',
+  );
   const existing =
     await upgrade.query(`SELECT count(*)::int AS n FROM devices.device
     WHERE manufacturer_device_id = 'shelly-existing-before-upgrade'`);
   if (existing.rows[0].n !== 1) throw new Error('Existing row changed');
   console.log(
-    `PASS: incremental migration (${before.length} -> ${after.length} changesets), previous checksums and device preserved.`,
+    `PASS: incremental migration (${before.length} -> ${revocationBaseline.length} -> ${after.length} changesets), previous checksums and device preserved.`,
   );
   phase = 'PostgreSQL and real TLS broker integration tests';
   const exitCode = await new Promise((resolve, reject) => {

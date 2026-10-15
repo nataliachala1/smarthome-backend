@@ -1,4 +1,4 @@
-HU11: [ejecución automática y operación del trabajador de revocación](docs/HU11_MQTT_REVOCATION_RUNTIME.md), sobre el [registro persistente](docs/HU11_MQTT_REVOCATION.md) y el [adaptador de identidades y ACL](docs/HU11_MQTT_IDENTITIES.md). Desactivado por defecto; despliegue, alta y pairing pendientes.
+HU11: [historial transaccional de identidades MQTT](docs/HU11_MQTT_IDENTITY_HISTORY.md), sobre la [ejecución automática de revocación](docs/HU11_MQTT_REVOCATION_RUNTIME.md), el [registro persistente](docs/HU11_MQTT_REVOCATION.md) y el [adaptador de identidades y ACL](docs/HU11_MQTT_IDENTITIES.md). Trabajador desactivado por defecto; despliegue, alta y pairing pendientes.
 
 HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Broker cloud y alta con identidad individual todavía requieren integración.
 

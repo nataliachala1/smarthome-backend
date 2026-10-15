@@ -19,7 +19,9 @@ functions AS (
     ('devices.fn_claim_mqtt_revocation()', true),
     ('devices.fn_finish_mqtt_revocation(uuid,uuid,text)', true),
     ('devices.fn_register_mqtt_identity(uuid,uuid,text)', false),
-    ('devices.fn_mqtt_identity_device_update()', false)
+    ('devices.fn_mqtt_identity_device_update()', false),
+    ('devices.fn_capture_mqtt_identity_event()', false),
+    ('devices.fn_mqtt_identity_event_append_only()', false)
   ) f(signature, allowed)
 ),
 checks(check_name, passed) AS (
@@ -71,6 +73,26 @@ checks(check_name, passed) AS (
         OR pg_catalog.has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))
   )
   UNION ALL
+  SELECT 'identity_history_capture', COALESCE((
+    SELECT h.relkind = 'r' AND h.relrowsecurity
+      AND pg_catalog.current_setting('session_replication_role') = 'origin'
+      AND EXISTS (SELECT 1 FROM pg_catalog.pg_trigger t
+        WHERE t.tgrelid = pg_catalog.to_regclass('devices.mqtt_identity')
+          AND t.tgname = 'trg_mqtt_identity_event'
+          AND t.tgfoid = pg_catalog.to_regprocedure('devices.fn_capture_mqtt_identity_event()')
+          AND t.tgtype = 21 -- AFTER ROW INSERT OR UPDATE
+          AND t.tgenabled = 'O' AND NOT t.tgisinternal
+          AND t.tgqual IS NULL AND t.tgnargs = 0 AND t.tgattr = ''::pg_catalog.int2vector)
+      AND EXISTS (SELECT 1 FROM pg_catalog.pg_trigger t
+        WHERE t.tgrelid = h.oid AND t.tgname = 'trg_mqtt_identity_event_append_only'
+          AND t.tgfoid = pg_catalog.to_regprocedure('devices.fn_mqtt_identity_event_append_only()')
+          AND t.tgtype = 58 -- BEFORE STATEMENT UPDATE OR DELETE OR TRUNCATE
+          AND t.tgenabled = 'O' AND NOT t.tgisinternal
+          AND t.tgqual IS NULL AND t.tgnargs = 0 AND t.tgattr = ''::pg_catalog.int2vector)
+    FROM pg_catalog.pg_class h
+    WHERE h.oid = pg_catalog.to_regclass('devices.mqtt_identity_event')
+  ), false)
+  UNION ALL
   SELECT 'no_schema_create', NOT EXISTS (
     SELECT 1 FROM business_schemas n WHERE pg_catalog.has_schema_privilege(current_user,n.oid,'CREATE')
   )
@@ -83,7 +105,7 @@ export async function assertMqttRevocationDatabase(pool: Pool): Promise<void> {
     MQTT_REVOCATION_DATABASE_AUDIT_SQL,
   );
   if (
-    result.rows.length !== 8 ||
+    result.rows.length !== 9 ||
     result.rows.some((row) => row.passed !== true)
   ) {
     throw new MqttRevocationDatabaseUnsafeError();

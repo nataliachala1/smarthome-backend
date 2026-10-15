@@ -208,8 +208,25 @@ model mqtt_identity {
   lease_until            DateTime? @db.Timestamptz(6)
   last_error_code        String?
   device                 device    @relation(fields: [id_device], references: [id_device], onDelete: Restrict, onUpdate: NoAction)
+  events                 mqtt_identity_event[]
 
   @@index([retry_at, id_mqtt_identity], map: "idx_mqtt_identity_pending", where: raw("(state = 'REVOKE_PENDING'::text)"))
+  @@schema("devices")
+}
+
+/// Technical history; RLS, append-only triggers and checks are owned by Liquibase.
+model mqtt_identity_event {
+  id_mqtt_identity_event BigInt        @id @default(autoincrement())
+  id_mqtt_identity       String        @db.Uuid
+  event_type             String
+  previous_state         String?
+  state                  String
+  attempt_count          Int
+  error_code             String?
+  occurred_at            DateTime      @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(6)
+  identity               mqtt_identity @relation(fields: [id_mqtt_identity], references: [id_mqtt_identity], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([id_mqtt_identity, id_mqtt_identity_event], map: "idx_mqtt_identity_event_history")
   @@schema("devices")
 }
 

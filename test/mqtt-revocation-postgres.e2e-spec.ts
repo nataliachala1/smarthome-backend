@@ -192,6 +192,22 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       "UPDATE devices.mqtt_identity SET retry_at=clock_timestamp()-interval '1 second' WHERE id_mqtt_identity=$1",
       [id],
     );
+  const history = async (id: string) =>
+    (
+      await admin.query<{
+        id_mqtt_identity_event: string;
+        id_mqtt_identity: string;
+        event_type: string;
+        previous_state: string | null;
+        state: string;
+        attempt_count: number;
+        error_code: string | null;
+        occurred_at: Date;
+      }>(
+        'SELECT * FROM devices.mqtt_identity_event WHERE id_mqtt_identity=$1 ORDER BY id_mqtt_identity_event',
+        [id],
+      )
+    ).rows;
 
   beforeAll(async () => {
     if (
@@ -293,7 +309,27 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
   });
 
   beforeEach(async () => {
-    await admin.query('TRUNCATE devices.mqtt_identity');
+    // Only the isolated, name-checked fixture uses its superuser to reset rows.
+    // Transactional DDL restores the guard even if resetting the fixture fails.
+    const reset = await admin.connect();
+    try {
+      await reset.query('BEGIN');
+      await reset.query(
+        'ALTER TABLE devices.mqtt_identity_event DISABLE TRIGGER trg_mqtt_identity_event_append_only',
+      );
+      await reset.query(
+        'TRUNCATE devices.mqtt_identity_event, devices.mqtt_identity',
+      );
+      await reset.query(
+        'ALTER TABLE devices.mqtt_identity_event ENABLE TRIGGER trg_mqtt_identity_event_append_only',
+      );
+      await reset.query('COMMIT');
+    } catch (error) {
+      await reset.query('ROLLBACK');
+      throw error;
+    } finally {
+      reset.release();
+    }
   });
   afterEach(async () => {
     for (const context of contexts.splice(0)) await context.close();
@@ -329,6 +365,329 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
     await expect(assertMqttRevocationDatabase(admin)).rejects.toThrow(
       'DATABASE_UNSAFE',
     );
+  });
+
+  it.each([
+    ['devices.mqtt_identity', 'trg_mqtt_identity_event'],
+    ['devices.mqtt_identity_event', 'trg_mqtt_identity_event_append_only'],
+  ])(
+    'refuses claims when history trigger %s.%s is disabled',
+    async (table, trigger) => {
+      // Identifiers are fixed test cases, not caller-supplied SQL.
+      await admin.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+      try {
+        await expect(
+          assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+        ).rejects.toThrow('DATABASE_UNSAFE');
+      } finally {
+        await admin.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
+      }
+      await expect(
+        assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+      ).resolves.toBeUndefined();
+    },
+  );
+
+  it('detects session replication mode that suppresses normal triggers', async () => {
+    const client = await admin.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL session_replication_role = 'replica'");
+      const result = await client.query<{
+        check_name: string;
+        passed: boolean;
+      }>(MQTT_REVOCATION_DATABASE_AUDIT_SQL);
+      expect(
+        result.rows.find((row) => row.check_name === 'identity_history_capture')
+          ?.passed,
+      ).toBe(false);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  it('rejects disabled history RLS', async () => {
+    await admin.query(
+      'ALTER TABLE devices.mqtt_identity_event DISABLE ROW LEVEL SECURITY',
+    );
+    try {
+      await expect(
+        assertMqttRevocationDatabase(logins.get('mqtt_revoke')!),
+      ).rejects.toThrow('DATABASE_UNSAFE');
+    } finally {
+      await admin.query(
+        'ALTER TABLE devices.mqtt_identity_event ENABLE ROW LEVEL SECURITY',
+      );
+    }
+  });
+
+  it('records retries and success once, retaining each stable error without tokens', async () => {
+    const d = await device();
+    await register(d);
+    await remove(d.id);
+    const first = (await store.claim())!;
+    await remove(d.id);
+    expect(await store.finish(first, 'MQTT_ADMIN_OUTCOME_UNKNOWN')).toBe(true);
+    expect(await store.finish(first, null)).toBe(false);
+    await dueNow(d.identity);
+    const second = (await store.claim())!;
+    expect(await store.finish(second, 'MQTT_ADMIN_UNAVAILABLE')).toBe(true);
+    await dueNow(d.identity);
+    const third = (await store.claim())!;
+    expect(await store.finish(third, null)).toBe(true);
+    expect(await store.finish(third, null)).toBe(false);
+    const events = await history(d.identity);
+    expect(
+      events.map((event) => [
+        event.event_type,
+        event.attempt_count,
+        event.error_code,
+      ]),
+    ).toEqual([
+      ['REGISTERED', 0, null],
+      ['REVOKE_REQUESTED', 0, null],
+      ['ATTEMPT_STARTED', 1, null],
+      ['RETRY_SCHEDULED', 1, 'MQTT_ADMIN_OUTCOME_UNKNOWN'],
+      ['ATTEMPT_STARTED', 2, null],
+      ['RETRY_SCHEDULED', 2, 'MQTT_ADMIN_UNAVAILABLE'],
+      ['ATTEMPT_STARTED', 3, null],
+      ['REVOKED', 3, null],
+    ]);
+    expect(events[0].previous_state).toBeNull();
+    expect(events[1]).toMatchObject({
+      previous_state: 'REGISTERED',
+      state: 'REVOKE_PENDING',
+    });
+    expect(events[7]).toMatchObject({
+      previous_state: 'REVOKE_PENDING',
+      state: 'REVOKED',
+    });
+    expect(events.every((event) => event.occurred_at instanceof Date)).toBe(
+      true,
+    );
+    for (const claim of [first, second, third])
+      expect(JSON.stringify(events)).not.toContain(claim.claimToken);
+    expect((await state(d.identity)).last_error_code).toBeNull();
+  });
+
+  it('rolls back registration and its technical event together', async () => {
+    const d = await device(false);
+    const client = await logins.get('mqtt_registrar')!.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT devices.fn_register_mqtt_identity($1,$2,$3)', [
+        d.id,
+        d.identity,
+        d.manufacturer,
+      ]);
+      await client.query('ROLLBACK');
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+    expect(await state(d.identity)).toBeUndefined();
+    expect(await history(d.identity)).toEqual([]);
+  });
+
+  it('rolls back a claim and records no attempt until it commits', async () => {
+    const d = await device();
+    await remove(d.id);
+    const client = await logins.get('mqtt_revoke')!.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT * FROM devices.fn_claim_mqtt_revocation()');
+      await client.query('ROLLBACK');
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+    expect(
+      (await history(d.identity)).map((event) => event.event_type),
+    ).toEqual(['REGISTERED', 'REVOKE_REQUESTED']);
+    expect((await store.claim())?.attempt).toBe(1);
+    expect(
+      (await history(d.identity)).filter(
+        (event) => event.event_type === 'ATTEMPT_STARTED',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('rolls back successful completion and its event together', async () => {
+    const d = await device();
+    await remove(d.id);
+    const claim = (await store.claim())!;
+    const client = await logins.get('mqtt_revoke')!.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'SELECT devices.fn_finish_mqtt_revocation($1,$2,NULL)',
+        [d.identity, claim.claimToken],
+      );
+      await client.query('ROLLBACK');
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+    expect((await state(d.identity)).state).toBe('REVOKE_PENDING');
+    expect(
+      (await history(d.identity)).some(
+        (event) => event.event_type === 'REVOKED',
+      ),
+    ).toBe(false);
+    expect(await store.finish(claim, null)).toBe(true);
+    expect(
+      (await history(d.identity)).filter(
+        (event) => event.event_type === 'REVOKED',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('keeps claims visible at the saturated attempt counter without storing leases', async () => {
+    const d = await device();
+    await remove(d.id);
+    await admin.query(
+      'UPDATE devices.mqtt_identity SET attempt_count=2147483647 WHERE id_mqtt_identity=$1',
+      [d.identity],
+    );
+    const first = (await store.claim())!;
+    await expireLease(d.identity);
+    const second = (await store.claim())!;
+    expect(first.attempt).toBe(2147483647);
+    expect(second.attempt).toBe(2147483647);
+    expect(
+      (await history(d.identity)).filter(
+        (event) => event.event_type === 'ATTEMPT_STARTED',
+      ),
+    ).toHaveLength(2);
+  });
+
+  it.each(roles)(
+    'denies direct history read/write, sequence use and trigger execution to %s',
+    async (role) => {
+      const d = await device();
+      const pool = logins.get(role)!;
+      for (const sql of [
+        'SELECT * FROM devices.mqtt_identity_event',
+        'UPDATE devices.mqtt_identity_event SET attempt_count=0',
+        'DELETE FROM devices.mqtt_identity_event',
+        'TRUNCATE devices.mqtt_identity_event',
+        "SELECT nextval('devices.mqtt_identity_event_id_mqtt_identity_event_seq')",
+        'SELECT devices.fn_capture_mqtt_identity_event()',
+        'SELECT devices.fn_mqtt_identity_event_append_only()',
+      ])
+        await expect(pool.query(sql)).rejects.toMatchObject({ code: '42501' });
+      await expect(
+        pool.query(
+          "INSERT INTO devices.mqtt_identity_event(id_mqtt_identity,event_type,state,attempt_count) VALUES ($1,'REGISTERED','REGISTERED',0)",
+          [d.identity],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
+      expect(await history(d.identity)).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    'UPDATE devices.mqtt_identity_event SET attempt_count=0',
+    'DELETE FROM devices.mqtt_identity_event',
+    'TRUNCATE devices.mqtt_identity_event',
+  ])(
+    'guards history against accidental privileged mutation: %s',
+    async (sql) => {
+      const d = await device();
+      await expect(admin.query(sql)).rejects.toMatchObject({
+        code: '55000',
+        message: 'MQTT_IDENTITY_HISTORY_APPEND_ONLY',
+      });
+      expect(await history(d.identity)).toHaveLength(1);
+    },
+  );
+
+  it('retains the identity referenced by history', async () => {
+    const d = await device();
+    await expect(
+      admin.query(
+        'DELETE FROM devices.mqtt_identity WHERE id_mqtt_identity=$1',
+        [d.identity],
+      ),
+    ).rejects.toMatchObject({ code: '23503' });
+    await expect(
+      admin.query('TRUNCATE devices.mqtt_identity'),
+    ).rejects.toMatchObject({ code: '0A000' });
+    expect(await history(d.identity)).toHaveLength(1);
+  });
+
+  it('aborts the business update if its history insert fails', async () => {
+    const d = await device();
+    await admin.query(
+      "ALTER TABLE devices.mqtt_identity_event ADD CONSTRAINT hu11_test_event_failure CHECK (event_type <> 'REVOKE_REQUESTED') NOT VALID",
+    );
+    try {
+      await expect(remove(d.id)).rejects.toMatchObject({ code: '23514' });
+      expect((await state(d.identity)).state).toBe('REGISTERED');
+      expect(
+        (await history(d.identity)).map((event) => event.event_type),
+      ).toEqual(['REGISTERED']);
+      expect(
+        (
+          await admin.query<{ deleted_at: Date | null }>(
+            'SELECT deleted_at FROM devices.device WHERE id_device=$1',
+            [d.id],
+          )
+        ).rows[0].deleted_at,
+      ).toBeNull();
+    } finally {
+      await admin.query(
+        'ALTER TABLE devices.mqtt_identity_event DROP CONSTRAINT hu11_test_event_failure',
+      );
+    }
+  });
+
+  it('refuses history rollback while observations exist', async () => {
+    const d = await device();
+    const sql = readFileSync(
+      resolve(
+        process.env.HU11_TEST_DATABASE_REPO!,
+        'releases/011_mqtt_identity_events/mqtt-identity-events.rollback.sql',
+      ),
+      'utf8',
+    );
+    const client = await admin.connect();
+    try {
+      await client.query('BEGIN');
+      await expect(client.query(sql)).rejects.toThrow(
+        'MQTT_IDENTITY_HISTORY_ROLLBACK_REQUIRES_EMPTY_HISTORY',
+      );
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+    expect(await history(d.identity)).toHaveLength(1);
+    await remove(d.id);
+    expect(await history(d.identity)).toHaveLength(2);
+  });
+
+  it('limits the history schema to typed metadata without secret or raw payload fields', async () => {
+    const result = await admin.query<{ column_name: string }>(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema='devices' AND table_name='mqtt_identity_event' ORDER BY ordinal_position",
+    );
+    expect(result.rows.map((row) => row.column_name)).toEqual([
+      'id_mqtt_identity_event',
+      'id_mqtt_identity',
+      'event_type',
+      'previous_state',
+      'state',
+      'attempt_count',
+      'error_code',
+      'occurred_at',
+    ]);
+    const d = await device();
+    await expect(
+      admin.query(
+        "INSERT INTO devices.mqtt_identity_event(id_mqtt_identity,event_type,previous_state,state,attempt_count) VALUES ($1,'REVOKED',NULL,'REVOKED',1)",
+        [d.identity],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
   });
 
   it.each(['app', 'ingest', 'readonly', 'worker', 'mqtt_registrar'])(
@@ -630,6 +989,9 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
         )
       ).rows[0].deleted_at,
     ).toBeNull();
+    expect(
+      (await history(d.identity)).map((event) => event.event_type),
+    ).toEqual(['REGISTERED']);
   });
 
   it('serializes registration against device deletion on the same row lock', async () => {
@@ -705,6 +1067,15 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
     ).toBe(false);
     expect(await store.finish(current, null)).toBe(true);
     expect(await store.finish(current, null)).toBe(false);
+    expect(
+      (await history(d.identity)).map((event) => event.event_type),
+    ).toEqual([
+      'REGISTERED',
+      'REVOKE_REQUESTED',
+      'ATTEMPT_STARTED',
+      'ATTEMPT_STARTED',
+      'REVOKED',
+    ]);
   });
 
   it('keeps an uncertain broker outcome pending and delays the next attempt', async () => {
@@ -740,6 +1111,11 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
         ]),
     ).rejects.toMatchObject({ code: '22023' });
     expect((await state(d.identity)).last_error_code).toBeNull();
+    expect(
+      (await history(d.identity)).some(
+        (event) => event.event_type === 'RETRY_SCHEDULED',
+      ),
+    ).toBe(false);
   });
 
   it('keeps repeated logical updates from resetting an in-flight lease', async () => {
@@ -881,6 +1257,14 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       }),
     ).rejects.toThrow('MQTT_TEST_CONNECTION_DENIED');
     expect(await snapshot()).toBe(before);
+    const events = await history(d.identity);
+    expect(events.map((event) => event.event_type)).toEqual([
+      'REGISTERED',
+      'REVOKE_REQUESTED',
+      'ATTEMPT_STARTED',
+      'REVOKED',
+    ]);
+    expect(JSON.stringify(events)).not.toContain(issued.password);
     expect(await new MqttRevocationWorker(store, broker).runOnce()).toBe(
       'IDLE',
     );
@@ -899,11 +1283,25 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       new MqttRevocationWorker(uncertainStore, broker).runOnce(),
     ).rejects.toThrow('MQTT_REVOCATION_STORE_UNAVAILABLE');
     expect((await state(d.identity)).state).toBe('REVOKE_PENDING');
+    expect(
+      (await history(d.identity)).some(
+        (event) => event.event_type === 'REVOKED',
+      ),
+    ).toBe(false);
     await expireLease(d.identity);
     expect(await new MqttRevocationWorker(store, broker).runOnce()).toBe(
       'REVOKED',
     );
     expect((await state(d.identity)).attempt_count).toBe(2);
+    expect(
+      (await history(d.identity)).map((event) => event.event_type),
+    ).toEqual([
+      'REGISTERED',
+      'REVOKE_REQUESTED',
+      'ATTEMPT_STARTED',
+      'ATTEMPT_STARTED',
+      'REVOKED',
+    ]);
   });
 
   it('does not mark a missing broker identity revoked after a negative administrative response', async () => {
@@ -916,6 +1314,10 @@ suite('HU11 durable revocation: real PostgreSQL, RLS and Mosquitto TLS', () => {
       state: 'REVOKE_PENDING',
       last_error_code: 'MQTT_ADMIN_REJECTED',
       revoked_at: null,
+    });
+    expect((await history(d.identity)).at(-1)).toMatchObject({
+      event_type: 'RETRY_SCHEDULED',
+      error_code: 'MQTT_ADMIN_REJECTED',
     });
   });
 });
