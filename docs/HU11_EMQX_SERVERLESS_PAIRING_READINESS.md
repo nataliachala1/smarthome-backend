@@ -47,7 +47,9 @@ Se inspeccionó [`from_movil/dev`, commit `0dc85b0d0215ded9004c69881a095bb99461e
 - `lib/services/pairing-service.ts` devuelve `PAIRING_UNSUPPORTED`; no implementa una ruta acordada.
 - Los tipos/transiciones de `lib/pairing` son propuestas móviles, no un contrato compartido validado.
 
-Se preparó el [protocolo de POC BLE](HU12_SHELLY_ANDROID_BLE_POC.md). Firmware y disponibilidad del Android físico siguen sin confirmar. `adb` no se encontró en PATH ni en la ubicación estándar del SDK; no se descarta otra instalación.
+Se preparó el [protocolo de POC BLE](HU12_SHELLY_ANDROID_BLE_POC.md), incluyendo el requisito Shelly de bonding fuera de la ventana inicial y el riesgo de compatibilidad entre Expo 57/RN 0.86 y la biblioteca BLE upstream. El propietario reportó el Shelly `S4SW-001P16EU`, ID `d885acf06990` y firmware `20260819-101735/2.0.1-beta1-g8a88c73`; la versión/build aún debe confirmarse en la interfaz web local. La IP local no se persiste en el repositorio. La disponibilidad de un Android físico sigue sin confirmar y `adb` no se encontró en PATH ni en la ubicación estándar del SDK.
+
+Desde esa inspección, el clon aislado de `from_movil/dev` recibió un escáner Android de anuncios Shelly, sin conexión ni cambios de configuración. TypeScript, ESLint, cinco pruebas de configuración y Expo prebuild pasaron; la validación en APK/hardware sigue pendiente porque este entorno no tiene Android SDK ni `adb`. `pairingService.createSession` y el contrato del servidor siguen sin cambios.
 
 ## Coordinación con PostgreSQL
 

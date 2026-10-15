@@ -6,9 +6,29 @@ Fecha: 2026-10-15. **Preparada, no ejecutada con hardware.** No es un contrato A
 
 Referencia: [`from_movil/dev`, `0dc85b0d0215ded9004c69881a095bb99461ebf5`](https://github.com/Kevin-Stiven-Lopez-Amaya404/from_movil/tree/0dc85b0d0215ded9004c69881a095bb99461ebf5). Tiene `expo-dev-client`, pero su adaptador BLE devuelve indisponibilidad. La POC local debe poder ejecutarse sin `pairingService.createSession()`, que hoy rechaza siempre antes de llegar al descubrimiento.
 
+### Baseline físico reportado
+
+El propietario reportó desde la aplicación del dispositivo el siguiente baseline, pendiente de confirmación en la interfaz web local:
+
+| Campo | Valor | Tratamiento |
+| --- | --- | --- |
+| Modelo | `S4SW-001P16EU` (Shelly 1PM Gen4) | Coincide con el dispositivo objetivo de la HU12. |
+| Identificador | `d885acf06990` | Se usará solo para correlacionar la POC; no es una prueba de posesión. |
+| Firmware reportado | `20260819-101735/2.0.1-beta1-g8a88c73` | Es una versión beta; confirmar versión y build desde la interfaz web antes de probar bonding o provisión. |
+
+La IP local compartida para la comprobación no se persiste en el repositorio. Desde un equipo en la misma red, consultar la interfaz web y registrar en el informe de ejecución la versión/build observados, sin contraseñas, tokens ni capturas que los contengan. Una lectura desde el entorno cloud o desde este agente no sustituye esa confirmación local.
+
+La comprobación de solo lectura intentada desde este entorno no pudo conectar con la interfaz local; el agente no tiene ruta a la LAN del dispositivo. No se enviaron RPC de escritura, credenciales, reinicios ni cambios de configuración.
+
 La compilación Android debe incorporar una biblioteca BLE compatible con las versiones del proyecto. Incluir `expo-dev-client` no demuestra que exista ese APK ni soporte BLE instalado. [Compilaciones de desarrollo Expo](https://docs.expo.dev/develop/development-builds/introduction/).
 
 La ficha del 1PM Gen4 enumera BLE, Wi-Fi y MQTT; falta validar su combinación en el firmware real. [API del dispositivo](https://shelly-api-docs.shelly.cloud/gen2/Devices/Gen4/Shelly1PMG4/).
+
+### Protocolo BLE y compatibilidad móvil
+
+La documentación de Shelly OS indica que BLE RPC requiere bonding fuera de la ventana inicial de provisión. Desde firmware 2.0.0, el bonding usa el método Bluetooth `Just Works`, admite hasta 20 clientes y persiste tras reinicios. La ventana inicial acepta BLE RPC mientras la provisión está `pending` o `confirmed`; en `complete` y `locked` exige bonding. Por ello la POC debe registrar el estado de provisión y el resultado de conexión/bonding sin interpretar ese resultado como autorización OWNER ni como prueba criptográfica de posesión. No invocará `BLE.StartPairing`, `BLE.SetConfig` ni llamadas de aprovisionamiento hasta tener una prueba de lectura acordada y el hardware disponible. [BLE oficial de Shelly](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/BLE/).
+
+La app usa Expo SDK 57 y React Native 0.86.3. El upstream `react-native-ble-plx` documenta pruebas hasta Expo 51/RN 0.74.1, por lo que no se selecciona para esta app sin adaptación. Existe `@sfourdrinier/react-native-ble-plx` que declara RN 0.86/Expo 57 y CNG, pero es un fork comunitario que requiere evaluación de mantenimiento, licencia, build limpio, Expo Doctor y prueba BLE en Android antes de adoptarlo. La presencia del paquete o un build exitoso no valida la interacción con Shelly. [Compatibilidad upstream](https://github.com/dotintent/react-native-ble-plx), [fork para RN 0.86/Expo 57](https://www.npmjs.com/package/@sfourdrinier/react-native-ble-plx).
 
 ## Preparación y orden de operaciones
 
@@ -22,8 +42,15 @@ No adoptar UUID GATT/framing de otros productos BLU por analogía. Contrastar el
 
 ## Pruebas y aceptación
 
+### Incremento de descubrimiento Android
+
+En el clon local de `from_movil/dev` se integró un escáner Android de anuncios cuyo nombre empieza por Shelly, con permisos en tiempo de ejecución, timeout, cancelación y resultados ordenados por RSSI. El escáner no conecta, no inicia bonding y no escribe configuración; el nombre y RSSI se muestran como candidatos sin autenticar. Se fijó `@sfourdrinier/react-native-ble-plx` `3.9.3` (MIT) y su config plugin porque el upstream no declara compatibilidad con Expo 57/RN 0.86.
+
+Verificación local: TypeScript, ESLint y las 5 pruebas `test:mobile-config` pasaron; `expo prebuild --platform android --no-install` terminó con éxito usando `com.smarthome.poc` solo en el entorno del proceso. La configuración generada incluye permisos BLE y ubicación. No hay Android SDK ni `adb` en este entorno, así que no se compiló/instaló un APK ni se ejecutó el escaneo contra el Shelly. La dependencia está en un fork comunitario con búsqueda pública de mantenedores y queda sujeta a revisión antes de producción.
+
 | Caso | Evidencia exigida | Estado |
 | --- | --- | --- |
+| POC-00 — Confirmación de firmware | Modelo/ID coinciden; versión y build beta confirmados en la interfaz web local | Reportado; confirmación pendiente |
 | POC-01 — Compilación/permisos | APK con BLE nativo instalado; Bluetooth apagado y permisos denegados gestionados sin éxito ficticio | Pendiente |
 | POC-02 — Descubrimiento | Dispositivos reales, timeout, cancelación y limpieza de listeners/conexiones | Pendiente |
 | POC-03 — GATT/RPC de lectura | Perfil real, `Shelly.GetDeviceInfo`, `BLE.GetConfig`, estado de provisión disponible; correlación, tamaños y timeouts acotados | Pendiente |
