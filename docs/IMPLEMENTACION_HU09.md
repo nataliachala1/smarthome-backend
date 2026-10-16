@@ -1,5 +1,7 @@
 # HU 09-dev · production-config-and-hardening
 
+Actualización transversal: [HU16, permisos de consumo y prueba del historial completo](HU16_CONSUMPTION_ACCESS.md). Se comprobó en una BD desechable la ausencia de objetos de sesión en los changesets originales y se agregó un puente incremental; su necesidad en una instalación existente requiere contraste del estado aplicado.
+
 ## Baseline coordinado (BD-01)
 
 Inicio de implementación autorizado por la responsable el 14/10/2026. Se autorizan avances pequeños con commit y push a las ramas de trabajo. No se autorizaron cambios sobre una base en uso, broker, Shelly ni despliegues.

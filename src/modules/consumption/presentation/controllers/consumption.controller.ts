@@ -43,104 +43,102 @@ export class ConsumptionController {
   ) {}
 
   @Get('summary')
-@ApiOperation({
-  summary:
-    'Consultar resumen de consumo de un dispositivo: OWNER, MEMBER o GUEST',
-})
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
-@ApiParam({
-  name: 'deviceId',
-  description: 'UUID del dispositivo',
-  format: 'uuid',
-})
-@ApiQuery({
-  name: 'from',
-  required: false,
-  description: 'Fecha inicial en formato ISO',
-})
-@ApiQuery({
-  name: 'to',
-  required: false,
-  description: 'Fecha final en formato ISO',
-})
-@ApiOkResponse({
-  description: 'Resumen agregado de consumo del dispositivo',
-})
-@ApiBadRequestResponse({
-  description: 'UUID o rango de fechas inválido',
-})
-@ApiForbiddenResponse({
-  description: 'Sin membresía activa en el hogar',
-})
-@ApiNotFoundResponse({
-  description: 'Dispositivo no encontrado',
-})
-async summaryByDevice(
-  @CurrentUser() user: AuthenticatedUser,
-  @Param('homeId', ParseUUIDPipe) homeId: string,
-  @Param('deviceId', ParseUUIDPipe) deviceId: string,
-  @Query() query: GetDeviceConsumptionSummaryQueryDto,
-) {
-  return this.getDeviceConsumptionSummaryUseCase.execute({
-    userId: user.userId,
-    homeId,
-    deviceId,
-    from: query.from,
-    to: query.to,
-  });
-}
+  @ApiOperation({
+    summary: 'Consultar resumen de consumo de un dispositivo: OWNER o MEMBER',
+  })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Fecha inicial en formato ISO',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Fecha final en formato ISO',
+  })
+  @ApiOkResponse({
+    description: 'Resumen agregado de consumo del dispositivo',
+  })
+  @ApiBadRequestResponse({
+    description: 'UUID o rango de fechas inválido',
+  })
+  @ApiForbiddenResponse({
+    description: 'Sin membresía activa en el hogar',
+  })
+  @ApiNotFoundResponse({
+    description: 'Dispositivo no encontrado',
+  })
+  async summaryByDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+    @Query() query: GetDeviceConsumptionSummaryQueryDto,
+  ) {
+    return this.getDeviceConsumptionSummaryUseCase.execute({
+      userId: user.userId,
+      homeId,
+      deviceId,
+      from: query.from,
+      to: query.to,
+    });
+  }
 
   @Get('daily')
-@ApiOperation({
-  summary: 'Consultar consumo diario de un dispositivo para gráficas',
-})
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
-@ApiParam({
-  name: 'deviceId',
-  description: 'UUID del dispositivo',
-  format: 'uuid',
-})
-@ApiQuery({
-  name: 'from',
-  required: false,
-  description: 'Fecha inicial en formato ISO',
-})
-@ApiQuery({
-  name: 'to',
-  required: false,
-  description: 'Fecha final en formato ISO',
-})
-@ApiOkResponse({
-  description: 'Consumo del dispositivo agrupado por día',
-})
-@ApiBadRequestResponse({
-  description: 'UUID o rango de fechas inválido',
-})
-@ApiForbiddenResponse({
-  description: 'Sin membresía activa en el hogar',
-})
-@ApiNotFoundResponse({
-  description: 'Dispositivo no encontrado',
-})
-async dailyByDevice(
-  @CurrentUser() user: AuthenticatedUser,
-  @Param('homeId', ParseUUIDPipe) homeId: string,
-  @Param('deviceId', ParseUUIDPipe) deviceId: string,
-  @Query() query: GetDeviceDailyConsumptionQueryDto,
-) {
-  return this.getDeviceDailyConsumptionUseCase.execute({
-    userId: user.userId,
-    homeId,
-    deviceId,
-    from: query.from,
-    to: query.to,
-  });
-}
+  @ApiOperation({
+    summary: 'Consultar consumo diario de un dispositivo para gráficas',
+  })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({
+    name: 'deviceId',
+    description: 'UUID del dispositivo',
+    format: 'uuid',
+  })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Fecha inicial en formato ISO',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Fecha final en formato ISO',
+  })
+  @ApiOkResponse({
+    description: 'Consumo del dispositivo agrupado por día',
+  })
+  @ApiBadRequestResponse({
+    description: 'UUID o rango de fechas inválido',
+  })
+  @ApiForbiddenResponse({
+    description: 'Sin membresía activa en el hogar',
+  })
+  @ApiNotFoundResponse({
+    description: 'Dispositivo no encontrado',
+  })
+  async dailyByDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('deviceId', ParseUUIDPipe) deviceId: string,
+    @Query() query: GetDeviceDailyConsumptionQueryDto,
+  ) {
+    return this.getDeviceDailyConsumptionUseCase.execute({
+      userId: user.userId,
+      homeId,
+      deviceId,
+      from: query.from,
+      to: query.to,
+    });
+  }
 
   @Get()
   @ApiOperation({
-    summary:
-      'Consultar consumo histórico de un dispositivo: OWNER, MEMBER o GUEST',
+    summary: 'Consultar consumo histórico de un dispositivo: OWNER o MEMBER',
   })
   @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
   @ApiParam({

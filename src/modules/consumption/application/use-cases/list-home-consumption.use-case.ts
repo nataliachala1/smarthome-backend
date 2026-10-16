@@ -1,8 +1,8 @@
 import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+  authorizeConsumptionDetail,
+  historyDevices,
+} from '../consumption-access';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
 
@@ -39,20 +39,7 @@ export class ListHomeConsumptionUseCase {
     }
 
     return await this.prismaRls.withUserContext(input.userId, async (tx) => {
-      const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
-        SELECT (
-          homes.fn_is_home_owner(${input.homeId}::uuid) OR (
-            homes.fn_is_home_active(${input.homeId}::uuid) AND
-            homes.fn_is_home_member(${input.homeId}::uuid, ARRAY['MEMBER', 'GUEST']::text[])
-          )
-        ) AS allowed
-      `;
-
-      if (!access?.allowed) {
-        throw new ForbiddenException(
-          'Sin permisos para consultar consumo de este hogar',
-        );
-      }
+      await authorizeConsumptionDetail(tx, input.homeId);
 
       const rows = await tx.consumption.findMany({
         where: {
@@ -63,22 +50,21 @@ export class ListHomeConsumptionUseCase {
           read_at: 'desc',
         },
         take: limit,
-        include: {
-          device: {
-            select: {
-              name: true,
-              manufacturer_device_id: true,
-            },
-          },
-        },
       });
 
+      const metadata = await historyDevices(tx, input.homeId, [
+        ...new Set(rows.map((row) => row.id_device)),
+      ]);
+      const devices = new Map(
+        metadata.map((device) => [device.id_device, device]),
+      );
       return rows.map((row) => ({
         id: row.id_consumption,
         homeId: row.id_home,
         deviceId: row.id_device,
-        deviceName: row.device.name,
-        manufacturerDeviceId: row.device.manufacturer_device_id,
+        deviceName: devices.get(row.id_device)?.name ?? null,
+        manufacturerDeviceId:
+          devices.get(row.id_device)?.manufacturer_device_id ?? null,
         powerW: Number(row.power_w),
         energyDeltaKwh: Number(row.energy_delta_kwh),
         energyTotalKwh:

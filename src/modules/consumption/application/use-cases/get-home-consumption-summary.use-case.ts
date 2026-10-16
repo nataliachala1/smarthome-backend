@@ -37,18 +37,25 @@ export class GetHomeConsumptionSummaryUseCase {
 
     return await this.prismaRls.withUserContext(input.userId, async (tx) => {
       const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
-        SELECT (
-          homes.fn_is_home_owner(${input.homeId}::uuid) OR (
-            homes.fn_is_home_active(${input.homeId}::uuid) AND
-            homes.fn_is_home_member(${input.homeId}::uuid, ARRAY['MEMBER', 'GUEST']::text[])
-          )
-        ) AS allowed
+        SELECT consumption.fn_can_read_detail(${input.homeId}::uuid) AS allowed
       `;
-
       if (!access?.allowed) {
-        throw new ForbiddenException(
-          'Sin permisos para consultar consumo de este hogar',
-        );
+        const [summary] = await tx.$queryRaw<
+          { total_energy_delta_kwh: unknown }[]
+        >`
+          SELECT * FROM consumption.fn_basic_home_consumption(${input.homeId}::uuid, ${from ?? null}::timestamptz, ${to ?? null}::timestamptz)
+        `;
+        if (!summary)
+          throw new ForbiddenException({
+            code: 'CONSUMPTION_SUMMARY_FORBIDDEN',
+            message: 'Sin permisos para consultar consumo de este hogar',
+          });
+        return {
+          homeId: input.homeId,
+          from: from ?? null,
+          to: to ?? null,
+          totalEnergyDeltaKwh: Number(summary.total_energy_delta_kwh),
+        };
       }
 
       const where = {

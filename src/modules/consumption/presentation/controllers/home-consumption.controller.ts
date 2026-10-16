@@ -43,7 +43,8 @@ export class HomeConsumptionController {
 
   @Get('summary')
   @ApiOperation({
-    summary: 'Consultar resumen de consumo del hogar: OWNER, MEMBER o GUEST',
+    summary:
+      'Consultar resumen del hogar: OWNER/MEMBER completo; GUEST solo energía y período',
   })
   @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
   @ApiQuery({
@@ -57,7 +58,8 @@ export class HomeConsumptionController {
     description: 'Fecha final en formato ISO',
   })
   @ApiOkResponse({
-    description: 'Resumen agregado de consumo del hogar',
+    description:
+      'OWNER/MEMBER reciben estadísticas. GUEST recibe homeId, from, to y totalEnergyDeltaKwh.',
   })
   @ApiBadRequestResponse({
     description: 'UUID o rango de fechas inválido',
@@ -65,13 +67,11 @@ export class HomeConsumptionController {
   @ApiForbiddenResponse({
     description: 'Sin membresía activa en el hogar',
   })
-
-
-    async summaryByHome(
-        @CurrentUser() user: AuthenticatedUser,
-        @Param('homeId', ParseUUIDPipe) homeId: string,
-        @Query() query: GetHomeConsumptionSummaryQueryDto,
-    ) {
+  async summaryByHome(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Query() query: GetHomeConsumptionSummaryQueryDto,
+  ) {
     return this.getHomeConsumptionSummaryUseCase.execute({
       userId: user.userId,
       homeId,
@@ -81,82 +81,82 @@ export class HomeConsumptionController {
   }
 
   @Get('daily')
-@ApiOperation({
-  summary: 'Consultar consumo diario del hogar para gráficas',
-})
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
-@ApiQuery({
-  name: 'from',
-  required: false,
-  description: 'Fecha inicial en formato ISO',
-})
-@ApiQuery({
-  name: 'to',
-  required: false,
-  description: 'Fecha final en formato ISO',
-})
-@ApiOkResponse({
-  description: 'Consumo del hogar agrupado por día',
-})
-@ApiBadRequestResponse({
-  description: 'UUID o rango de fechas inválido',
-})
-@ApiForbiddenResponse({
-  description: 'Sin membresía activa en el hogar',
-})
-async dailyByHome(
-  @CurrentUser() user: AuthenticatedUser,
-  @Param('homeId', ParseUUIDPipe) homeId: string,
-  @Query() query: GetHomeDailyConsumptionQueryDto,
-) {
-  return this.getHomeDailyConsumptionUseCase.execute({
-    userId: user.userId,
-    homeId,
-    from: query.from,
-    to: query.to,
-  });
-}
-
-    @Get()
-    @ApiOperation({
-    summary: 'Consultar historial de consumo del hogar: OWNER, MEMBER o GUEST',
-    })
-    @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
-    @ApiQuery({
+  @ApiOperation({
+    summary: 'Consultar consumo diario del hogar para gráficas',
+  })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiQuery({
     name: 'from',
     required: false,
     description: 'Fecha inicial en formato ISO',
-    })
-    @ApiQuery({
+  })
+  @ApiQuery({
     name: 'to',
     required: false,
     description: 'Fecha final en formato ISO',
-    })
-    @ApiQuery({
+  })
+  @ApiOkResponse({
+    description: 'Consumo del hogar agrupado por día',
+  })
+  @ApiBadRequestResponse({
+    description: 'UUID o rango de fechas inválido',
+  })
+  @ApiForbiddenResponse({
+    description: 'Sin membresía activa en el hogar',
+  })
+  async dailyByHome(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Query() query: GetHomeDailyConsumptionQueryDto,
+  ) {
+    return this.getHomeDailyConsumptionUseCase.execute({
+      userId: user.userId,
+      homeId,
+      from: query.from,
+      to: query.to,
+    });
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Consultar historial de consumo del hogar: OWNER o MEMBER',
+  })
+  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Fecha inicial en formato ISO',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Fecha final en formato ISO',
+  })
+  @ApiQuery({
     name: 'limit',
     required: false,
     description: 'Cantidad máxima de registros, entre 1 y 200',
-    })
-    @ApiOkResponse({
+  })
+  @ApiOkResponse({
     description: 'Lecturas históricas de consumo del hogar',
-    })
-    @ApiBadRequestResponse({
+  })
+  @ApiBadRequestResponse({
     description: 'UUID, fechas o límite inválidos',
-    })
-    @ApiForbiddenResponse({
+  })
+  @ApiForbiddenResponse({
     description: 'Sin membresía activa en el hogar',
-    })
-    async listByHome(
+  })
+  async listByHome(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
     @Query() query: ListHomeConsumptionQueryDto,
-    ) {
+  ) {
     return this.listHomeConsumptionUseCase.execute({
-        userId: user.userId,
-        homeId,
-        from: query.from,
-        to: query.to,
-        limit: query.limit,
+      userId: user.userId,
+      homeId,
+      from: query.from,
+      to: query.to,
+      limit: query.limit,
     });
   }
 }
