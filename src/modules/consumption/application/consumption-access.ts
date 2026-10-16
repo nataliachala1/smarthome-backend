@@ -15,6 +15,20 @@ export async function authorizeConsumptionDetail(
     });
 }
 
+export async function authorizeDeviceConsumptionDetail(
+  tx: Prisma.TransactionClient,
+  deviceId: string,
+): Promise<void> {
+  const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
+    SELECT consumption.fn_can_read_device_detail(${deviceId}::uuid) AS allowed
+  `;
+  if (!access?.allowed)
+    throw new ForbiddenException({
+      code: 'CONSUMPTION_DETAIL_FORBIDDEN',
+      message: 'Sin permisos para consultar el consumo de este dispositivo',
+    });
+}
+
 export interface HistoryDevice {
   id_device: string;
   name: string;

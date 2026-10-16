@@ -1,44 +1,53 @@
 # Roles y permisos del hogar
 
-Esta definición describe responsabilidades funcionales. No prescribe tablas, endpoints ni un mecanismo técnico de autorización.
-
-## Regla general
-
-`OWNER`, `MEMBER` y `GUEST` son roles dentro de un hogar. El rol establece las responsabilidades máximas; para `MEMBER` y `GUEST`, el acceso efectivo a consultas y control depende de los permisos que se les hayan concedido. Ser miembro o invitado, por sí solo, no concede acceso a toda la información ni control sobre todos los dispositivos.
-
-Administrar el hogar, consultar información y controlar dispositivos son acciones distintas. Un permiso para consultar no implica permiso para controlar; un permiso para controlar tampoco concede administración del hogar, de sus miembros o de sus dispositivos.
+`OWNER`, `MEMBER` y `GUEST` son roles asignados dentro de cada hogar. El rol define responsabilidades y permisos iniciales; el acceso efectivo de `MEMBER` y `GUEST` depende de los permisos concedidos. Consultar, controlar y administrar son acciones independientes: consultar no concede control, y controlar no concede lectura ni administración.
 
 ## Roles
 
 ### `OWNER` — Dueño del hogar
 
-Es el usuario principal del hogar. Administra el hogar y sus miembros, cursa invitaciones y gestiona usuarios conforme a los permisos establecidos. Vincula y administra los dispositivos Shelly del hogar. Puede controlar esos dispositivos y consultar el consumo energético.
+Administra el hogar y sus miembros, cursa invitaciones, vincula y administra los dispositivos Shelly, controla los dispositivos y consulta el consumo energético. Las capacidades de administración del hogar y sus dispositivos corresponden a `OWNER`.
 
 ### `MEMBER` — Miembro del hogar
 
-Accede al hogar al que pertenece según su membresía y los permisos concedidos. Puede consultar los dispositivos y la información de consumo que tenga autorizados, y controlar los dispositivos para los que tenga permiso de control. No administra la propiedad del hogar ni a sus propietarios. La administración de miembros e invitaciones corresponde al `OWNER` en el alcance definido.
+Accede al hogar al que pertenece conforme a los permisos vigentes. Puede consultar la información y el consumo autorizados, y controlar únicamente los dispositivos para los que tenga permiso efectivo. No administra la propiedad del hogar, a sus propietarios, miembros ni invitaciones.
 
 ### `GUEST` — Invitado
 
-Accede únicamente al hogar y a la información autorizados. Puede consultar los dispositivos que se le permitan. No administra el hogar, sus miembros, las invitaciones ni la configuración. Puede controlar un dispositivo solo cuando tenga concedido el permiso correspondiente.
+Accede únicamente a la información autorizada. Puede consultar los dispositivos y controlarlos solo si se le concede ese permiso. No administra el hogar, su configuración, sus miembros ni sus invitaciones. En materia de energía, solo recibe el total del hogar y el período consultado; nunca lecturas, estadísticas o series por dispositivo.
 
-Para consumo, se conserva la definición aprobada del proyecto: `GUEST` recibe únicamente el total de energía del hogar y el período consultado; no recibe lecturas, estadísticas ni series de consumo por dispositivo. La autorización para consultar un dispositivo no amplía por sí sola este alcance de consumo.
+## Permisos y herencia
 
-## Separación de responsabilidades
+Al crear una invitación se asigna la base correspondiente al rol:
 
-| Acción | `OWNER` | `MEMBER` | `GUEST` |
+| Rol | Consultar dispositivos | Consultar consumo | Controlar dispositivos |
 | --- | --- | --- | --- |
-| Administrar hogar, miembros e invitaciones | Sí, según sus responsabilidades de dueño | No | No |
-| Vincular y administrar dispositivos Shelly | Sí | No | No |
-| Consultar dispositivos | Sí | Solo según permisos concedidos | Solo según permisos concedidos |
-| Consultar consumo | Sí | Solo el consumo autorizado | Solo el total energético del hogar y el período consultado |
-| Controlar dispositivos | Sí | Solo dispositivos con permiso de control | Solo dispositivos con permiso de control |
+| `MEMBER` | Sí | Sí, según los dispositivos autorizados | Sí |
+| `GUEST` | Sí | Sí, solo total agregado del hogar y período | No |
 
-La tabla no define cómo se asignan, almacenan o revocan los permisos.
+`OWNER` puede cambiar los permisos de hogar de cada `MEMBER` o `GUEST`. También puede establecer excepciones para un dispositivo concreto. Cada excepción puede permitir, denegar o heredar el permiso del hogar. Una excepción por dispositivo prevalece sobre la base para ese dispositivo.
 
-## Aclaraciones pendientes de producto
+Permisos efectivos independientes:
 
-- Precisar qué datos incluye “consultar un dispositivo” (por ejemplo, su presencia en la lista y la información descriptiva), sin confundirlo con lecturas energéticas por dispositivo, que no están incluidas para `GUEST`.
-- Confirmar la granularidad con la que se conceden permisos de consulta y control. La definición exige que el permiso determine el acceso, pero no decide si se otorga por hogar, por dispositivo o de otra forma.
-- Precisar qué opciones abarca “administrar el hogar” para `OWNER`; la definición conserva esa responsabilidad sin enumerar ajustes concretos.
-- Mantener separado el acceso al listado de dispositivos, a datos de consumo y al control; conceder uno no concede implícitamente los otros.
+- **Consultar dispositivos:** ver la información descriptiva y operativa del dispositivo autorizado.
+- **Consultar consumo:** ver consumo detallado solo para `OWNER` o `MEMBER` autorizado. Para `GUEST`, la salida permanece agregada al hogar incluso si existe una excepción por dispositivo.
+- **Controlar dispositivos:** emitir acciones de control sobre dispositivos autorizados. Este permiso no implica acceso a sus datos.
+- **Administrar hogar o dispositivos:** reservado a `OWNER`; ningún permiso de consulta o control lo concede.
+
+El permiso de consulta de un dispositivo y el permiso de consulta de su consumo son independientes. El permiso de control también es independiente de ambos.
+
+## Gestión desde el backend
+
+Solo `OWNER` puede leer o cambiar permisos de otras membresías:
+
+- `GET/PUT /api/v1/homes/:homeId/members/:memberId/permissions`
+- `GET/PUT /api/v1/homes/:homeId/members/:memberId/devices/:deviceId/permissions`
+
+En permisos por dispositivo, enviar `null` hereda la base del hogar y omitir un campo conserva su excepción actual. Enviar los tres valores como `null` elimina la excepción del dispositivo.
+
+## Límites conservados
+
+- El cambio de permisos no concede propiedad ni administración del hogar.
+- `GUEST` no recibe telemetría ni históricos energéticos individuales.
+- Las invitaciones iniciales aplican valores base por rol; `OWNER` puede ajustarlos.
+- La aplicación debe comprobar el permiso efectivo tanto en sus endpoints como en la base de datos.

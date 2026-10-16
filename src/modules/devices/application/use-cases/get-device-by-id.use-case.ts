@@ -15,6 +15,7 @@ export class GetDeviceByIdUseCase {
     if (!device) {
       return null;
     }
+    const canReadConsumption = await this.deviceRepository.canReadDetailedConsumption(userId, device.id);
 
     return {
       id: device.id,
@@ -23,7 +24,7 @@ export class GetDeviceByIdUseCase {
       status: device.status,
       connectivityStatus: device.connectivityStatus,
       isOn: device.isOn,
-      currentPowerW: device.currentPowerW,
+      currentPowerW: canReadConsumption ? device.currentPowerW : null,
       manufacturerDeviceId: device.manufacturerDeviceId,
       transportType: device.transportType,
       messagingProtocol: device.messagingProtocol,
