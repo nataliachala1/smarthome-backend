@@ -1,4 +1,5 @@
 import { getTrustedProxies } from './trusted-proxies';
+import { shellyLocalEnabled } from './shelly-local';
 
 type Environment = Record<string, unknown>;
 
@@ -94,6 +95,7 @@ export function validateRuntimeConfig(environment: Environment): Environment {
     throw new Error('NODE_ENV debe ser development, test o production.');
   }
   const isProduction = nodeEnv === 'production';
+  shellyLocalEnabled(environment.SHELLY_LOCAL_ENABLED, nodeEnv);
   getTrustedProxies(environment.TRUSTED_PROXY_CIDRS);
   const required = ['DATABASE_URL', 'DATABASE_IOT_URL', 'JWT_SECRET'];
   const missing = required.filter(

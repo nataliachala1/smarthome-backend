@@ -15,26 +15,18 @@ export class IdentifyShellyDeviceUseCase {
     private readonly shellyRpcClient: ShellyRpcClientService,
   ) {}
 
-  async execute(
-    userId: string,
-    homeId: string,
-    shellyIp: string,
-  ) {
+  async execute(userId: string, homeId: string, shellyIp: string) {
     await this.assertCanManageHome(userId, homeId);
 
-    const deviceInfo =
-      await this.shellyRpcClient.getDeviceInfo(shellyIp);
+    const deviceInfo = await this.shellyRpcClient.getDeviceInfo(shellyIp);
 
     this.assertSupportedDevice(deviceInfo);
 
-    const authenticationRequired =
-      deviceInfo.auth_en === true;
+    const authenticationRequired = deviceInfo.auth_en === true;
 
-    const mqttConnected = authenticationRequired
-      ? null
-      : await this.shellyRpcClient.getMqttConnected(
-          shellyIp,
-        );
+    const mqttStatus = authenticationRequired
+      ? { connected: null, errorCode: 'SHELLY_AUTH_REQUIRED' }
+      : await this.shellyRpcClient.getMqttStatus(shellyIp);
 
     return {
       manufacturerDeviceId: deviceInfo.id,
@@ -43,7 +35,8 @@ export class IdentifyShellyDeviceUseCase {
       mac: deviceInfo.mac,
       wifiIp: shellyIp,
       firmwareVersion: deviceInfo.ver ?? null,
-      mqttConnected,
+      mqttConnected: mqttStatus.connected,
+      mqttStatusErrorCode: mqttStatus.errorCode,
       authenticationRequired,
       message: 'Shelly detectado correctamente',
     };
@@ -53,24 +46,19 @@ export class IdentifyShellyDeviceUseCase {
     userId: string,
     homeId: string,
   ): Promise<void> {
-    await this.prismaRls.withUserContext(
-      userId,
-      async (tx) => {
-        const [access] = await tx.$queryRaw<
-          { allowed: boolean }[]
-        >`
+    await this.prismaRls.withUserContext(userId, async (tx) => {
+      const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
           SELECT homes.fn_can_manage_home(
             ${homeId}::uuid
           ) AS allowed
         `;
 
-        if (!access?.allowed) {
-          throw new ForbiddenException(
-            'Solo el propietario del hogar puede vincular dispositivos Shelly',
-          );
-        }
-      },
-    );
+      if (!access?.allowed) {
+        throw new ForbiddenException(
+          'Solo el propietario del hogar puede vincular dispositivos Shelly',
+        );
+      }
+    });
   }
 
   private assertSupportedDevice(deviceInfo: {
@@ -78,13 +66,13 @@ export class IdentifyShellyDeviceUseCase {
     gen: number;
   }): void {
     const isShelly1PmGen4 =
-      deviceInfo.model === 'S4SW-001P16EU' &&
-      deviceInfo.gen === 4;
+      deviceInfo.model === 'S4SW-001P16EU' && deviceInfo.gen === 4;
 
     if (!isShelly1PmGen4) {
-      throw new UnprocessableEntityException(
-        'El dispositivo detectado no es un Shelly 1PM Gen4 compatible',
-      );
+      throw new UnprocessableEntityException({
+        code: 'SHELLY_UNSUPPORTED_DEVICE',
+        message: 'El dispositivo detectado no es un Shelly 1PM Gen4 compatible',
+      });
     }
   }
 }

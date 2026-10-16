@@ -35,27 +35,24 @@ import { ProvisionShellyDeviceDto } from '../../application/dto/provision-shelly
 import { ProvisionShellyDeviceUseCase } from '../../application/use-cases/provision-shelly-device.use-case';
 import { DiscoverShellyDevicesUseCase } from '../../application/use-cases/discover-shelly-devices.use-case';
 import { DiscoveredShellyDeviceDto } from '../../application/dto/discovered-shelly-device.dto';
+import { ShellyLocalGuard } from '../../infrastructure/shelly/shelly-local-access.service';
 
 @Controller('api/v1/homes/:homeId/shelly')
 @ApiTags('shelly')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ShellyLocalGuard)
 export class ShellyController {
   constructor(
-    private readonly identifyShellyDeviceUseCase:
-      IdentifyShellyDeviceUseCase,
+    private readonly identifyShellyDeviceUseCase: IdentifyShellyDeviceUseCase,
 
-    private readonly provisionShellyDeviceUseCase:
-      ProvisionShellyDeviceUseCase,
+    private readonly provisionShellyDeviceUseCase: ProvisionShellyDeviceUseCase,
 
-    private readonly discoverShellyDevicesUseCase:
-      DiscoverShellyDevicesUseCase,
+    private readonly discoverShellyDevicesUseCase: DiscoverShellyDevicesUseCase,
   ) {}
 
   @Get('discover')
   @ApiOperation({
-    summary:
-      'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
+    summary: 'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
   })
   @ApiParam({
     name: 'homeId',
@@ -63,44 +60,34 @@ export class ShellyController {
     format: 'uuid',
   })
   @ApiOkResponse({
-    description:
-      'Dispositivos Shelly 1PM Gen4 encontrados en la red local',
+    description: 'Dispositivos Shelly 1PM Gen4 encontrados en la red local',
     type: DiscoveredShellyDeviceDto,
     isArray: true,
   })
   @ApiForbiddenResponse({
     description:
-      'El usuario no puede administrar el hogar',
+      'El usuario no puede administrar el hogar o SHELLY_LOCAL_DISABLED',
   })
   async discover(
     @CurrentUser()
     user: AuthenticatedUser,
 
-    @Param(
-      'homeId',
-      ParseUUIDPipe,
-    )
+    @Param('homeId', ParseUUIDPipe)
     homeId: string,
-  ): Promise<
-    DiscoveredShellyDeviceDto[]
-  > {
-    return this.discoverShellyDevicesUseCase.execute(
-      user.userId,
-      homeId,
-    );
+  ): Promise<DiscoveredShellyDeviceDto[]> {
+    return this.discoverShellyDevicesUseCase.execute(user.userId, homeId);
   }
 
   @Post('identify')
   @ApiOperation({
-    summary:
-      'Identificar un Shelly 1PM Gen4 por IP local: OWNER',
+    summary: 'Identificar un Shelly 1PM Gen4 por IP local: OWNER',
   })
   @ApiParam({
     name: 'homeId',
     description: 'UUID del hogar',
     format: 'uuid',
   })
-  @ApiOkResponse({
+  @ApiCreatedResponse({
     description: 'Shelly identificado correctamente',
     type: ShellyDeviceInfoResponseDto,
   })
@@ -109,15 +96,14 @@ export class ShellyController {
   })
   @ApiForbiddenResponse({
     description:
-      'El usuario no puede administrar el hogar',
+      'El usuario no puede administrar el hogar o SHELLY_LOCAL_DISABLED',
   })
   @ApiUnprocessableEntityResponse({
     description:
       'El dispositivo encontrado no es un Shelly 1PM Gen4 compatible',
   })
   @ApiBadGatewayResponse({
-    description:
-      'El Shelly no responde o no es accesible',
+    description: 'El Shelly no responde o no es accesible',
   })
   async identify(
     @CurrentUser() user: AuthenticatedUser,
@@ -142,24 +128,20 @@ export class ShellyController {
     format: 'uuid',
   })
   @ApiCreatedResponse({
-    description:
-      'Shelly configurado y registrado correctamente',
+    description: 'Shelly configurado y registrado correctamente',
   })
   @ApiBadRequestResponse({
-    description:
-      'IP, UUID o datos inválidos',
+    description: 'IP, UUID o datos inválidos',
   })
   @ApiForbiddenResponse({
     description:
-      'El usuario no puede administrar el hogar',
+      'El usuario no puede administrar el hogar o SHELLY_LOCAL_DISABLED',
   })
   @ApiConflictResponse({
-    description:
-      'El Shelly o el nombre del dispositivo ya están registrados',
+    description: 'El Shelly o el nombre del dispositivo ya están registrados',
   })
   @ApiUnprocessableEntityResponse({
-    description:
-      'Shelly incompatible o con autenticación local habilitada',
+    description: 'Shelly incompatible o con autenticación local habilitada',
   })
   @ApiBadGatewayResponse({
     description:
@@ -168,26 +150,20 @@ export class ShellyController {
   async provision(
     @CurrentUser() user: AuthenticatedUser,
 
-    @Param(
-      'homeId',
-      ParseUUIDPipe,
-    )
+    @Param('homeId', ParseUUIDPipe)
     homeId: string,
 
     @Body()
     dto: ProvisionShellyDeviceDto,
   ) {
-    return this.provisionShellyDeviceUseCase.execute(
-      {
-        userId: user.userId,
+    return this.provisionShellyDeviceUseCase.execute({
+      userId: user.userId,
 
-        homeId,
+      homeId,
 
-        shellyIp: dto.shellyIp,
+      shellyIp: dto.shellyIp,
 
-        name: dto.name,
-      },
-    );
+      name: dto.name,
+    });
   }
-
 }
