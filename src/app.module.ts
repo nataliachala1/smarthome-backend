@@ -10,6 +10,7 @@ import { ConsumptionModule } from './modules/consumption/consumption.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RateLimitModule } from './security/rate-limit.module';
+import { MetricsModule } from './observability/metrics.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RateLimitModule } from './security/rate-limit.module';
     }),
 
     RateLimitModule,
+    MetricsModule,
     PrismaModule,
     HealthModule,
     AuthModule,

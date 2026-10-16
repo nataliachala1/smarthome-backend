@@ -134,6 +134,23 @@ export function validateRuntimeConfig(environment: Environment): Environment {
   if (swagger !== undefined && !['true', 'false'].includes(swagger)) {
     throw new Error('SWAGGER_ENABLED debe ser true o false.');
   }
+  const metricsEnabled = setting(environment, 'METRICS_ENABLED')
+    ?.trim()
+    .toLowerCase();
+  if (
+    metricsEnabled !== undefined &&
+    !['true', 'false'].includes(metricsEnabled)
+  ) {
+    throw new Error('METRICS_ENABLED debe ser true o false.');
+  }
+  if (metricsEnabled === 'true') {
+    const metricsToken = setting(environment, 'METRICS_BEARER_TOKEN')?.trim();
+    if (!metricsToken || Buffer.byteLength(metricsToken, 'utf8') < 32) {
+      throw new Error(
+        'METRICS_BEARER_TOKEN debe contener al menos 32 bytes cuando METRICS_ENABLED es true.',
+      );
+    }
+  }
   const sameSite = setting(environment, 'COOKIE_SAME_SITE')
     ?.trim()
     .toLowerCase();

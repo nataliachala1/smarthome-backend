@@ -113,6 +113,29 @@ describe('runtime configuration', () => {
     ).toThrow(name);
   });
 
+  it('keeps metrics disabled by default and requires a strong token to enable them', () => {
+    expect(
+      validateRuntimeConfig(development()).METRICS_ENABLED,
+    ).toBeUndefined();
+    expect(() =>
+      validateRuntimeConfig({ ...development(), METRICS_ENABLED: 'true' }),
+    ).toThrow('METRICS_BEARER_TOKEN');
+    expect(() =>
+      validateRuntimeConfig({
+        ...development(),
+        METRICS_ENABLED: 'true',
+        METRICS_BEARER_TOKEN: 'short',
+      }),
+    ).toThrow('METRICS_BEARER_TOKEN');
+    expect(
+      validateRuntimeConfig({
+        ...development(),
+        METRICS_ENABLED: 'true',
+        METRICS_BEARER_TOKEN: 'x'.repeat(32),
+      }).METRICS_ENABLED,
+    ).toBe('true');
+  });
+
   it('requires an explicit production origin', () => {
     expect(() =>
       validateRuntimeConfig({
