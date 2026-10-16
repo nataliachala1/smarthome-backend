@@ -2,6 +2,8 @@ Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_20
 
 HU16: [resumen GUEST aprobado, permisos de consumo e históricos con RLS](docs/HU16_CONSUMPTION_ACCESS.md). Esta versión requiere los changesets nuevos de sesiones y consumo del repositorio BD `16-dev`.
 
+Roles y permisos funcionales: [definición de OWNER, MEMBER y GUEST](docs/ROLES_Y_PERMISOS.md). La granularidad de permisos se deja como decisión de producto; este documento no define implementación técnica.
+
 Implementación por HU: [baseline coordinado y validación de configuración de HU 09-dev](docs/IMPLEMENTACION_HU09.md). Consultar los límites y verificaciones pendientes antes de aplicar cambios a una instalación existente.
 
 Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxies](docs/HU09_RATE_LIMITING.md).
