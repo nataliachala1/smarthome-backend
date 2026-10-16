@@ -1,5 +1,7 @@
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 
+HU12: [POC BLE Android y Shelly 1PM Gen4](docs/HU12_SHELLY_ANDROID_BLE_POC.md). Perfil GATT/RPC identificado en fuentes de Shelly; implementación física, contrato pairing y activación EMQX aún pendientes.
+
 Implementación por HU: [baseline coordinado y validación de configuración de HU 09-dev](docs/IMPLEMENTACION_HU09.md). Consultar los límites y verificaciones pendientes antes de aplicar cambios a una instalación existente.
 
 Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxies](docs/HU09_RATE_LIMITING.md).
