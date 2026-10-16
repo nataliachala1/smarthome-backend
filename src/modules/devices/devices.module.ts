@@ -30,6 +30,7 @@ import { ControlDeviceUseCase } from './application/use-cases/control-device.use
 import { ProvisionShellyDeviceUseCase } from './application/use-cases/provision-shelly-device.use-case';
 import { IdentifyShellyDeviceUseCase } from './application/use-cases/identify-shelly-device.use-case';
 import { DiscoverShellyDevicesUseCase } from './application/use-cases/discover-shelly-devices.use-case';
+import { ShellyPairingSessionService } from './application/services/shelly-pairing-session.service';
 
 import { DevicesController } from './presentation/controllers/devices.controller';
 import { ShellyController } from './presentation/controllers/shelly.controller';
@@ -37,15 +38,9 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
 import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
 
 @Module({
-  imports: [
-    AuthModule,
-    RealtimeModule,
-  ],
+  imports: [AuthModule, RealtimeModule],
 
-  controllers: [
-    DevicesController,
-    ShellyController,
-  ],
+  controllers: [DevicesController, ShellyController],
 
   providers: [
     ListHomeDevicesUseCase,
@@ -68,6 +63,7 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     ShellyRpcClientService,
     ProvisionShellyDeviceUseCase,
     DiscoverShellyDevicesUseCase,
+    ShellyPairingSessionService,
     ShellyDiscoveryService,
 
     {
@@ -81,8 +77,6 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     },
   ],
 
-  exports: [
-    DeviceRepository,
-  ],
+  exports: [DeviceRepository],
 })
 export class DevicesModule {}
