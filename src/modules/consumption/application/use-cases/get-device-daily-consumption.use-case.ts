@@ -19,9 +19,9 @@ interface DeviceDailyConsumptionRow {
   period_start: Date;
   readings_count: number;
   total_energy_delta_kwh: unknown;
-  average_power_w: unknown | null;
-  max_power_w: unknown | null;
-  min_power_w: unknown | null;
+  average_power_w: unknown;
+  max_power_w: unknown;
+  min_power_w: unknown;
 }
 
 @Injectable()

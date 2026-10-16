@@ -1,3 +1,5 @@
+HU15: [CI y preparacion de staging](docs/HU15_CICD_STAGING.md). La CI valida pruebas, build e imagen; el despliegue externo queda pendiente de configurar el entorno.
+
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 
 Implementación por HU: [baseline coordinado y validación de configuración de HU 09-dev](docs/IMPLEMENTACION_HU09.md). Consultar los límites y verificaciones pendientes antes de aplicar cambios a una instalación existente.

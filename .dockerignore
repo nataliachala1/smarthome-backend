@@ -1,0 +1,12 @@
+.git
+.tmp
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+generated
+smarthome-database
+*.log
+*.patch

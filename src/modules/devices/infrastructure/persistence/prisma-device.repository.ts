@@ -424,9 +424,7 @@ export class PrismaDeviceRepository implements DeviceRepository {
             },
           });
 
-        return rows.map(
-          PrismaDeviceMapper.toDomain,
-        );
+        return rows.map((row) => PrismaDeviceMapper.toDomain(row));
       },
     );
   } catch (error) {

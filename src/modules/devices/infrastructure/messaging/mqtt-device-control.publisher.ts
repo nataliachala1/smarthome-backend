@@ -147,8 +147,6 @@ export class MqttDeviceControlPublisher
 
     return await new Promise<MqttClient>((resolve, reject) => {
       let settled = false;
-      let timeout: ReturnType<typeof setTimeout>;
-
       const cleanup = () => {
         clearTimeout(timeout);
         client.off('connect', success);
@@ -177,7 +175,7 @@ export class MqttDeviceControlPublisher
         resolve(client);
       };
 
-      timeout = setTimeout(fail, 5000);
+      const timeout = setTimeout(fail, 5000);
 
       client.once('connect', success);
       client.once('error', fail);

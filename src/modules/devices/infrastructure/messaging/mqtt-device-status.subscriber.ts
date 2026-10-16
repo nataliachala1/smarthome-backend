@@ -28,15 +28,6 @@ interface DeviceStatusMessage {
   readAt?: string;
 }
 
-interface UpdatedDeviceStatus {
-  id_device: string;
-  id_home: string;
-  connectivity_status: DeviceConnectivityStatus;
-  is_on: boolean;
-  current_power_w: Prisma.Decimal | null;
-  updated_at: Date;
-}
-
 interface CreatedNotification {
   id_notification: string;
   id_user: string;

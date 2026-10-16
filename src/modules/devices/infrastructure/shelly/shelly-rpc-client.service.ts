@@ -29,10 +29,6 @@ interface ShellySetConfigResult {
   restart_required?: boolean;
 }
 
-interface ShellyMqttStatus {
-  connected?: boolean;
-}
-
 @Injectable()
 export class ShellyRpcClientService {
   private readonly timeoutMs = 3000;
