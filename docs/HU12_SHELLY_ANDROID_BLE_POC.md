@@ -6,7 +6,7 @@ Fecha de revisión: 15/10/2026. Rama backend `12-dev`, derivada de `09-dev`. Est
 
 El propietario reportó modelo `S4SW-001P16EU`, identificador `d885acf06990` y firmware `20260819-101735/2.0.1-beta1-g8a88c73`, observados en la aplicación Shelly. Se debe confirmar versión y build en la página Firmware de la interfaz web local antes de la POC. La IP compartida se omite de este repositorio. No se ha usado el dispositivo desde este entorno ni se han enviado llamadas, credenciales, reinicios o cambios de configuración.
 
-La app móvil tiene en `dev` una POC de escaneo Android y `@sfourdrinier/react-native-ble-plx` 3.9.3. El escáner no conecta a GATT. `pairingService.createSession` todavía devuelve `PAIRING_UNSUPPORTED`; no existe contrato NestJS–Android validado. El commit de escaneo es [`22e93c9`](https://github.com/Kevin-Stiven-Lopez-Amaya404/from_movil/commit/22e93c9).
+La app móvil tiene en `dev` una POC de escaneo Android y `@sfourdrinier/react-native-ble-plx` 3.9.3. El commit [`5fd1442`](https://github.com/Kevin-Stiven-Lopez-Amaya404/from_movil/commit/5fd1442) agrega una lectura experimental de `Shelly.GetDeviceInfo` por GATT desde la pantalla; usa el framing documentado, valida tamaño e ID de respuesta y desconecta al terminar. Hay prueba simulada, TypeScript y ESLint aprobados. No se construyó/instaló APK ni se comprobó la operación con el Shelly. `pairingService.createSession` todavía devuelve `PAIRING_UNSUPPORTED`; no existe contrato NestJS–Android validado.
 
 ## Evidencia oficial de Shelly
 
@@ -26,7 +26,7 @@ Fuentes primarias:
 - [Shelly Technical Documentation — BLE](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/BLE/)
 - [Shelly Technical Documentation — provisión segura y estado del dispositivo](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Sys/)
 
-Esta documentación permite comenzar una POC aislada de lectura, pero no demuestra que el firmware beta del dispositivo exponga esas características en su estado actual. Como el Shelly ya obtuvo una IP Wi-Fi, su RPC Bluetooth podría estar en estado `complete` y requerir bonding previo. No reiniciar, restablecer, activar BLE pairing ni modificar configuración durante la POC sin autorización operativa explícita del propietario.
+Esta documentación permitió comenzar una POC aislada de lectura, pero no demuestra que el firmware beta del dispositivo exponga esas características en su estado actual. Como el Shelly ya obtuvo una IP Wi-Fi, su RPC Bluetooth podría estar en estado `complete` y requerir bonding previo. La conexión de lectura puede provocar que Android muestre el diálogo de bonding si el dispositivo exige un enlace seguro; cancelar ese diálogo hasta coordinar la prueba. No reiniciar, restablecer, activar BLE pairing ni modificar configuración durante la POC sin autorización operativa explícita del propietario.
 
 ## EMQX Serverless y activación
 
