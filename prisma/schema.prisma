@@ -182,6 +182,7 @@ model device {
   device_schedule        device_schedule[]
   device_telemetry_raw   device_telemetry_raw[]
   smart_device           smart_device?
+  mqtt_identity          mqtt_identity?
   alert                  alert[]
   notification           notification[]
 
@@ -193,6 +194,43 @@ model device {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mqtt_identity {
+  id_mqtt_identity       String    @id @db.Uuid
+  id_device              String    @unique @db.Uuid
+  manufacturer_device_id String    @unique @db.VarChar(100)
+  state                  String    @default("REGISTERED")
+  created_at             DateTime  @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(6)
+  revoke_requested_at    DateTime? @db.Timestamptz(6)
+  revoked_at             DateTime? @db.Timestamptz(6)
+  attempt_count          Int       @default(0)
+  retry_at               DateTime? @db.Timestamptz(6)
+  lease_token            String?   @db.Uuid
+  lease_until            DateTime? @db.Timestamptz(6)
+  last_error_code        String?
+  device                 device    @relation(fields: [id_device], references: [id_device], onDelete: Restrict, onUpdate: NoAction)
+  events                 mqtt_identity_event[]
+
+  @@index([retry_at, id_mqtt_identity], map: "idx_mqtt_identity_pending", where: raw("(state = 'REVOKE_PENDING'::text)"))
+  @@schema("devices")
+}
+
+/// Technical history; RLS, append-only triggers and checks are owned by Liquibase.
+model mqtt_identity_event {
+  id_mqtt_identity_event BigInt        @id @default(autoincrement())
+  id_mqtt_identity       String        @db.Uuid
+  event_type             String
+  previous_state         String?
+  state                  String
+  attempt_count          Int
+  error_code             String?
+  occurred_at            DateTime      @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(6)
+  identity               mqtt_identity @relation(fields: [id_mqtt_identity], references: [id_mqtt_identity], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([id_mqtt_identity, id_mqtt_identity_event], map: "idx_mqtt_identity_event_history")
+  @@schema("devices")
+}
+
+/// This table contains check constraints and row level security managed by Liquibase.
 model device_schedule {
   id_device_schedule String    @id(map: "pk_device_schedule") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_device          String    @db.Uuid

@@ -1,5 +1,6 @@
 import { getTrustedProxies } from './trusted-proxies';
 import { parseMqttConfig } from './mqtt-config';
+import { parseMqttRevocationConfig } from './mqtt-revocation-config';
 
 type Environment = Record<string, unknown>;
 
@@ -157,5 +158,6 @@ export function validateRuntimeConfig(environment: Environment): Environment {
     );
   }
   parseMqttConfig(environment);
+  parseMqttRevocationConfig(environment);
   return environment;
 }

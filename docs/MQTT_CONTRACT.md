@@ -1,5 +1,7 @@
 # Contrato MQTT - Smart Home
 
+> HU11 añade [ACL por identidad y pruebas reales de broker TLS](HU11_MQTT_IDENTITIES.md). Con namespace, el `src` de Shelly pasa a `<MQTT_SHELLY_RPC_SOURCE>/devices/<manufacturerDeviceId>`, con respuesta en `<src>/rpc`, para permitir ACL de respuesta por dispositivo. No cambia el `src` del modo local sin namespace. La confirmación física de comandos sigue pendiente.
+
 > HU10 incorpora un [contrato configurable de namespace y conexión TLS](HU10_MQTT_TLS_NAMESPACE.md). Los ejemplos siguientes corresponden al modo local heredado, sin `MQTT_TOPIC_NAMESPACE`. En modo namespace, tanto el contrato interno como el adaptador Shelly usan `<namespace>/devices/<manufacturerDeviceId>`; la extracción del ID y las suscripciones siguen el mismo contrato. El simulador de este documento sigue siendo una herramienta local y no valida TLS/ACL cloud.
 
 Este documento define los topicos, comandos y payloads MQTT utilizados entre el backend Smart Home y los dispositivos IoT compatibles con el contrato interno de la aplicacion.

@@ -1,5 +1,7 @@
 # HU10 — MQTT con TLS y namespace: primer incremento
 
+> Integración posterior en HU11: [identidad MQTT y ACL](HU11_MQTT_IDENTITIES.md). En esta rama el `src` con namespace incorpora `/devices/<manufacturerDeviceId>` para separar las respuestas RPC. La tabla siguiente conserva el contrato histórico del primer incremento HU10.
+
 Fecha: 2026-10-15. Rama `10-dev`, creada desde `09-dev` (`6b033fe34775af269ba8138688a26f7f5f82e694`). Incremento revisado con diff y pruebas; commit y push autorizados por la responsable. Este avance implementa la parte de cliente backend de BD-07 y documenta requisitos de BD-06. No completa HU10 ni certifica conectividad cloud.
 
 ## Cambios verificables

@@ -1,4 +1,8 @@
-HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Primer incremento local; broker cloud, ACL y alta con identidad individual pendientes.
+HU11/HU12: [compatibilidad con EMQX Serverless y pendientes de activación](docs/HU11_EMQX_SERVERLESS_PAIRING_READINESS.md) y [protocolo de POC BLE con Android/Shelly](docs/HU12_SHELLY_ANDROID_BLE_POC.md). El trabajador exige proveedor administrativo explícito y solo admite Mosquitto Dynamic Security; permanece desactivado para EMQX Serverless. Pairing y activación coordinada siguen abiertos.
+
+HU11: [preparación e inspección internas de credenciales MQTT](docs/HU11_MQTT_CREDENTIAL_PREPARATION.md), sobre el [historial transaccional](docs/HU11_MQTT_IDENTITY_HISTORY.md), la [ejecución automática de revocación](docs/HU11_MQTT_REVOCATION_RUNTIME.md), el [registro persistente](docs/HU11_MQTT_REVOCATION.md) y el [adaptador de identidades y ACL](docs/HU11_MQTT_IDENTITIES.md). Evidencia del adaptador Mosquitto; no certifica administración de identidades EMQX.
+
+HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Broker cloud y alta con identidad individual todavía requieren integración.
 
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 
