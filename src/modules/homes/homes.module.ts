@@ -20,6 +20,8 @@ import { ListHomeMembersUseCase } from './application/use-cases/list-home-member
 import { CreateHomeInvitationUseCase } from './application/use-cases/create-home-invitation.use-case';
 import { UsersModule } from '../users/users.module';
 import { InvitationsController } from './presentation/http/invitations.controller';
+import { HomePermissionsController } from './presentation/http/home-permissions.controller';
+import { HomePermissionsService } from './application/services/home-permissions.service';
 
 import { ListMyInvitationsUseCase } from './application/use-cases/list-my-invitations.use-case';
 import { AcceptInvitationUseCase } from './application/use-cases/accept-invitation.use-case';
@@ -32,7 +34,7 @@ import { DeleteHomeUseCase } from './application/use-cases/delete-home.use-case'
 @Module({
   imports: [AuthModule, UsersModule],
 
-  controllers: [HomesController, InvitationsController],
+  controllers: [HomesController, InvitationsController, HomePermissionsController],
 
   providers: [
     ListHomesUseCase,
@@ -48,6 +50,7 @@ import { DeleteHomeUseCase } from './application/use-cases/delete-home.use-case'
     UpdateHomeMemberRoleUseCase,
     RevokeHomeMemberUseCase,
     DeleteHomeUseCase,
+    HomePermissionsService,
     {
       provide: HomeMemberRepository,
       useClass: PrismaHomeMemberRepository,

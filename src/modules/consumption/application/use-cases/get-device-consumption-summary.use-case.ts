@@ -1,5 +1,5 @@
 import {
-  authorizeConsumptionDetail,
+  authorizeDeviceConsumptionDetail,
   requireHistoryDevice,
 } from '../consumption-access';
 import { BadRequestException, Injectable } from '@nestjs/common';
@@ -37,7 +37,7 @@ export class GetDeviceConsumptionSummaryUseCase {
     }
 
     return await this.prismaRls.withUserContext(input.userId, async (tx) => {
-      await authorizeConsumptionDetail(tx, input.homeId);
+      await authorizeDeviceConsumptionDetail(tx, input.deviceId);
 
       await requireHistoryDevice(tx, input.homeId, input.deviceId);
 

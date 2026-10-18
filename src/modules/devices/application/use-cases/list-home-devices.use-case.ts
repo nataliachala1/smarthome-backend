@@ -11,20 +11,19 @@ export class ListHomeDevicesUseCase {
     const devices = await this.deviceRepository
       .findAllByHome(userId, homeId)
       .catch(throwDeviceHttpError);
-
-    return devices.map((device) => ({
+    return Promise.all(devices.map(async (device) => ({
       id: device.id,
       homeId: device.homeId,
       name: device.name,
       status: device.status,
       connectivityStatus: device.connectivityStatus,
       isOn: device.isOn,
-      currentPowerW: device.currentPowerW,
+      currentPowerW: await this.deviceRepository.canReadDetailedConsumption(userId, device.id) ? device.currentPowerW : null,
       manufacturerDeviceId: device.manufacturerDeviceId,
       transportType: device.transportType,
       messagingProtocol: device.messagingProtocol,
       createdAt: device.createdAt,
       updatedAt: device.updatedAt,
-    }));
+    })));
   }
 }

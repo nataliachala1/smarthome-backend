@@ -1,7 +1,10 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
+  HttpCode,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -17,6 +20,7 @@ import {
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiHeader,
   ApiParam,
   ApiServiceUnavailableResponse,
   ApiTags,
@@ -36,6 +40,10 @@ import { ProvisionShellyDeviceDto } from '../../application/dto/provision-shelly
 import { ProvisionShellyDeviceUseCase } from '../../application/use-cases/provision-shelly-device.use-case';
 import { DiscoverShellyDevicesUseCase } from '../../application/use-cases/discover-shelly-devices.use-case';
 import { DiscoveredShellyDeviceDto } from '../../application/dto/discovered-shelly-device.dto';
+import { CreateShellyPairingSessionDto } from '../../application/dto/create-shelly-pairing-session.dto';
+import { ReportShellyPairingIdentityDto } from '../../application/dto/report-shelly-pairing-identity.dto';
+import { CompleteShellyPairingSessionDto } from '../../application/dto/complete-shelly-pairing-session.dto';
+import { ShellyPairingSessionService } from '../../application/services/shelly-pairing-session.service';
 
 @Controller('api/v1/homes/:homeId/shelly')
 @ApiTags('shelly')
@@ -48,7 +56,152 @@ export class ShellyController {
     private readonly provisionShellyDeviceUseCase: ProvisionShellyDeviceUseCase,
 
     private readonly discoverShellyDevicesUseCase: DiscoverShellyDevicesUseCase,
+
+    private readonly pairingSessionService: ShellyPairingSessionService,
   ) {}
+
+  @Get('setup-capabilities')
+  @ApiOperation({
+    summary: 'Consultar capacidades disponibles para alta Shelly por red local',
+  })
+  @ApiOkResponse({
+    description:
+      'AP es prioritario; la configuración local la ejecuta Android. La prueba física sigue pendiente.',
+  })
+  async setupCapabilities(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+  ) {
+    await this.pairingSessionService.assertCanManageHome(user.userId, homeId);
+    return {
+      preferredMethod: 'AP',
+      compatibleModels: [
+        {
+          modelCode: 'S4SW-001P16EU',
+          generation: 4,
+          firmwareCompatibility: 'NOT_CONFIGURED',
+        },
+      ],
+      methods: {
+        AP: {
+          sessionCoordination: 'READY_FOR_SESSION_CREATION',
+          deviceConfiguration: 'MOBILE_TO_DEVICE_LOCAL_REQUIRED',
+          physicalValidation: 'POC_PENDING',
+          localRpcBaseUrl: 'http://192.168.33.1',
+        },
+        BLE: {
+          sessionCoordination: 'NOT_AVAILABLE',
+          reason: 'BLE automatizado requiere POC nativa y validación física.',
+        },
+      },
+      brokerCredentialProvisioning: {
+        status: 'BLOCKED_UNTIL_INDIVIDUAL_AUTHENTICATION_VALIDATED',
+        reason:
+          'No se ha validado una API soportada de EMQX Serverless para crear credenciales y ACL individuales desde el backend.',
+      },
+      pairingCompletion:
+        'BLOCKED_UNTIL_DEVICE_SPECIFIC_AUTHENTICATED_CONNECTION',
+      completionRequires:
+        'BROKER_OBSERVED_DEVICE_SPECIFIC_AUTHENTICATED_MQTT_CONNECTION',
+    };
+  }
+
+  @Post('setup-sessions')
+  @ApiOperation({ summary: 'Iniciar sesión temporal de pairing para OWNER' })
+  @ApiCreatedResponse({
+    description: 'Sesión PENDING creada; el token de sesión no se devuelve.',
+  })
+  async createSetupSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Body() dto: CreateShellyPairingSessionDto,
+  ) {
+    return this.pairingSessionService.create(user.userId, homeId, dto);
+  }
+
+  @Get('setup-sessions/:sessionId')
+  @ApiOperation({ summary: 'Consultar sesión de pairing' })
+  @ApiHeader({ name: 'X-Pairing-Token', required: true })
+  async getSetupSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Headers('x-pairing-token') token: string,
+  ) {
+    return this.pairingSessionService.get(
+      user.userId,
+      homeId,
+      sessionId,
+      token ?? '',
+    );
+  }
+
+  @Post('setup-sessions/:sessionId/identify')
+  @ApiOperation({
+    summary:
+      'Guardar identidad reportada por el móvil; no completa ni verifica posesión',
+  })
+  @ApiHeader({ name: 'X-Pairing-Token', required: true })
+  async reportSetupIdentity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Headers('x-pairing-token') token: string,
+    @Body() dto: ReportShellyPairingIdentityDto,
+  ) {
+    return this.pairingSessionService.reportIdentity(
+      user.userId,
+      homeId,
+      sessionId,
+      token ?? '',
+      dto,
+    );
+  }
+
+  @Delete('setup-sessions/:sessionId')
+  @ApiOperation({ summary: 'Cancelar sesión de pairing activa' })
+  @ApiHeader({ name: 'X-Pairing-Token', required: true })
+  async cancelSetupSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Headers('x-pairing-token') token: string,
+  ) {
+    return this.pairingSessionService.cancel(
+      user.userId,
+      homeId,
+      sessionId,
+      token ?? '',
+    );
+  }
+
+  @Post('setup-sessions/:sessionId/complete')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Completar el registro solo tras confirmar MQTT autenticado',
+  })
+  @ApiHeader({ name: 'X-Pairing-Token', required: true })
+  @ApiOkResponse({
+    description: 'Sesión completada o aún esperando verificación MQTT.',
+  })
+  @ApiConflictResponse({
+    description: 'La sesión no está lista o el dispositivo ya está registrado.',
+  })
+  async completeSetupSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('homeId', ParseUUIDPipe) homeId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Headers('x-pairing-token') token: string,
+    @Body() dto: CompleteShellyPairingSessionDto,
+  ) {
+    return this.pairingSessionService.complete(
+      user.userId,
+      homeId,
+      sessionId,
+      token ?? '',
+      dto.name,
+    );
+  }
 
   @Get('discover')
   @ApiOperation({

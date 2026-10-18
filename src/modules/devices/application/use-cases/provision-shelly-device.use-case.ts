@@ -39,6 +39,7 @@ export class ProvisionShellyDeviceUseCase {
   ) {}
 
   async execute(input: ProvisionShellyDeviceInput) {
+    this.assertCloudCredentialProvisioningAvailable();
     // This legacy LAN flow shares the backend credential. Cloud bootstrap must
     // wait for individual device identities; never distribute the service secret.
     if (this.mqtt.config.tls || this.mqtt.config.namespace) {
@@ -178,5 +179,30 @@ export class ProvisionShellyDeviceUseCase {
         connected: true,
       },
     };
+  }
+
+  private assertCloudCredentialProvisioningAvailable(): void {
+    const runtimeEnvironment =
+      this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
+    const provider = this.configService
+      .get<string>('MQTT_DEVICE_CREDENTIALS_PROVIDER')
+      ?.trim()
+      .toLowerCase();
+
+    if (provider === 'emqx-serverless') {
+      throw new ServiceUnavailableException({
+        code: 'MQTT_DEVICE_IDENTITY_PROVIDER_UNSUPPORTED',
+        message:
+          'No está implementada la administración de credenciales individuales para EMQX Serverless; no se aprovisionó el dispositivo.',
+      });
+    }
+
+    if (runtimeEnvironment === 'production') {
+      throw new ServiceUnavailableException({
+        code: 'MQTT_DEVICE_IDENTITY_PROVISIONING_UNAVAILABLE',
+        message:
+          'El aprovisionamiento productivo requiere credenciales MQTT individuales y verificación del cliente; este flujo local no las emite.',
+      });
+    }
   }
 }

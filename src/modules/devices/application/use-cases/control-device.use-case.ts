@@ -41,17 +41,24 @@ export class ControlDeviceUseCase {
         throw new DeviceCannotBeControlledError();
       }
 
+      const canViewDevice = await this.deviceRepository.canViewDevice(
+        input.userId,
+        input.deviceId,
+      );
+
       if (device.status !== 'ACTIVE' || device.deletedAt !== null) {
         throw new DeviceCannotBeControlledError();
       }
 
       if (device.connectivityStatus !== 'ONLINE') {
+        if (!canViewDevice) throw new DeviceCannotBeControlledError();
         throw new DeviceOfflineForControlError();
       }
 
       const manufacturerDeviceId = device.manufacturerDeviceId;
 
       if (!manufacturerDeviceId || device.messagingProtocol !== 'MQTT') {
+        if (!canViewDevice) throw new DeviceCannotBeControlledError();
         throw new DeviceControlNotConfiguredError();
       }
 
@@ -64,11 +71,8 @@ export class ControlDeviceUseCase {
 
       return {
         id: device.id,
-        homeId: device.homeId,
         command: input.command,
         status: 'COMMAND_PUBLISHED',
-        previousIsOn: device.isOn,
-        connectivityStatus: device.connectivityStatus,
       };
     } catch (error) {
       throwDeviceHttpError(error);

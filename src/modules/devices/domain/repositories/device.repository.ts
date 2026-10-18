@@ -29,6 +29,9 @@ export abstract class DeviceRepository {
   deviceId: string,
 ): Promise<Device | null>;
 
+  abstract canReadDetailedConsumption(userId: string, deviceId: string): Promise<boolean>;
+  abstract canViewDevice(userId: string, deviceId: string): Promise<boolean>;
+
   abstract create(userId: string, data: CreateDeviceData): Promise<Device>;
 
   abstract update(
