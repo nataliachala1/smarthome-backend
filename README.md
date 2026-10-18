@@ -1,3 +1,5 @@
+HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Primer incremento local; broker cloud, ACL y alta con identidad individual pendientes.
+
 Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
 
 HU16: [resumen GUEST aprobado, permisos de consumo e históricos con RLS](docs/HU16_CONSUMPTION_ACCESS.md). La API de pairing AP y sus límites están en [sesiones Shelly por AP](docs/HU16_PAIRING_AP_SESSIONS.md); la finalización MQTT individual espera un proveedor validado en BD `16-dev`.

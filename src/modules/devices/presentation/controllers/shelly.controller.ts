@@ -22,6 +22,7 @@ import {
   ApiOperation,
   ApiHeader,
   ApiParam,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -268,6 +269,10 @@ export class ShellyController {
   }
 
   @Post('provision')
+  @ApiServiceUnavailableResponse({
+    description:
+      'MQTT_DEVICE_BOOTSTRAP_REQUIRED: TLS o namespace requieren alta con identidad individual; el flujo LAN heredado no entrega credenciales de servicio.',
+  })
   @ApiOperation({
     summary:
       'Configurar MQTT y registrar un Shelly 1PM Gen4 en el hogar: OWNER',

@@ -13,6 +13,7 @@ import { IdentifyShellyDeviceUseCase } from './identify-shelly-device.use-case';
 import { CreateDeviceUseCase } from './create-device.use-case';
 
 import { ShellyRpcClientService } from '../../infrastructure/shelly/shelly-rpc-client.service';
+import { MqttRuntimeService } from '../../infrastructure/messaging/mqtt-runtime.service';
 
 export interface ProvisionShellyDeviceInput {
   userId: string;
@@ -27,6 +28,7 @@ export interface ProvisionShellyDeviceInput {
 @Injectable()
 export class ProvisionShellyDeviceUseCase {
   constructor(
+    private readonly mqtt: MqttRuntimeService,
     private readonly configService: ConfigService,
 
     private readonly identifyShellyDeviceUseCase: IdentifyShellyDeviceUseCase,
@@ -38,6 +40,15 @@ export class ProvisionShellyDeviceUseCase {
 
   async execute(input: ProvisionShellyDeviceInput) {
     this.assertCloudCredentialProvisioningAvailable();
+    // This legacy LAN flow shares the backend credential. Cloud bootstrap must
+    // wait for individual device identities; never distribute the service secret.
+    if (this.mqtt.config.tls || this.mqtt.config.namespace) {
+      throw new ServiceUnavailableException({
+        code: 'MQTT_DEVICE_BOOTSTRAP_REQUIRED',
+        message:
+          'El alta con TLS o namespace requiere credenciales MQTT individuales de dispositivo.',
+      });
+    }
     /*
      * 1. Identificamos nuevamente el
      * dispositivo antes de configurarlo.

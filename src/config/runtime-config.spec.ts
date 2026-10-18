@@ -11,6 +11,10 @@ const production = () => ({
   ...development(),
   NODE_ENV: 'production',
   CORS_ALLOWED_ORIGINS: 'https://app.example.test',
+  MQTT_BROKER_URL: 'mqtts://broker.example.test:8883',
+  MQTT_TOPIC_NAMESPACE: 'smarthome/test/v1',
+  MQTT_USERNAME: 'synthetic-service',
+  MQTT_PASSWORD: 'synthetic-password',
 });
 
 describe('runtime configuration', () => {
@@ -22,6 +26,15 @@ describe('runtime configuration', () => {
 
   it('accepts production with explicit HTTPS origins and secure cookie defaults', () => {
     expect(validateRuntimeConfig(production())).toEqual(production());
+  });
+
+  it('validates MQTT before allowing startup', () => {
+    expect(() =>
+      validateRuntimeConfig({
+        ...production(),
+        MQTT_BROKER_URL: 'mqtt://broker.example.test',
+      }),
+    ).toThrow('mqtts://');
   });
 
   it.each(['DATABASE_URL', 'DATABASE_IOT_URL', 'JWT_SECRET'])(

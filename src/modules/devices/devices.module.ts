@@ -10,6 +10,7 @@ import { PrismaDeviceRepository } from './infrastructure/persistence/prisma-devi
 
 import { MqttDeviceControlPublisher } from './infrastructure/messaging/mqtt-device-control.publisher';
 import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
+import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.service';
 
 import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
 import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
@@ -57,6 +58,7 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     ControlDeviceUseCase,
 
     MqttDeviceStatusSubscriber,
+    MqttRuntimeService,
     DeviceOfflineWatcherService,
 
     IdentifyShellyDeviceUseCase,
