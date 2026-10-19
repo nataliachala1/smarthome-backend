@@ -29,6 +29,7 @@ describe('ProvisionShellyDeviceUseCase production safety', () => {
       ),
     };
     const useCase = new ProvisionShellyDeviceUseCase(
+      {} as never,
       config as never,
       identify as never,
       rpc as never,
@@ -51,6 +52,7 @@ describe('ProvisionShellyDeviceUseCase production safety', () => {
       ),
     };
     const useCase = new ProvisionShellyDeviceUseCase(
+      {} as never,
       config as never,
       identify as never,
       { configureMqtt: jest.fn() } as never,
