@@ -66,7 +66,7 @@ export class ShellyController {
   })
   @ApiOkResponse({
     description:
-      'AP es prioritario; la configuración local la ejecuta Android. La prueba física sigue pendiente.',
+      'LAN-first para Shelly en la Wi-Fi; AP para equipo nuevo. Android ejecuta la configuración local; las pruebas físicas siguen pendientes.',
   })
   async setupCapabilities(
     @CurrentUser() user: AuthenticatedUser,
@@ -74,7 +74,11 @@ export class ShellyController {
   ) {
     await this.pairingSessionService.assertCanManageHome(user.userId, homeId);
     return {
-      preferredMethod: 'AP',
+      preferredMethod: 'LAN',
+      networkRequirements: {
+        LAN: 'El teléfono Android debe compartir la red local del Shelly; el backend cloud no conecta a IPs privadas.',
+        AP: 'El teléfono Android se conecta al AP del Shelly; la clave Wi-Fi del hogar se transmite solo localmente.',
+      },
       compatibleModels: [
         {
           modelCode: 'S4SW-001P16EU',
@@ -88,6 +92,12 @@ export class ShellyController {
           deviceConfiguration: 'MOBILE_TO_DEVICE_LOCAL_REQUIRED',
           physicalValidation: 'POC_PENDING',
           localRpcBaseUrl: 'http://192.168.33.1',
+        },
+        LAN: {
+          sessionCoordination: 'READY_FOR_SESSION_CREATION',
+          deviceConfiguration: 'MOBILE_TO_DEVICE_LOCAL_REQUIRED',
+          physicalValidation: 'POC_PENDING',
+          localRpcBaseUrl: 'DEVICE_IP_DISCOVERED_BY_ANDROID',
         },
         BLE: {
           sessionCoordination: 'NOT_AVAILABLE',
@@ -109,7 +119,8 @@ export class ShellyController {
   @Post('setup-sessions')
   @ApiOperation({ summary: 'Iniciar sesión temporal de pairing para OWNER' })
   @ApiCreatedResponse({
-    description: 'Sesión PENDING creada; el token de sesión no se devuelve.',
+    description:
+      'Sesión PENDING creada; LAN o AP. El token de sesión no se devuelve.',
   })
   async createSetupSession(
     @CurrentUser() user: AuthenticatedUser,

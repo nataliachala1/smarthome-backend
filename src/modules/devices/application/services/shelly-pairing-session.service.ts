@@ -22,7 +22,7 @@ const SUPPORTED_MODEL = 'S4SW-001P16EU';
 type PairingRow = {
   id_device_pairing_session: string;
   id_home: string;
-  method: 'AP' | 'BLE';
+  method: 'LAN' | 'AP';
   status: string;
   manufacturer_device_id: string | null;
   model_code: string | null;
@@ -56,7 +56,11 @@ export class ShellyPairingSessionService {
   async create(
     userId: string,
     homeId: string,
-    input: { requestId: string; sessionToken: string; method: 'AP' | 'BLE' },
+    input: {
+      requestId: string;
+      sessionToken: string;
+      method: 'LAN' | 'AP' | 'BLE';
+    },
   ) {
     if (input.method === 'BLE') {
       throw new UnprocessableEntityException({
@@ -76,7 +80,7 @@ export class ShellyPairingSessionService {
           INSERT INTO devices.device_pairing_session (
             id_home, id_user, request_key_hash, token_hash, method, expires_at
           )
-          SELECT ${homeId}::uuid, ${userId}::uuid, ${requestHash}, ${tokenHash}, 'AP', ${expiresAt}
+            SELECT ${homeId}::uuid, ${userId}::uuid, ${requestHash}, ${tokenHash}, ${input.method}, ${expiresAt}
           WHERE homes.fn_can_manage_home(${homeId}::uuid)
           ON CONFLICT (id_home, id_user, request_key_hash) DO NOTHING
           RETURNING id_device_pairing_session, id_home, method, status,
@@ -115,6 +119,12 @@ export class ShellyPairingSessionService {
           throw new ConflictException({
             code: 'PAIRING_IDEMPOTENCY_KEY_REUSED',
             message: 'El requestId ya se usó con otro token.',
+          });
+        }
+        if (row.method !== input.method) {
+          throw new ConflictException({
+            code: 'PAIRING_IDEMPOTENCY_KEY_REUSED',
+            message: 'El requestId ya se usó con otro método de vinculación.',
           });
         }
       }
@@ -383,7 +393,7 @@ export class ShellyPairingSessionService {
             id_home: homeId,
             name: name.trim(),
             status: 'ACTIVE',
-            connectivity_status: 'ONLINE',
+            connectivity_status: 'OFFLINE',
             is_on: false,
             current_power_w: null,
             deleted_at: null,
