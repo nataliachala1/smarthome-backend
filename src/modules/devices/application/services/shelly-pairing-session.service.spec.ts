@@ -69,6 +69,20 @@ describe('ShellyPairingSessionService', () => {
     expect(JSON.stringify(response)).not.toContain('sessionToken');
   });
 
+  it('creates a LAN session for a device already connected to the home Wi-Fi', async () => {
+    const { service, tx } = createService();
+    tx.$queryRaw.mockResolvedValueOnce([{ ...baseRow, method: 'LAN' }]);
+
+    const response = await service.create('user-id', baseRow.id_home, {
+      requestId: 'c6e33c66-e3af-4d8e-8492-ad1e7bc72d12',
+      sessionToken,
+      method: 'LAN',
+    });
+
+    expect(response).toMatchObject({ status: 'PENDING', method: 'LAN' });
+    expect(tx.$queryRaw.mock.calls[0]).toContain('LAN');
+  });
+
   it('returns the same session on an idempotent retry with the same token', async () => {
     const { service, tx } = createService();
     tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([baseRow]);
@@ -94,6 +108,21 @@ describe('ShellyPairingSessionService', () => {
         method: 'AP',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects an idempotency retry that changes LAN/AP method', async () => {
+    const { service, tx } = createService();
+    tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([baseRow]);
+
+    await expect(
+      service.create('user-id', baseRow.id_home, {
+        requestId: 'ada0c01e-72ee-42e6-9b4c-8cad3d590258',
+        sessionToken,
+        method: 'LAN',
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'PAIRING_IDEMPOTENCY_KEY_REUSED' },
+    });
   });
 
   it('does not enable BLE before the native proof of concept is validated', async () => {
@@ -217,6 +246,10 @@ describe('ShellyPairingSessionService', () => {
       deviceId: completed.completed_device_id,
     });
     expect(tx.device.create).toHaveBeenCalledTimes(1);
+    const createCalls: unknown = tx.device.create.mock.calls;
+    expect(createCalls).toMatchObject([
+      [{ data: { connectivity_status: 'OFFLINE' } }],
+    ]);
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
   });
 

@@ -19,7 +19,12 @@ export class CreateShellyPairingSessionDto {
   @Matches(/^[A-Za-z0-9_-]+$/)
   sessionToken!: string;
 
-  @ApiProperty({ enum: ['AP', 'BLE'], example: 'AP' })
-  @IsIn(['AP', 'BLE'])
-  method!: 'AP' | 'BLE';
+  @ApiProperty({
+    description:
+      'LAN para Shelly ya conectado a la red local; AP para equipo nuevo. BLE no está habilitado.',
+    enum: ['LAN', 'AP'],
+    example: 'LAN',
+  })
+  @IsIn(['LAN', 'AP'])
+  method!: 'LAN' | 'AP';
 }
