@@ -1,5 +1,6 @@
 export const MQTT_SETTINGS = [
   'NODE_ENV',
+  'MQTT_ENABLED',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
   'MQTT_USERNAME',
@@ -47,6 +48,25 @@ export function parseMqttConfig(
     return value;
   };
   const production = read('NODE_ENV') === 'production';
+  const enabledSetting = read('MQTT_ENABLED');
+  if (enabledSetting !== undefined && !['true', 'false'].includes(enabledSetting)) {
+    throw new Error('MQTT_ENABLED debe ser true o false.');
+  }
+  if (production && enabledSetting === 'false') {
+    return {
+      brokerUrl: undefined,
+      tls: false,
+      username: undefined,
+      password: undefined,
+      controlClientId: undefined,
+      statusClientId: undefined,
+      caFile: undefined,
+      namespace: undefined,
+      devicePrefix: 'smarthome/devices',
+      rpcSource: 'smarthome-backend',
+      switchId: 0,
+    };
+  }
   const brokerUrl = read('MQTT_BROKER_URL');
   let tls = false;
   if (brokerUrl) {

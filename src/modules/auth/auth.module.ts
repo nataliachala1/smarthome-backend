@@ -22,6 +22,7 @@ import { NodeSecureToken } from './infrastructure/security/node-secure-token';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
 
 import { GmailEmailSender } from './infrastructure/email/gmail-email-sender';
+import { DisabledEmailSender } from './infrastructure/email/disabled-email-sender';
 
 import { PrismaRecoveryTokenRepository } from './infrastructure/persistence/prisma-recovery-token.repository';
 
@@ -93,7 +94,11 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
 
     {
       provide: EmailSender,
-      useClass: GmailEmailSender,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) =>
+        configService.get<string>('EMAIL_ENABLED') === 'true'
+          ? new GmailEmailSender(configService)
+          : new DisabledEmailSender(),
     },
 
     {
