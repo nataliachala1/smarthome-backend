@@ -62,9 +62,7 @@ export class PrismaHomeRepository
           },
         });
 
-        return rows.map(
-          PrismaHomeMapper.toDomain,
-        );
+        return rows.map((row) => PrismaHomeMapper.toDomain(row));
       },
     );
   }

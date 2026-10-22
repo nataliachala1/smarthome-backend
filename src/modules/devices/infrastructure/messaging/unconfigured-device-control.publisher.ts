@@ -9,11 +9,10 @@ import { DeviceControlPublisherUnavailableError } from '../../domain/errors/devi
 
 @Injectable()
 export class UnconfiguredDeviceControlPublisher extends DeviceControlPublisher {
-  async publishControlCommand(
+  publishControlCommand(
     input: PublishDeviceControlCommandInput,
   ): Promise<void> {
     void input;
-
-    throw new DeviceControlPublisherUnavailableError();
+    return Promise.reject(new DeviceControlPublisherUnavailableError());
   }
 }

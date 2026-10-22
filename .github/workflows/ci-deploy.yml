@@ -1,0 +1,63 @@
+name: CI and deploy dev
+
+on:
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: smarthome-dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate-build-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit -p tsconfig.build.json
+      - run: npm test -- --runInBand
+      - run: npm run build
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/smarthome-backend:dev
+            ghcr.io/${{ github.repository_owner }}/smarthome-backend:${{ github.sha }}
+
+  deploy:
+    if: ${{ false }} # Enable only after the VPS backup and restore audit is complete.
+    needs: validate-build-publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Dokploy
+        env:
+          DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+        run: |
+          test -n "$DOKPLOY_DEPLOY_WEBHOOK"
+          curl --fail --silent --show-error --request POST "$DOKPLOY_DEPLOY_WEBHOOK" --output /dev/null
+      - name: Verify deployment health
+        env:
+          DEPLOYMENT_HEALTH_URL: ${{ secrets.DEPLOYMENT_HEALTH_URL }}
+        run: |
+          test -n "$DEPLOYMENT_HEALTH_URL"
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent "$DEPLOYMENT_HEALTH_URL" --output /dev/null; then exit 0; fi
+            sleep 10
+          done
+          echo "Deployment health check did not pass within 6 minutes."
+          exit 1

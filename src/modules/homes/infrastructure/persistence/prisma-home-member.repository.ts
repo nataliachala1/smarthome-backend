@@ -35,9 +35,7 @@ export class PrismaHomeMemberRepository
             },
           });
 
-        return members.map(
-          PrismaHomeMemberMapper.toDomain,
-        );
+        return members.map((member) => PrismaHomeMemberMapper.toDomain(member));
       },
     );
   }
@@ -58,9 +56,7 @@ export class PrismaHomeMemberRepository
         },
       });
 
-      return members.map(
-        PrismaHomeMemberMapper.toDomain,
-      );
+      return members.map((member) => PrismaHomeMemberMapper.toDomain(member));
     },
   );
 }

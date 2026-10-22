@@ -7,6 +7,7 @@ import {
 
 import { HomeMemberRepository } from '../../domain/repositories/home-member.repository';
 import { UserRepository } from '../../../users/domain/repositories/user.repository';
+import { UserStatus } from '../../../users/domain/entities/user-status.enum';
 
 export interface CreateHomeInvitationInput {
   userId: string;
@@ -39,7 +40,7 @@ export class CreateHomeInvitationUseCase {
       );
     }
 
-    if (invitedUser.status !== 'ACTIVE') {
+    if (invitedUser.status !== UserStatus.ACTIVE) {
       throw new BadRequestException(
         'El usuario invitado no se encuentra activo',
       );
