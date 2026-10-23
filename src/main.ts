@@ -11,6 +11,7 @@ import { SecureIoAdapter } from './modules/realtime/secure-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   const isProduction = process.env.NODE_ENV === 'production';
   const corsOrigins = getCorsOrigins();
   app.useWebSocketAdapter(new SecureIoAdapter(app, corsOrigins));

@@ -166,7 +166,7 @@ describe('HU10 MQTT adapter integration (synthetic transport, no broker/DB/Shell
     const [topic, payload, options] = client.publish.mock.calls[0];
     expect(topic).toBe('smarthome/staging/v1/devices/shelly-test/rpc');
     expect(JSON.parse(payload)).toMatchObject({
-      src: 'smarthome/staging/v1/backend',
+      src: 'smarthome/staging/v1/backend/devices/shelly-test',
       method: 'Switch.Set',
       params: { id: 0, on: true },
     });

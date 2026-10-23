@@ -30,6 +30,13 @@ export class MqttTopicContract {
       : `${this.config.devicePrefix}/${id}/control`;
   }
 
+  rpcSource(id: string): string {
+    this.assertDeviceId(id);
+    return this.config.namespace
+      ? `${this.config.rpcSource}/devices/${id}`
+      : this.config.rpcSource;
+  }
+
   subscriptions(): string[] {
     const shelly = this.config.namespace
       ? `${this.config.devicePrefix}/+`
