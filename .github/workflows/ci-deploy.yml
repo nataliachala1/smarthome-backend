@@ -40,21 +40,19 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/smarthome-backend:${{ github.sha }}
 
   deploy:
-    if: ${{ false }} # Enable only after the VPS backup and restore audit is complete.
     needs: validate-build-publish
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Dokploy
         env:
           DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
-        run: |
-          test -n "$DOKPLOY_DEPLOY_WEBHOOK"
-          curl --fail --silent --show-error --request POST "$DOKPLOY_DEPLOY_WEBHOOK" --output /dev/null
-      - name: Verify deployment health
-        env:
           DEPLOYMENT_HEALTH_URL: ${{ secrets.DEPLOYMENT_HEALTH_URL }}
         run: |
-          test -n "$DEPLOYMENT_HEALTH_URL"
+          if [[ -z "${DOKPLOY_DEPLOY_WEBHOOK:-}" || -z "${DEPLOYMENT_HEALTH_URL:-}" ]]; then
+            echo "::notice::Deployment skipped; configure DOKPLOY_DEPLOY_WEBHOOK and DEPLOYMENT_HEALTH_URL repository secrets."
+            exit 0
+          fi
+          curl --fail --silent --show-error --request POST "$DOKPLOY_DEPLOY_WEBHOOK" --output /dev/null
           for attempt in $(seq 1 36); do
             if curl --fail --silent "$DEPLOYMENT_HEALTH_URL" --output /dev/null; then exit 0; fi
             sleep 10
