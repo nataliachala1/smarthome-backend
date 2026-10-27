@@ -56,6 +56,23 @@ describe('MQTT - seleccion segura de perfiles de DI', () => {
       .toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
 
+  it('permite la DI PG-only con transporte VPS DEV opt-in, sin workflow', () => {
+    const env = { ...vps(), MQTT_ENABLED: 'true',
+      SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'true' };
+    expect(selectShellyMqttProviderPlan(env)).toMatchObject({
+      mode: 'vps-dev-tls',
+      vpsPgOnly: true,
+      localWorkflow: false,
+      localAuthWorker: false,
+    });
+  });
+
+  it('no admite MQTT=true en VPS DEV sin autorizacion especifica', () => {
+    expect(() => selectShellyMqttDeploymentMode({
+      ...vps(), MQTT_ENABLED: 'true',
+    })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
+  });
+
   it('impide confundir local-dev con perfil VPS activado', () => {
     expect(() => selectShellyMqttDeploymentMode({
       NODE_ENV: 'development',

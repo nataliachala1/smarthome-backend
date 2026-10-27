@@ -33,8 +33,11 @@ export function selectShellyMqttDeploymentMode(
   if (env.NODE_ENV === 'production' &&
       env.APP_ENV === 'development' &&
       env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED === 'true' &&
-      // Esta etapa solo prepara la DI; el broker permanece apagado.
-      env.MQTT_ENABLED === 'false' &&
+      // La DI PostgreSQL continua separada: transporte opt-in NO registra
+      // controladores, coordinadores ni workers en el perfil VPS DEV.
+      (env.MQTT_ENABLED === 'false' ||
+        (env.MQTT_ENABLED === 'true' &&
+         env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED === 'true')) &&
       isDevDatabaseUrl(env.DATABASE_URL) &&
       isDevDatabaseUrl(env.DATABASE_IOT_URL)) {
     return 'vps-dev-tls';
