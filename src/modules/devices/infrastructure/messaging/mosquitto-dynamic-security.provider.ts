@@ -431,7 +431,11 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
 
   async disableIdentity(username: string): Promise<void> {
     this.validateIdentifier(username);
-    await this.command('disableClient', { username });
+    const before = await this.inspectIdentity(username);
+    // An explicit DynSec "Client not found" response is durable absence. A
+    // timeout or malformed response still throws and remains uncertain.
+    if (!before) return;
+    if (!before.disabled) await this.command('disableClient', { username });
     const after = await this.inspectIdentity(username);
     if (!after?.disabled) {
       throw unavailable('MQTT_DYNSEC_DISABLE_NOT_CONFIRMED');

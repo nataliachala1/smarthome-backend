@@ -18,30 +18,34 @@ export interface MqttEnableRequest {
   userId:string; homeId:string; sessionId:string; sessionToken:string;
   operationId:string;
   /** Confirmación obtenida de readback MQTT.GetConfig en el mismo Shelly físico. */
-  localConfigurationReadbackVerified:boolean;
+  localConfigurationReadbackVerified?:boolean;
   /** Confirmación humana para una red LAN aislada de desarrollo. */
-  explicitlyTrustedLocalNetwork:boolean;
+  explicitlyTrustedLocalNetwork?:boolean;
 }
+
+export type MqttEnableProfile = 'local-dev' | 'vps-dev-tls';
 /**
- * Se invoca SOLO tras 504.13: configuración local y lectura de vuelta.
- * Inerte hasta cablear explícitamente un controlador OWNER con sesión+token.
- * Nunca es prueba de conexión autenticada; requiere SQL026+029 después.
+ * Local exige readback y aprobación de laboratorio; VPS usa autorización
+ * OWNER+token y lease SQL030. En ambos perfiles solo alcanza AWAITING_AUTH.
  */
 export class ShellyMqttEnableCoordinator {
   constructor(
-    private readonly sessions:Pick<ShellyPairingSessionService,'get'>,
+    private readonly sessions:Pick<ShellyPairingSessionService,'get'|'assertCanManageHome'>,
     private readonly port:MqttEnablePort,
     private readonly broker:Pick<MqttDeviceIdentityProvider,
-      'verifyPreparedDisabled'|'enableIdentity'|'inspectIdentity'>,
+      'verifyPreparedDisabled'|'enableIdentity'|'inspectIdentity'|'disableIdentity'>,
     private readonly runtime:Pick<MqttRuntimeService,'topics'|'config'>,
+    private readonly profile:MqttEnableProfile='local-dev',
   ) {}
 
   async enable(input:MqttEnableRequest):Promise<{phase:'AWAITING_MQTT_AUTH';mqttAuthenticated:false}> {
-    if (!input.localConfigurationReadbackVerified || !input.explicitlyTrustedLocalNetwork ||
-        !UUID.test(input.operationId) || !UUID.test(input.sessionId) ||
-        typeof input.sessionToken !== 'string') {
-      throw new Error('MQTT_ENABLE_LOCAL_PROVISIONING_NOT_VERIFIED');
+    if (!UUID.test(input.operationId) || !UUID.test(input.sessionId) ||
+        !/^[A-Za-z0-9_-]{43,128}$/.test(input.sessionToken) ||
+        (this.profile==='local-dev' &&
+          (!input.localConfigurationReadbackVerified || !input.explicitlyTrustedLocalNetwork))) {
+      throw new Error('MQTT_ENABLE_REQUEST_INVALID');
     }
+    await this.sessions.assertCanManageHome(input.userId,input.homeId);
     const current=await this.sessions.get(input.userId,input.homeId,input.sessionId,input.sessionToken);
     if (current.sessionId !== input.sessionId || current.homeId !== input.homeId ||
         !['DEVICE_IDENTIFIED','WAITING_FOR_MQTT'].includes(current.status) ||
@@ -60,7 +64,7 @@ export class ShellyMqttEnableCoordinator {
     const claim=await this.port.claim(input.operationId);
     const suffix=claim.identityId.replace(/-/g,'');
     const expectedUser=`shd_${suffix}`, expectedClient=`shd-${suffix}`;
-    if (claim.username!==expectedUser || claim.clientId!==expectedClient ||
+    if (claim.operationId!==input.operationId || claim.username!==expectedUser || claim.clientId!==expectedClient ||
         claim.roleName!==`role_shd_${suffix}`) {
       await this.port.uncertain(claim).catch(()=>undefined);
       throw new Error('MQTT_ENABLE_BINDING_MISMATCH_REQUIRES_RECONCILIATION');
@@ -77,10 +81,12 @@ export class ShellyMqttEnableCoordinator {
           Date.now()>=claim.leaseUntil.getTime()) {
         throw new Error('BROKER_ENABLE_OUTCOME_UNCERTAIN');
       }
+      await this.sessions.assertCanManageHome(input.userId,input.homeId);
       const again=await this.sessions.get(input.userId,input.homeId,input.sessionId,input.sessionToken);
       if (again.sessionId!==input.sessionId ||
           !['DEVICE_IDENTIFIED','WAITING_FOR_MQTT'].includes(again.status) ||
           again.identity?.manufacturerDeviceId!==manufacturerId ||
+          again.identity?.modelCode!=='S4SW-001P16EU' || again.identity.generation!==4 ||
           !again.expiresAt || new Date(again.expiresAt).getTime()<=Date.now()) {
         throw new Error('SESSION_CHANGED_DURING_BROKER_ENABLE');
       }
@@ -88,6 +94,9 @@ export class ShellyMqttEnableCoordinator {
       return {phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false};
     } catch {
       // Resultado de Mosquitto o del COMMIT SQL incierto: bloquear reintentos.
+      // The validated binding is safe to disable even if inspection failed
+      // before enable; fail closed on a possibly active broker account.
+      await this.broker.disableIdentity(claim.username).catch(()=>undefined);
       await this.port.uncertain(claim).catch(()=>undefined);
       throw new Error('MQTT_ENABLE_OUTCOME_REQUIRES_RECONCILIATION');
     }

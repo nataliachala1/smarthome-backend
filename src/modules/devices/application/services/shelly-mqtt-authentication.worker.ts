@@ -44,8 +44,8 @@ export interface AuthMqttChallengeTransport {
 
 /**
  * NUNCA registrar directamente como endpoint HTTP. Solo puede ejecutar
- * un worker interno que haya activado la identidad y configurado el Shelly
- * mediante un mecanismo local seguro. La BD no observa el broker; el worker
+ * un coordinador que autorizó OWNER+sesión+token y solicitó la activación.
+ * La BD no observa el broker; el worker
  * demuestra el challenge y persistente SQL026/SQL029.
  */
 export class ShellyMqttAuthenticationWorker {
@@ -58,10 +58,14 @@ export class ShellyMqttAuthenticationWorker {
     private readonly switchId: number,
   ) {}
 
-  async confirm(operationId: string): Promise<{
+  async confirm(operationId: string, expectedManufacturerDeviceId: string): Promise<{
     readonly phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED';
   }> {
-    if (!UUID.test(operationId)) throw new Error('MQTT_AUTH_OPERATION_INVALID');
+    if (!UUID.test(operationId) ||
+        typeof expectedManufacturerDeviceId !== 'string' ||
+        !/^shelly[a-z0-9_-]{1,100}$/.test(expectedManufacturerDeviceId)) {
+      throw new Error('MQTT_AUTH_OPERATION_INVALID');
+    }
 
     // SQL026 valida OWNER, vigencia, estado AWAITING_AUTH, no-revocacion,
     // historial de reintentos y emite un RPC id no elegido por HTTP.
@@ -71,6 +75,9 @@ export class ShellyMqttAuthenticationWorker {
       !NAME.test(issued.brokerClientId) ||
       !NAME.test(issued.brokerRoleName)) {
       throw new Error('MQTT_AUTH_SQL026_REPLY_INVALID');
+    }
+    if (issued.manufacturerDeviceId !== expectedManufacturerDeviceId) {
+      throw new Error('MQTT_AUTH_OPERATION_SESSION_BINDING_MISMATCH');
     }
     const plan = buildShellyMqttAclPlan(
       this.topics, issued.manufacturerDeviceId, this.switchId,

@@ -26,9 +26,8 @@ export const MQTT_LEASE_GATEWAY = Symbol('MQTT_LEASE_GATEWAY');
 export const MQTT_CONFIRMER_GATEWAY = Symbol('MQTT_CONFIRMER_GATEWAY');
 
 /**
- * VPS DEV: SOLO gateways PostgreSQL especializados. Sus factories validan
- * cuenta, destino, TLS y privilegios; no registran Mosquitto, acciones ni HTTP.
- * El modo de conexion sigue requiriendo opt-in explicito de entorno.
+ * Base VPS DEV: solo gateways PostgreSQL especializados. Sus factories
+ * validan cuenta, destino, TLS y privilegios. El modo requiere opt-in.
  */
 export const shellyMqttPgDevProviders: Provider[] = [
   {
@@ -119,12 +118,31 @@ export const shellyMqttDevProviders: Provider[] = [
   },
   {
     provide: ShellyMqttBootstrapAction,
-    inject: [ShellyPairingSessionService, PgMqttBootstrapPort, MqttRuntimeService, ConfigService],
-    useFactory: (sessions:ShellyPairingSessionService,port:PgMqttBootstrapPort,
-      runtime:MqttRuntimeService,c:ConfigService) => new ShellyMqttBootstrapAction(
-       sessions,port,runtime,c.get<string>('MQTT_PREPARATION_AES_KEY_B64URL')??'',
-       c.get<string>('MQTT_PREPARATION_AES_KEY_ID')??'',
-       c.get<string>('MQTT_TLS_CA_FILE')??''),
+    inject: [
+      ShellyPairingSessionService,
+      PgMqttBootstrapPort,
+      MqttRuntimeService,
+      MqttDeviceIdentityProvider,
+      ConfigService,
+    ],
+    useFactory: (
+      sessions: ShellyPairingSessionService,
+      port: PgMqttBootstrapPort,
+      runtime: MqttRuntimeService,
+      broker: MqttDeviceIdentityProvider,
+      c: ConfigService,
+    ) => new ShellyMqttBootstrapAction(
+      sessions,
+      port,
+      runtime,
+      broker,
+      c.get<string>('MQTT_PREPARATION_AES_KEY_B64URL') ?? '',
+      c.get<string>('MQTT_PREPARATION_AES_KEY_ID') ?? '',
+      {
+        profile: 'local-dev',
+        localCaFile: c.get<string>('MQTT_TLS_CA_FILE') ?? '',
+      },
+    ),
   },
   ] : []),
   { provide: MqttDeviceIdentityProvider, useClass: MosquittoDynamicSecurityProvider },
@@ -171,5 +189,84 @@ export const shellyMqttDevProviders: Provider[] = [
       broker: MqttDeviceIdentityProvider,
       runtime: MqttRuntimeService,
     ) => new ShellyMqttEnableCoordinator(sessions, port, broker, runtime),
+  },
+];
+
+/**
+ * VPS DEV preparation orchestration. This explicit allowlist strips the SQL
+ * gateway factories and the local-only bootstrap action from the local set.
+ * It contains no HTTP controllers or authentication worker.
+ */
+const vpsPairingProviderTokens = new Set<unknown>([
+  PgMqttPrivilegedReservationPort,
+  PgMqttPreparationLeasePort,
+  PgMqttPreparedConfirmationPort,
+  PgMqttPreparationSecretRepository,
+  EncryptedMqttPreparationSecretPort,
+  MqttDeviceIdentityProvider,
+  ShellyMqttReservationCoordinator,
+  ShellyMqttPreparationCoordinator,
+  ShellyMqttPrepareAction,
+  PgMqttEnablePort,
+]);
+
+export const shellyMqttVpsPairingProviders: Provider[] =
+  [
+    ...shellyMqttDevProviders.filter((provider) =>
+      vpsPairingProviderTokens.has(
+        (provider as { provide?: unknown }).provide,
+      ),
+    ),
+    {
+      provide: ShellyMqttEnableCoordinator,
+      inject: [ShellyPairingSessionService, PgMqttEnablePort,
+        MqttDeviceIdentityProvider, MqttRuntimeService],
+      useFactory: (
+        sessions: ShellyPairingSessionService,
+        port: PgMqttEnablePort,
+        broker: MqttDeviceIdentityProvider,
+        runtime: MqttRuntimeService,
+      ) => new ShellyMqttEnableCoordinator(
+        sessions, port, broker, runtime, 'vps-dev-tls',
+      ),
+    },
+  ];
+
+/** Bootstrap credentials are delivered only through the separately authorized route. */
+export const shellyMqttVpsBootstrapProviders: Provider[] = [
+  {
+    provide: PgMqttBootstrapPort,
+    inject: [MqttSecretPgGateway],
+    useFactory: (gateway: MqttSecretPgGateway) => new PgMqttBootstrapPort(gateway),
+  },
+  {
+    provide: ShellyMqttBootstrapAction,
+    inject: [
+      ShellyPairingSessionService,
+      PgMqttBootstrapPort,
+      MqttRuntimeService,
+      MqttDeviceIdentityProvider,
+      ConfigService,
+    ],
+    useFactory: (
+      sessions: ShellyPairingSessionService,
+      port: PgMqttBootstrapPort,
+      runtime: MqttRuntimeService,
+      broker: MqttDeviceIdentityProvider,
+      c: ConfigService,
+    ) => new ShellyMqttBootstrapAction(
+      sessions,
+      port,
+      runtime,
+      broker,
+      c.get<string>('MQTT_PREPARATION_AES_KEY_B64URL') ?? '',
+      c.get<string>('MQTT_PREPARATION_AES_KEY_ID') ?? '',
+      {
+        profile: 'vps-dev-tls',
+        publicBrokerUrl: c.get<string>('SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL'),
+        publicCaFile: c.get<string>('SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE'),
+        adminCaFile: c.get<string>('MQTT_DYNSEC_ADMIN_CA_FILE'),
+      },
+    ),
   },
 ];

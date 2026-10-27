@@ -33,6 +33,8 @@ describe('VPS DEV: transporte MQTT TLS aislado sin endpoints', () => {
       'SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED',
       'SHELLY_MQTT_VPS_DEV_TLS_ENABLED',
       'SHELLY_MQTT_VPS_DEV_BROKER_HOST',
+      'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL',
+      'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
     ]));
   });
 

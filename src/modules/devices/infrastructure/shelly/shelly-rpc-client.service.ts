@@ -1,11 +1,11 @@
 import {
-  BadGatewayException,
   BadRequestException,
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
-
 import { isIP } from 'node:net';
+import { ShellyLocalAccessService } from './shelly-local-access.service';
+import { ShellyRpcError, type ShellyRpcErrorCode } from './shelly-rpc.error';
 
 export interface ShellyDeviceInfo {
   id: string;
@@ -15,7 +15,7 @@ export interface ShellyDeviceInfo {
   fw_id?: string;
   ver?: string;
   app?: string;
-  auth_en?: boolean;
+  auth_en: boolean;
 }
 
 export interface ConfigureShellyMqttInput {
@@ -25,91 +25,86 @@ export interface ConfigureShellyMqttInput {
   password?: string;
 }
 
-interface ShellySetConfigResult {
-  restart_required?: boolean;
+export interface ShellyMqttStatus {
+  connected: boolean | null;
+  errorCode: ShellyRpcErrorCode | null;
 }
 
 @Injectable()
 export class ShellyRpcClientService {
   private readonly timeoutMs = 3000;
 
+  constructor(private readonly localAccess: ShellyLocalAccessService) {}
+
   async getDeviceInfo(ip: string): Promise<ShellyDeviceInfo> {
-    this.assertPrivateIpv4(ip);
-
-    const response = await this.getJson<unknown>(
-      `http://${ip}/shelly`,
-    );
-
+    this.assertTarget(ip);
+    const response = await this.requestJson('http://' + ip + '/shelly', {
+      method: 'GET',
+    });
     if (!this.isShellyDeviceInfo(response)) {
-      throw new UnprocessableEntityException(
-        'La IP indicada no corresponde a un dispositivo Shelly válido',
-      );
+      throw new UnprocessableEntityException({
+        code: 'SHELLY_INVALID_DEVICE',
+        message: 'La respuesta no identifica un dispositivo Shelly válido.',
+      });
     }
-
     return response;
   }
 
-  async getMqttConnected(ip: string): Promise<boolean | null> {
-    this.assertPrivateIpv4(ip);
-
+  async getMqttStatus(ip: string): Promise<ShellyMqttStatus> {
+    // Keep local-policy and input failures outside the optional probe catch.
+    this.assertTarget(ip);
     try {
-      const response = await this.getJson<unknown>(
-        `http://${ip}/rpc/MQTT.GetStatus`,
+      const response = await this.requestJson(
+        'http://' + ip + '/rpc/MQTT.GetStatus',
+        { method: 'GET' },
       );
-
-      if (
-        !this.isObjectRecord(response) ||
-        typeof response.connected !== 'boolean'
-      ) {
-        return null;
+      if (!this.isRecord(response) || typeof response.connected !== 'boolean') {
+        throw new ShellyRpcError('SHELLY_INVALID_RESPONSE');
       }
-
-      return response.connected;
-    } catch {
-      /*
-       * La identificación del dispositivo ya fue exitosa.
-       * MQTT.GetStatus puede requerir autenticación si el usuario
-       * protegió el Shelly, por lo que no hacemos fallar todo
-       * el endpoint identify.
-       */
-      return null;
+      return { connected: response.connected, errorCode: null };
+    } catch (error) {
+      if (!(error instanceof ShellyRpcError)) throw error;
+      // Identification remains useful when MQTT status cannot be obtained.
+      return { connected: null, errorCode: error.code };
     }
+  }
+
+  /** Compatibility adapter for the pairing HTTP DTO; no broker proof is implied. */
+  async getMqttConnected(ip: string): Promise<boolean | null> {
+    return (await this.getMqttStatus(ip)).connected;
   }
 
   async configureMqtt(
     ip: string,
     input: ConfigureShellyMqttInput,
   ): Promise<{ restartRequired: boolean }> {
-    this.assertPrivateIpv4(ip);
-
+    this.assertTarget(ip);
     const config: Record<string, unknown> = {
       enable: true,
       server: input.server,
+      // Shelly validates the broker certificate using its built-in CA bundle.
+      ssl_ca: 'ca.pem',
       topic_prefix: input.topicPrefix,
       rpc_ntf: true,
       status_ntf: true,
       enable_rpc: true,
       enable_control: true,
     };
-
     if (input.username) {
       config.user = input.username;
       config.pass = input.password;
     }
-
-    const result = await this.postRpc<ShellySetConfigResult>(ip, 'MQTT.SetConfig', {
-      config,
-    });
-
-    return {
-      restartRequired: result.restart_required === true,
-    };
+    const response = await this.postRpc(ip, 'MQTT.SetConfig', { config });
+    if (!this.isRecord(response) || typeof response.restart_required !== 'boolean') {
+      throw new ShellyRpcError('SHELLY_INVALID_RESPONSE');
+    }
+    return { restartRequired: response.restart_required };
   }
 
   async reboot(ip: string): Promise<void> {
-    this.assertPrivateIpv4(ip);
-
-    await this.postRpc<null>(ip, 'Shelly.Reboot', {});
+    this.assertTarget(ip);
+    const response = await this.postRpc(ip, 'Shelly.Reboot', {}, true);
+    if (response !== null) throw new ShellyRpcError('SHELLY_INVALID_RESPONSE');
   }
 
   async waitForMqttConnection(
@@ -117,180 +112,121 @@ export class ShellyRpcClientService {
     attempts = 12,
     delayMs = 1500,
   ): Promise<boolean> {
-    /*
-     * MQTT.SetConfig normalmente requiere reinicio.
-     * Esperamos primero a que el Shelly vuelva a estar
-     * disponible.
-     */
+    this.assertTarget(ip);
     await this.sleep(2000);
-
+    let lastStatus: ShellyMqttStatus = { connected: false, errorCode: null };
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const connected = await this.getMqttConnected(ip);
-
-      if (connected === true) {
-        return true;
-      }
-
-      if (attempt < attempts) {
-        await this.sleep(delayMs);
-      }
+      lastStatus = await this.getMqttStatus(ip);
+      if (lastStatus.connected === true) return true;
+      if (attempt < attempts) await this.sleep(delayMs);
     }
-
+    if (lastStatus.errorCode) throw new ShellyRpcError(lastStatus.errorCode);
     return false;
   }
 
-  private async getJson<T>(url: string): Promise<T> {
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, this.timeoutMs);
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-        redirect: 'error',
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new BadGatewayException(
-          `El Shelly respondió con HTTP ${response.status}`,
-        );
-      }
-
-      return (await response.json()) as T;
-    } catch (error) {
-      if (error instanceof BadGatewayException) {
-        throw error;
-      }
-
-      throw new BadGatewayException(
-        'El Shelly no responde o no es accesible desde el backend',
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  private assertPrivateIpv4(ip: string): void {
-    if (isIP(ip) !== 4) {
-      throw new BadRequestException(
-        'La dirección IP del Shelly no es una IPv4 válida',
-      );
-    }
-
-    const octets = ip.split('.').map(Number);
-
-    const first = octets[0];
-    const second = octets[1];
-
-    const isPrivate =
-      first === 10 ||
-      (first === 172 &&
-        second !== undefined &&
-        second >= 16 &&
-        second <= 31) ||
-      (first === 192 && second === 168);
-
-    if (!isPrivate) {
-      throw new BadRequestException(
-        'La IP del Shelly debe pertenecer a una red privada local',
-      );
-    }
-  }
-
-  private isShellyDeviceInfo(
-    value: unknown,
-  ): value is ShellyDeviceInfo {
-    if (!this.isObjectRecord(value)) {
-      return false;
-    }
-
-    return (
-      typeof value.id === 'string' &&
-      value.id.length > 0 &&
-      typeof value.mac === 'string' &&
-      value.mac.length > 0 &&
-      typeof value.model === 'string' &&
-      value.model.length > 0 &&
-      typeof value.gen === 'number'
-    );
-  }
-
-  private isObjectRecord(
-    value: unknown,
-  ): value is Record<string, unknown> {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    );
-  }
-
-  private async postRpc<T>(
+  private postRpc(
     ip: string,
     method: string,
     params: Record<string, unknown>,
-  ): Promise<T> {
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, this.timeoutMs);
-
-    try {
-      const response = await fetch(`http://${ip}/rpc/${method}`, {
+    allowEmpty = false,
+  ): Promise<unknown> {
+    return this.requestJson(
+      'http://' + ip + '/rpc/' + method,
+      {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
+      },
+      allowEmpty,
+    );
+  }
+
+  private async requestJson(
+    url: string,
+    init: RequestInit,
+    allowEmpty = false,
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...init,
+        headers: { Accept: 'application/json', ...init.headers },
         redirect: 'error',
         signal: controller.signal,
       });
-
       if (!response.ok) {
-        throw new BadGatewayException(
-          `El Shelly respondió con HTTP ${response.status} al ejecutar ${method}`,
+        throw new ShellyRpcError(
+          response.status === 401 || response.status === 403
+            ? 'SHELLY_AUTH_REQUIRED'
+            : 'SHELLY_HTTP_ERROR',
         );
       }
-
       const body = await response.text();
-
-      if (!body || body.trim() === 'null') {
-        return null as T;
-      }
-
+      if (allowEmpty && body.trim() === '') return null;
+      let value: unknown;
       try {
-        return JSON.parse(body) as T;
+        value = JSON.parse(body);
       } catch {
-        throw new BadGatewayException(
-          `El Shelly devolvió una respuesta inválida al ejecutar ${method}`,
-        );
+        throw new ShellyRpcError('SHELLY_INVALID_RESPONSE');
       }
+      // Method-specific endpoints return direct results, never RPC envelopes.
+      if (
+        this.isRecord(value) &&
+        ('error' in value || ('code' in value && 'message' in value))
+      ) {
+        throw new ShellyRpcError('SHELLY_RPC_ERROR');
+      }
+      return value;
     } catch (error) {
-      if (error instanceof BadGatewayException) {
-        throw error;
-      }
-
-      throw new BadGatewayException(
-        `No fue posible ejecutar ${method} en el Shelly`,
+      if (error instanceof ShellyRpcError) throw error;
+      throw new ShellyRpcError(
+        controller.signal.aborted ? 'SHELLY_RPC_TIMEOUT' : 'SHELLY_UNREACHABLE',
       );
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  private async sleep(
-    milliseconds: number,
-  ): Promise<void> {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, milliseconds);
-    });
+  private assertTarget(ip: string): void {
+    this.localAccess.assertEnabled();
+    const [first, second] = ip.split('.').map(Number);
+    if (
+      isIP(ip) !== 4 ||
+      !(
+        first === 10 ||
+        (first === 172 && second !== undefined && second >= 16 && second <= 31) ||
+        (first === 192 && second === 168)
+      )
+    ) {
+      throw new BadRequestException({
+        code: 'SHELLY_INVALID_IP',
+        message: 'La IP del Shelly debe ser una IPv4 privada local.',
+      });
+    }
+  }
+
+  private isShellyDeviceInfo(value: unknown): value is ShellyDeviceInfo {
+    if (!this.isRecord(value)) return false;
+    return (
+      ['id', 'mac', 'model'].every(
+        (key) => typeof value[key] === 'string' && value[key].trim().length > 0,
+      ) &&
+      typeof value.gen === 'number' &&
+      Number.isSafeInteger(value.gen) &&
+      value.gen > 0 &&
+      typeof value.auth_en === 'boolean' &&
+      ['fw_id', 'ver', 'app'].every(
+        (key) => value[key] === undefined || typeof value[key] === 'string',
+      )
+    );
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private async sleep(milliseconds: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   }
 }

@@ -1,6 +1,7 @@
 import {
   Controller,
   Headers,
+  Header,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -23,10 +24,9 @@ import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated
 import { ShellyMqttPrepareAction } from '../../application/services/shelly-mqtt-prepare.action';
 
 /**
- * 504.10: ruta LOCAL opt-in para avanzar una operacion hasta
- * PREPARED_DISABLED; la identidad del broker debe continuar deshabilitada.
- * NO exponer esta ruta en produccion antes del flujo de aprovisionamiento,
- * verificacion autenticada, revocacion y auditoria completos.
+ * Ruta opt-in para avanzar una operacion hasta PREPARED_DISABLED.
+ * VPS DEV solo la registra con el perfil TLS+DEV validado; nunca entrega
+ * passwords ni habilita la identidad del broker.
  */
 @Controller('api/v1/homes/:homeId/shelly/setup-sessions/:sessionId/mqtt')
 @ApiTags('shelly')
@@ -37,6 +37,9 @@ export class ShellyMqttPrepareController {
 
   @Post('prepare')
   @HttpCode(HttpStatus.ACCEPTED)
+  @Header('Cache-Control', 'no-store, private, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Vary', 'Authorization, X-Pairing-Token')
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   @ApiOperation({ summary: 'Preparar identidad MQTT DESHABILITADA (solo development opt-in)' })
   @ApiServiceUnavailableResponse({

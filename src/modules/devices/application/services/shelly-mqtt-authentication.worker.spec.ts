@@ -64,7 +64,7 @@ function harness(options: {
 describe('Etapa 1: SQL026 + prueba broker + SQL029 (sin red)', () => {
   it('consume SOLO el rpc_id emitido por SQL026 y confirma SQL029', async () => {
     const t = harness();
-    await expect(t.worker.confirm(op)).resolves.toEqual({
+    await expect(t.worker.confirm(op, id)).resolves.toEqual({
       phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED',
     });
     expect(t.consume).toHaveBeenCalledWith(op, rpcId);
@@ -78,26 +78,35 @@ describe('Etapa 1: SQL026 + prueba broker + SQL029 (sin red)', () => {
   });
   it('nunca publica ni persiste si la identidad esta deshabilitada', async () => {
     const t = harness({ disabled: true });
-    await expect(t.worker.confirm(op)).rejects.toThrow('BROKER_NOT_AUTHENTICATED');
+    await expect(t.worker.confirm(op, id)).rejects.toThrow('BROKER_NOT_AUTHENTICATED');
     expect(t.exchange).not.toHaveBeenCalled();
     expect(t.consume).not.toHaveBeenCalled();
     expect(t.confirm).not.toHaveBeenCalled();
   });
   it('no consume ni confirma una respuesta MQTT retenida', async () => {
     const t = harness({ retained: true });
-    await expect(t.worker.confirm(op)).rejects.toThrow('RPC_NOT_VERIFIED');
+    await expect(t.worker.confirm(op, id)).rejects.toThrow('RPC_NOT_VERIFIED');
     expect(t.consume).not.toHaveBeenCalled();
     expect(t.confirm).not.toHaveBeenCalled();
   });
   it('rechaza scope de SQL que no coincide con el fabricante', async () => {
     const t = harness({ wrongScope: true });
-    await expect(t.worker.confirm(op)).rejects.toThrow('SCOPE_OR_WINDOW_INVALID');
+    await expect(t.worker.confirm(op, id)).rejects.toThrow('SCOPE_OR_WINDOW_INVALID');
     expect(t.inspectIdentity).not.toHaveBeenCalled();
     expect(t.confirm).not.toHaveBeenCalled();
   });
   it('requiere conexion autenticada despues del RPC', async () => {
     const t = harness({ disconnectedAfter: true });
-    await expect(t.worker.confirm(op)).rejects.toThrow('BROKER_UNCERTAIN');
+    await expect(t.worker.confirm(op, id)).rejects.toThrow('BROKER_UNCERTAIN');
+    expect(t.consume).not.toHaveBeenCalled();
+    expect(t.confirm).not.toHaveBeenCalled();
+  });
+
+  it('no prueba una operación que pertenece a otra identidad de sesión', async () => {
+    const t = harness();
+    await expect(t.worker.confirm(op, 'shelly1pmg4-112233445566'))
+      .rejects.toThrow('SESSION_BINDING_MISMATCH');
+    expect(t.exchange).not.toHaveBeenCalled();
     expect(t.consume).not.toHaveBeenCalled();
     expect(t.confirm).not.toHaveBeenCalled();
   });

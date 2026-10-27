@@ -16,7 +16,7 @@ describe('Etapa2: enable HTTP dev no confunde readback con autenticacion', () =>
   const home = '00000000-0000-4000-8000-000000000001';
   const session = '00000000-0000-4000-8000-000000000002';
   const operationId = '00000000-0000-4000-8000-000000000003';
-  const token = 'ab'.repeat(32);
+  const token = 'a'.repeat(43);
   const consent = 'isolated-dev-lan-only';
   const input = {operationId, localConfigurationReadbackVerified:true};
   const enable = jest.fn();
@@ -46,6 +46,22 @@ describe('Etapa2: enable HTTP dev no confunde readback con autenticacion', () =>
     expect(enable).toHaveBeenCalledWith({
       userId:actor.userId,homeId:home,sessionId:session,sessionToken:token,
       operationId,localConfigurationReadbackVerified:true,explicitlyTrustedLocalNetwork:true,
+    });
+  });
+  it('acepta VPS DEV sin header ni readback local y no declara MQTT autenticado',async()=>{
+    process.env.NODE_ENV='production';
+    process.env.APP_ENV='development';
+    process.env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED='true';
+    process.env.SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED='true';
+    process.env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED='true';
+    process.env.MQTT_ENABLED='true';
+    process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED='true';
+    process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED='true';
+    enable.mockResolvedValue({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
+    await expect(controller.enable(actor,home,session,token,undefined,{operationId}))
+      .resolves.toEqual({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
+    expect(enable).toHaveBeenCalledWith({
+      userId:actor.userId,homeId:home,sessionId:session,sessionToken:token,operationId,
     });
   });
   it('un resultado incierto se entrega como error sanitario, no éxito',async () => {

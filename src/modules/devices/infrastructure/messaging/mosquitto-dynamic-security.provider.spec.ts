@@ -127,6 +127,37 @@ describe('MosquittoDynamicSecurityProvider safety', () => {
     });
   });
 
+  it('revokes idempotently and skips disableClient when the identity is already disabled', async () => {
+    const provider = make({});
+    const command = jest.spyOn(provider as never, 'command')
+      .mockResolvedValue({ client: {
+        username: 'device_user_001', clientid: 'client-shelly-001',
+        disabled: true, roles: [], connections: [],
+      } });
+    await expect(provider.disableIdentity('device_user_001')).resolves.toBeUndefined();
+    expect(command).toHaveBeenCalledTimes(2);
+    expect(command).toHaveBeenCalledWith('getClient', { username: 'device_user_001' });
+    expect(command).not.toHaveBeenCalledWith('disableClient', expect.anything());
+  });
+
+  it('confirma el estado posterior antes de aceptar disableClient', async () => {
+    const provider = make({});
+    const command = jest.spyOn(provider as never, 'command')
+      .mockResolvedValueOnce({ client: {
+        username: 'device_user_001', clientid: 'client-shelly-001',
+        disabled: false, roles: [], connections: [],
+      } })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ client: {
+        username: 'device_user_001', clientid: 'client-shelly-001',
+        disabled: true, roles: [], connections: [],
+      } });
+    await expect(provider.disableIdentity('device_user_001')).resolves.toBeUndefined();
+    expect(command).toHaveBeenNthCalledWith(2, 'disableClient', {
+      username: 'device_user_001',
+    });
+  });
+
   it('rejects an invalid topic scope', async () => {
     const provider = make({});
     const input = pairRequest();

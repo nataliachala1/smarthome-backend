@@ -6,6 +6,8 @@ export const MQTT_SETTINGS = [
   'SHELLY_MQTT_VPS_DEV_TLS_ENABLED',
   'SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED',
   'SHELLY_MQTT_VPS_DEV_BROKER_HOST',
+  'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL',
+  'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
   'MQTT_ENABLED',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
@@ -23,6 +25,10 @@ export const MQTT_SETTINGS = [
   'MQTT_SHELLY_RPC_SOURCE',
   'MQTT_SHELLY_SWITCH_ID',
 ] as const;
+
+/** Public TLS endpoint used by the Shelly; backend transport remains private. */
+export const SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL =
+  'mqtts://mqtt-dev.179-236-82-122.sslip.io:443';
 
 export interface MqttConfiguration {
   brokerUrl?: string;

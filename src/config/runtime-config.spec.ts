@@ -1,4 +1,5 @@
 import { getCorsOrigins, validateRuntimeConfig } from './runtime-config';
+import { shellyLocalEnabled } from './shelly-local';
 
 // Synthetic settings only: these tests never connect to a database or broker.
 const development = () => ({
@@ -169,4 +170,40 @@ describe('CORS origins', () => {
       getCorsOrigins({ ...production(), CORS_ALLOWED_ORIGINS }),
     ).toThrow('CORS_ALLOWED_ORIGINS');
   });
+});
+
+describe('local Shelly configuration', () => {
+  it.each(['development', 'test', 'production'])(
+    'disables local access by default in %s',
+    (nodeEnv) => {
+      expect(shellyLocalEnabled(undefined, nodeEnv)).toBe(false);
+    },
+  );
+
+  it('allows an explicit opt-in for local development', () => {
+    const config = { ...development(), SHELLY_LOCAL_ENABLED: 'true' };
+    expect(validateRuntimeConfig(config)).toEqual(config);
+    expect(shellyLocalEnabled(config.SHELLY_LOCAL_ENABLED, config.NODE_ENV)).toBe(true);
+  });
+
+  it('rejects local access in production even when explicitly enabled', () => {
+    expect(() =>
+      validateRuntimeConfig({ ...production(), SHELLY_LOCAL_ENABLED: 'true' }),
+    ).toThrow('SHELLY_LOCAL_ENABLED');
+  });
+
+  it('accepts explicitly disabled local access in production', () => {
+    expect(() =>
+      validateRuntimeConfig({ ...production(), SHELLY_LOCAL_ENABLED: 'false' }),
+    ).not.toThrow();
+  });
+
+  it.each(['', 'yes', '1', 'TRUE', true])(
+    'rejects ambiguous local-access flag %p',
+    (value) => {
+      expect(() =>
+        validateRuntimeConfig({ ...development(), SHELLY_LOCAL_ENABLED: value }),
+      ).toThrow('SHELLY_LOCAL_ENABLED');
+    },
+  );
 });

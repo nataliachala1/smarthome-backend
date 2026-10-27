@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { MqttAuthenticationPgGateway, openMqttAuthPgGateway } from '../persistence/mqtt-authentication-pg.gateway';
 import { PgMqttRpcChallengePort, PgMqttAuthConfirmPort } from '../persistence/pg-mqtt-authentication.ports';
 import { ShellyMqttAuthenticationWorker } from '../../application/services/shelly-mqtt-authentication.worker';
+import { ShellyMqttAuthenticationAction } from '../../application/services/shelly-mqtt-authentication.action';
 import { ShellyMqttRpcChallengeTransport } from './shelly-mqtt-rpc-challenge.transport';
 import { MqttRuntimeService } from './mqtt-runtime.service';
 import { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-device-identity-provider';
+import { ShellyPairingSessionService } from '../../application/services/shelly-pairing-session.service';
 import { requireShellyMqttDeploymentMode } from './shelly-mqtt-deployment-mode';
 
 export const MQTT_RPC_AUTH_GATEWAY = Symbol('MQTT_RPC_AUTH_GATEWAY');
@@ -61,5 +63,18 @@ export const shellyMqttAuthDevProviders: Provider[] = [
     ) => new ShellyMqttAuthenticationWorker(
       rpc, auth, broker, transport, runtime.topics, runtime.config.switchId,
     ),
+  },
+];
+
+/** VPS worker + HTTP authorization wrapper; only registered under a second opt-in. */
+export const shellyMqttVpsAuthWorkerProviders: Provider[] = [
+  ...shellyMqttAuthDevProviders,
+  {
+    provide: ShellyMqttAuthenticationAction,
+    inject: [ShellyPairingSessionService, ShellyMqttAuthenticationWorker],
+    useFactory: (
+      sessions: ShellyPairingSessionService,
+      worker: ShellyMqttAuthenticationWorker,
+    ) => new ShellyMqttAuthenticationAction(sessions, worker),
   },
 ];

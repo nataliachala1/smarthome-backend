@@ -19,7 +19,7 @@ export class PgMqttEnablePort implements MqttEnablePort {
 
   async request(operationId: string, actorId: string, sessionToken: string): Promise<void> {
     if (!UUID.test(operationId) || !UUID.test(actorId) ||
-        typeof sessionToken !== 'string' || !/^[a-f0-9]{64}$/.test(sessionToken)) {
+        typeof sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(sessionToken)) {
       throw new Error('MQTT_ENABLE_REQUEST_INVALID');
     }
     const sha = createHash('sha256').update(sessionToken,'utf8').digest('hex');

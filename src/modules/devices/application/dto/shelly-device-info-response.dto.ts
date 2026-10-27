@@ -41,6 +41,15 @@ export class ShellyDeviceInfoResponseDto {
   mqttConnected!: boolean | null;
 
   @ApiProperty({
+    type: String,
+    nullable: true,
+    example: null,
+    description:
+      'Código estable del fallo de consulta MQTT; null cuando la consulta fue válida.',
+  })
+  mqttStatusErrorCode!: string | null;
+
+  @ApiProperty({
     example: false,
   })
   authenticationRequired!: boolean;

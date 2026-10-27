@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import Bonjour from 'bonjour-service';
 
 import { isIP } from 'node:net';
+import { ShellyLocalAccessService } from './shelly-local-access.service';
 
 export interface ShellyMdnsCandidate {
   ip: string;
@@ -26,6 +27,7 @@ export class ShellyDiscoveryService {
   constructor(
     private readonly configService:
       ConfigService,
+    private readonly localAccess: ShellyLocalAccessService,
   ) {}
 
   async discover(
@@ -33,6 +35,7 @@ export class ShellyDiscoveryService {
   ): Promise<
     ShellyMdnsCandidate[]
   > {
+    this.localAccess.assertEnabled();
     const devices =
       new Map<
         string,
