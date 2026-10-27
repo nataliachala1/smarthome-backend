@@ -30,11 +30,9 @@ export class IdentifyShellyDeviceUseCase {
     const authenticationRequired =
       deviceInfo.auth_en === true;
 
-    const mqttConnected = authenticationRequired
-      ? null
-      : await this.shellyRpcClient.getMqttConnected(
-          shellyIp,
-        );
+    const mqttStatus = authenticationRequired
+      ? { connected: null, errorCode: 'SHELLY_AUTH_REQUIRED' as const }
+      : await this.shellyRpcClient.getMqttStatus(shellyIp);
 
     return {
       manufacturerDeviceId: deviceInfo.id,
@@ -43,7 +41,8 @@ export class IdentifyShellyDeviceUseCase {
       mac: deviceInfo.mac,
       wifiIp: shellyIp,
       firmwareVersion: deviceInfo.ver ?? null,
-      mqttConnected,
+      mqttConnected: mqttStatus.connected,
+      mqttStatusErrorCode: mqttStatus.errorCode,
       authenticationRequired,
       message: 'Shelly detectado correctamente',
     };

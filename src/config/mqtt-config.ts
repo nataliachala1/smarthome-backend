@@ -1,5 +1,13 @@
 export const MQTT_SETTINGS = [
   'NODE_ENV',
+  'APP_ENV',
+  'DATABASE_URL',
+  'DATABASE_IOT_URL',
+  'SHELLY_MQTT_VPS_DEV_TLS_ENABLED',
+  'SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED',
+  'SHELLY_MQTT_VPS_DEV_BROKER_HOST',
+  'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL',
+  'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
   'MQTT_ENABLED',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
@@ -17,6 +25,10 @@ export const MQTT_SETTINGS = [
   'MQTT_SHELLY_RPC_SOURCE',
   'MQTT_SHELLY_SWITCH_ID',
 ] as const;
+
+/** Public TLS endpoint used by the Shelly; backend transport remains private. */
+export const SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL =
+  'mqtts://mqtt-dev.179-236-82-122.sslip.io:443';
 
 export interface MqttConfiguration {
   brokerUrl?: string;
@@ -36,6 +48,20 @@ export interface MqttConfiguration {
 const topicPath = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*(?![\s\S])/;
 export const mqttDeviceId = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}(?![\s\S])/;
 
+/** VPS DEV utiliza un host PostgreSQL dedicado, nunca smarthome de Production. */
+function isVpsDevDatabaseUrl(raw: string | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const url = new URL(raw);
+    return ['postgres:', 'postgresql:'].includes(url.protocol) &&
+      url.hostname === 'smart-home-smarthomepostgresdev-vrmtpz' &&
+      url.port === '5432' && url.pathname === '/smarthome_dev' &&
+      Boolean(url.username) && Boolean(url.password);
+  } catch {
+    return false;
+  }
+}
+
 export function parseMqttConfig(
   environment: Record<string, unknown>,
 ): MqttConfiguration {
@@ -48,9 +74,25 @@ export function parseMqttConfig(
     return value;
   };
   const production = read('NODE_ENV') === 'production';
+  const vpsDev = production && read('APP_ENV') === 'development';
   const enabledSetting = read('MQTT_ENABLED');
   if (enabledSetting !== undefined && !['true', 'false'].includes(enabledSetting)) {
     throw new Error('MQTT_ENABLED debe ser true o false.');
+  }
+  const transportOptIn = read('SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED') === 'true';
+  if (vpsDev && enabledSetting !== 'false' && enabledSetting !== 'true') {
+    throw new Error('MQTT_VPS_DEV_EXPLICIT_FLAG_REQUIRED');
+  }
+  if (transportOptIn && (!vpsDev || enabledSetting !== 'true')) {
+    throw new Error('MQTT_VPS_DEV_TRANSPORT_NOT_ALLOWED');
+  }
+  if (vpsDev && enabledSetting === 'true' && (
+    !transportOptIn ||
+    read('SHELLY_MQTT_VPS_DEV_TLS_ENABLED') !== 'true' ||
+    !isVpsDevDatabaseUrl(read('DATABASE_URL')) ||
+    !isVpsDevDatabaseUrl(read('DATABASE_IOT_URL'))
+  )) {
+    throw new Error('MQTT_VPS_DEV_TRANSPORT_NOT_ALLOWED');
   }
   if (production && enabledSetting === 'false') {
     return {
@@ -95,6 +137,15 @@ export function parseMqttConfig(
       );
     }
     tls = url.protocol === 'mqtts:';
+    if (vpsDev && enabledSetting === 'true') {
+      // El host autorizado se fija en el despliegue DEV, no desde HTTP.
+      // Se inspeccionara como recurso DEV independiente antes del rollout.
+      const expectedHost = read('SHELLY_MQTT_VPS_DEV_BROKER_HOST');
+      if (!expectedHost || !/^[a-z0-9][a-z0-9.-]{1,249}$/.test(expectedHost) ||
+          url.hostname !== expectedHost || !tls) {
+        throw new Error('MQTT_VPS_DEV_BROKER_NOT_ALLOWED');
+      }
+    }
   }
   if (production && (!brokerUrl || !tls)) {
     throw new Error('MQTT_BROKER_URL requiere mqtts:// en producción.');
@@ -107,6 +158,9 @@ export function parseMqttConfig(
     );
   }
   const caFile = read('MQTT_TLS_CA_FILE');
+  if (vpsDev && enabledSetting === 'true' && !caFile) {
+    throw new Error('MQTT_VPS_DEV_TLS_CA_REQUIRED');
+  }
   if (caFile && !tls) {
     throw new Error('MQTT_TLS_CA_FILE requiere mqtts://.');
   }
@@ -125,6 +179,10 @@ export function parseMqttConfig(
   }
   if (production && !namespace) {
     throw new Error('MQTT_TOPIC_NAMESPACE es obligatorio en producción.');
+  }
+  if (vpsDev && enabledSetting === 'true' &&
+      !namespace?.startsWith('smarthome/dev/')) {
+    throw new Error('MQTT_VPS_DEV_NAMESPACE_NOT_ALLOWED');
   }
   const legacyPrefix = read('MQTT_CONTROL_TOPIC_PREFIX');
   const devicePrefix = namespace

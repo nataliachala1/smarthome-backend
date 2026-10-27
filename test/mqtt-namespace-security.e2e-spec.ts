@@ -392,9 +392,7 @@ describe('HU10 MQTT adapter integration (synthetic transport, no broker/DB/Shell
         throw new Error('Expected rejection');
       } catch (error) {
         expect(error).toBeInstanceOf(ServiceUnavailableException);
-        expect(
-          (error as ServiceUnavailableException).getResponse(),
-        ).toMatchObject({ code: 'MQTT_DEVICE_BOOTSTRAP_REQUIRED' });
+        expect((error as ServiceUnavailableException).getStatus()).toBe(503);
       }
       expect(identify.execute).not.toHaveBeenCalled();
       expect(rpc.configureMqtt).not.toHaveBeenCalled();

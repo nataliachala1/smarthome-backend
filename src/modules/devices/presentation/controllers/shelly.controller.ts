@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 
 import { JwtAuthGuard } from '../../../auth/presentation/http/guards/jwt-auth.guard';
+import { ShellyLocalGuard } from '../../infrastructure/shelly/shelly-local-access.service';
 
 import { CurrentUser } from '../../../auth/presentation/http/decorators/current-user.decorator';
 
@@ -215,6 +216,7 @@ export class ShellyController {
   }
 
   @Get('discover')
+  @UseGuards(ShellyLocalGuard)
   @ApiOperation({
     summary: 'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
   })
@@ -242,6 +244,7 @@ export class ShellyController {
   }
 
   @Post('identify')
+  @UseGuards(ShellyLocalGuard)
   @ApiOperation({
     summary: 'Identificar un Shelly 1PM Gen4 por IP local: OWNER',
   })
@@ -280,6 +283,7 @@ export class ShellyController {
   }
 
   @Post('provision')
+  @UseGuards(ShellyLocalGuard)
   @ApiServiceUnavailableResponse({
     description:
       'MQTT_DEVICE_BOOTSTRAP_REQUIRED: TLS o namespace requieren alta con identidad individual; el flujo LAN heredado no entrega credenciales de servicio.',
@@ -321,6 +325,7 @@ export class ShellyController {
     @Body()
     dto: ProvisionShellyDeviceDto,
   ) {
+    await this.pairingSessionService.assertCanManageHome(user.userId, homeId);
     return this.provisionShellyDeviceUseCase.execute({
       userId: user.userId,
 

@@ -1,4 +1,21 @@
 import { Module } from '@nestjs/common';
+import { ShellyMqttPrepareController } from './presentation/controllers/shelly-mqtt-prepare.controller';
+import { ShellyMqttBootstrapController } from './presentation/controllers/shelly-mqtt-bootstrap.controller';
+import { ShellyMqttEnableController } from './presentation/controllers/shelly-mqtt-enable.controller';
+import { ShellyMqttAuthenticationController } from './presentation/controllers/shelly-mqtt-authentication.controller';
+import {
+  shellyMqttDevProviders,
+  shellyMqttPgDevProviders,
+  shellyMqttVpsPairingProviders,
+  shellyMqttVpsBootstrapProviders,
+} from './infrastructure/messaging/shelly-mqtt-dev.providers';
+import {
+  shellyMqttAuthDevProviders,
+  shellyMqttAuthPgDevProviders,
+  shellyMqttVpsAuthWorkerProviders,
+} from './infrastructure/messaging/shelly-mqtt-auth-dev.providers';
+import { shellyMqttVpsRevocationProviders } from './infrastructure/messaging/shelly-mqtt-revocation.providers';
+import { selectShellyMqttProviderPlan } from './infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 import { AuthModule } from '../auth/auth.module';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -14,6 +31,10 @@ import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.serv
 
 import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
 import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
+import {
+  ShellyLocalAccessService,
+  ShellyLocalGuard,
+} from './infrastructure/shelly/shelly-local-access.service';
 
 import { ListHomeDevicesUseCase } from './application/use-cases/list-home-devices.use-case';
 import { ListInactiveDevicesUseCase } from './application/use-cases/list-inactive-devices.use-case';
@@ -38,10 +59,31 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
 
 import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
 
+// Se decide una sola vez al cargar el modulo. Nunca a partir de HTTP.
+const shellyMqttPlan = selectShellyMqttProviderPlan();
+
 @Module({
   imports: [AuthModule, RealtimeModule],
 
-  controllers: [DevicesController, ShellyController],
+  controllers: [
+    DevicesController,
+    ShellyController,
+    ...(shellyMqttPlan.localWorkflow &&
+    process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true'
+      ? [ShellyMqttBootstrapController, ShellyMqttEnableController] : []),
+    // VPS DEV expone preparación y bootstrap solo bajo el perfil TLS validado.
+    ...(shellyMqttPlan.vpsPairing
+      ? [ShellyMqttPrepareController, ShellyMqttBootstrapController]
+      : []),
+    // Enable y prueba MQTT requieren el opt-in adicional del worker aislado.
+    ...(shellyMqttPlan.vpsAuthWorker
+      ? [ShellyMqttEnableController, ShellyMqttAuthenticationController]
+      : []),
+    // Endpoint controlado: no existe fuera del entorno development+opt-in.
+    ...(shellyMqttPlan.localWorkflow
+      ? [ShellyMqttPrepareController]
+      : []),
+  ],
 
   providers: [
     ListHomeDevicesUseCase,
@@ -63,10 +105,31 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
 
     IdentifyShellyDeviceUseCase,
     ShellyRpcClientService,
+    ShellyLocalAccessService,
+    ShellyLocalGuard,
     ProvisionShellyDeviceUseCase,
     DiscoverShellyDevicesUseCase,
     ShellyPairingSessionService,
     ShellyDiscoveryService,
+
+    // Local: mantiene los coordinadores de laboratorio existentes.
+    ...(shellyMqttPlan.localWorkflow ? shellyMqttDevProviders : []),
+    // Base VPS DEV: cuatro gateways PG especializados.
+    ...(shellyMqttPlan.vpsPgOnly ? shellyMqttPgDevProviders : []),
+    // VPS pairing: servicios internos bajo opt-in y precondiciones estrictas.
+    // Los controllers y el worker de autenticacion siguen fuera de este perfil.
+    ...(shellyMqttPlan.vpsPairing ? shellyMqttVpsPairingProviders : []),
+    ...(shellyMqttPlan.vpsPairing ? shellyMqttVpsBootstrapProviders : []),
+    ...(shellyMqttPlan.vpsRevocationWorker
+      ? shellyMqttVpsRevocationProviders
+      : []),
+
+    // Auth SQL requires its opt-in; VPS adds the worker only with a separate
+    // worker opt-in and the already validated VPS pairing profile.
+    ...(shellyMqttPlan.localAuthWorker ? shellyMqttAuthDevProviders : []),
+    ...(shellyMqttPlan.vpsAuthWorker
+      ? shellyMqttVpsAuthWorkerProviders
+      : shellyMqttPlan.vpsAuthPgOnly ? shellyMqttAuthPgDevProviders : []),
 
     {
       provide: DeviceControlPublisher,
