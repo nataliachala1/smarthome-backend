@@ -25,8 +25,12 @@ import { EncryptedMqttPreparationSecretPort } from '../secrets/encrypted-mqtt-pr
 export const MQTT_LEASE_GATEWAY = Symbol('MQTT_LEASE_GATEWAY');
 export const MQTT_CONFIRMER_GATEWAY = Symbol('MQTT_CONFIRMER_GATEWAY');
 
-/** El opt-in se aplica al iniciar el proceso, nunca por un campo HTTP. */
-export const shellyMqttDevProviders: Provider[] = [
+/**
+ * VPS DEV: SOLO gateways PostgreSQL especializados. Sus factories validan
+ * cuenta, destino, TLS y privilegios; no registran Mosquitto, acciones ni HTTP.
+ * El modo de conexion sigue requiriendo opt-in explicito de entorno.
+ */
+export const shellyMqttPgDevProviders: Provider[] = [
   {
     provide: MqttReserverPgGateway,
     inject: [ConfigService],
@@ -55,6 +59,12 @@ export const shellyMqttDevProviders: Provider[] = [
       c.get<string>('MQTT_SECRET_DATABASE_URL'), requireShellyMqttDeploymentMode(),
     ),
   },
+  // El perfil DB-only termina aqui: no se crean acciones ni identidades MQTT.
+];
+
+/** Flujo local de laboratorio legado; conserva el comportamiento anterior. */
+export const shellyMqttDevProviders: Provider[] = [
+  ...shellyMqttPgDevProviders,
   {
     provide: PgMqttPrivilegedReservationPort,
     inject: [MqttReserverPgGateway],

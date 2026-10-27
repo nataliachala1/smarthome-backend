@@ -50,3 +50,29 @@ export function requireShellyMqttDeploymentMode(
   if (mode === 'off') throw new Error('MQTT_DEV_DI_DISABLED');
   return mode;
 }
+
+/**
+ * Decide grupos de providers en un solo punto; NO habilita conexiones MQTT.
+ * Para VPS DEV se permiten exclusivamente las factories SQL.
+ */
+export interface ShellyMqttProviderPlan {
+  readonly mode: ShellyMqttDeploymentMode;
+  readonly localWorkflow: boolean;
+  readonly vpsPgOnly: boolean;
+  readonly localAuthWorker: boolean;
+  readonly vpsAuthPgOnly: boolean;
+}
+
+export function selectShellyMqttProviderPlan(
+  env: Environment = process.env,
+): ShellyMqttProviderPlan {
+  const mode = selectShellyMqttDeploymentMode(env);
+  const authRequested = env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED === 'true';
+  return {
+    mode,
+    localWorkflow: mode === 'local-dev',
+    vpsPgOnly: mode === 'vps-dev-tls',
+    localAuthWorker: mode === 'local-dev' && authRequested,
+    vpsAuthPgOnly: mode === 'vps-dev-tls' && authRequested,
+  };
+}

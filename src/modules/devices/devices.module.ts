@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { ShellyMqttPrepareController } from './presentation/controllers/shelly-mqtt-prepare.controller';
 import { ShellyMqttBootstrapController } from './presentation/controllers/shelly-mqtt-bootstrap.controller';
 import { ShellyMqttEnableController } from './presentation/controllers/shelly-mqtt-enable.controller';
-import { shellyMqttDevProviders } from './infrastructure/messaging/shelly-mqtt-dev.providers';
-import { shellyMqttAuthDevProviders } from './infrastructure/messaging/shelly-mqtt-auth-dev.providers';
-import { selectShellyMqttDeploymentMode } from './infrastructure/messaging/shelly-mqtt-deployment-mode';
+import { shellyMqttDevProviders, shellyMqttPgDevProviders } from './infrastructure/messaging/shelly-mqtt-dev.providers';
+import { shellyMqttAuthDevProviders, shellyMqttAuthPgDevProviders } from './infrastructure/messaging/shelly-mqtt-auth-dev.providers';
+import { selectShellyMqttProviderPlan } from './infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 import { AuthModule } from '../auth/auth.module';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -44,19 +44,20 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
 
 import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
 
+// Se decide una sola vez al cargar el modulo. Nunca a partir de HTTP.
+const shellyMqttPlan = selectShellyMqttProviderPlan();
+
 @Module({
   imports: [AuthModule, RealtimeModule],
 
   controllers: [
     DevicesController,
     ShellyController,
-    ...(process.env.NODE_ENV === 'development' &&
-    process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true' &&
+    ...(shellyMqttPlan.localWorkflow &&
     process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true'
       ? [ShellyMqttBootstrapController, ShellyMqttEnableController] : []),
     // Endpoint controlado: no existe fuera del entorno development+opt-in.
-    ...(process.env.NODE_ENV === 'development' &&
-    process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true'
+    ...(shellyMqttPlan.localWorkflow
       ? [ShellyMqttPrepareController]
       : []),
   ],
@@ -86,15 +87,15 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     ShellyPairingSessionService,
     ShellyDiscoveryService,
 
-    // Opt-in local o VPS DEV aislado. Sin endpoints de pairing en VPS.
-    ...(selectShellyMqttDeploymentMode() !== 'off'
-      ? shellyMqttDevProviders : []),
+    // Local: mantiene los coordinadores de laboratorio existentes.
+    ...(shellyMqttPlan.localWorkflow ? shellyMqttDevProviders : []),
+    // VPS DEV: SOLO cuatro gateways PG (reserver, lease, confirmer, secret).
+    ...(shellyMqttPlan.vpsPgOnly ? shellyMqttPgDevProviders : []),
 
-    // Subsystem de autenticacion inerte salvo doble opt-in en desarrollo;
-    // no endpoint, timer ni ejecucion automatica sobre el broker.
-    ...(selectShellyMqttDeploymentMode() !== 'off' &&
-    process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED === 'true'
-      ? shellyMqttAuthDevProviders : []),
+    // Los dos gateways PG de autenticacion requieren un segundo opt-in.
+    // En VPS no se registra el worker, transport MQTT ni administrador broker.
+    ...(shellyMqttPlan.localAuthWorker ? shellyMqttAuthDevProviders : []),
+    ...(shellyMqttPlan.vpsAuthPgOnly ? shellyMqttAuthPgDevProviders : []),
 
     {
       provide: DeviceControlPublisher,

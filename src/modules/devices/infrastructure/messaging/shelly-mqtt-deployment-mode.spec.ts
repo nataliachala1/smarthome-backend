@@ -1,6 +1,7 @@
 import {
   requireShellyMqttDeploymentMode,
   selectShellyMqttDeploymentMode,
+  selectShellyMqttProviderPlan,
 } from './shelly-mqtt-deployment-mode';
 
 const password = 'SYNTHETIC_NOT_A_REAL_SECRET';
@@ -68,4 +69,50 @@ describe('MQTT - seleccion segura de perfiles de DI', () => {
       ...vps(), DATABASE_URL: 'not-a-url',
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
+
+  it('mantiene VPS DEV limitado a DB-only sin coordinadores MQTT', () => {
+    expect(selectShellyMqttProviderPlan(vps())).toEqual({
+      mode: 'vps-dev-tls',
+      localWorkflow: false,
+      vpsPgOnly: true,
+      localAuthWorker: false,
+      vpsAuthPgOnly: false,
+    });
+  });
+
+  it('permite SQL RPC/auth en VPS solo con el segundo opt-in', () => {
+    const env = { ...vps(), SHELLY_MQTT_AUTH_DEV_DI_ENABLED: 'true' };
+    expect(selectShellyMqttProviderPlan(env)).toMatchObject({
+      vpsPgOnly: true,
+      vpsAuthPgOnly: true,
+      localWorkflow: false,
+      localAuthWorker: false,
+    });
+  });
+
+  it('mantiene el flujo local y no selecciona PG-only VPS', () => {
+    const env = {
+      NODE_ENV: 'development',
+      SHELLY_MQTT_DEV_DI_ENABLED: 'true',
+      SHELLY_MQTT_AUTH_DEV_DI_ENABLED: 'true',
+    };
+    expect(selectShellyMqttProviderPlan(env)).toMatchObject({
+      mode: 'local-dev',
+      localWorkflow: true,
+      vpsPgOnly: false,
+      localAuthWorker: true,
+      vpsAuthPgOnly: false,
+    });
+  });
+
+  it('no registra providers adicionales sin opt-in', () => {
+    expect(selectShellyMqttProviderPlan({ NODE_ENV: 'production' })).toEqual({
+      mode: 'off',
+      localWorkflow: false,
+      vpsPgOnly: false,
+      localAuthWorker: false,
+      vpsAuthPgOnly: false,
+    });
+  });
+
 });

@@ -11,11 +11,8 @@ import { requireShellyMqttDeploymentMode } from './shelly-mqtt-deployment-mode';
 export const MQTT_RPC_AUTH_GATEWAY = Symbol('MQTT_RPC_AUTH_GATEWAY');
 export const MQTT_CONFIRM_AUTH_GATEWAY = Symbol('MQTT_CONFIRM_AUTH_GATEWAY');
 
-/**
- * Solo DI dev y SIN endpoints, cron, autoejecución ni MQTT físico. El worker
- * queda disponible para un orquestador interno futuro tras activar SQL029.
- */
-export const shellyMqttAuthDevProviders: Provider[] = [
+/** Solo conexiones SQL RPC y confirmacion. No registra transportes o workers. */
+export const shellyMqttAuthPgDevProviders: Provider[] = [
   {
     provide: MQTT_RPC_AUTH_GATEWAY,
     inject: [ConfigService],
@@ -30,6 +27,12 @@ export const shellyMqttAuthDevProviders: Provider[] = [
       c.get<string>('MQTT_AUTH_DATABASE_URL'), 'confirm', requireShellyMqttDeploymentMode(),
     ),
   },
+  // El perfil DB-only termina aqui.
+];
+
+/** Worker local original; permanece sin timer ni ejecución automática. */
+export const shellyMqttAuthDevProviders: Provider[] = [
+  ...shellyMqttAuthPgDevProviders,
   {
     provide: PgMqttRpcChallengePort,
     inject: [MQTT_RPC_AUTH_GATEWAY],
