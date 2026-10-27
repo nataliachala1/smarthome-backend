@@ -44,6 +44,44 @@ describe('ProvisionShellyDeviceUseCase production safety', () => {
     expect(createDevice.execute).not.toHaveBeenCalled();
   });
 
+  it('blocks legacy provisioning in development before configuring the Shelly', async () => {
+    const identify = { execute: jest.fn() };
+
+    const rpc = {
+      configureMqtt: jest.fn(),
+      reboot: jest.fn(),
+      waitForMqttConnection: jest.fn(),
+    };
+
+    const createDevice = { execute: jest.fn() };
+
+    const config = {
+      get: jest.fn((key: string) =>
+        key === 'NODE_ENV' ? 'development' : undefined,
+      ),
+    };
+
+    const useCase = new ProvisionShellyDeviceUseCase(
+      {} as never,
+      config as never,
+      identify as never,
+      rpc as never,
+      createDevice as never,
+    );
+
+    await expect(useCase.execute(input)).rejects.toMatchObject({
+      response: {
+        code: 'SHELLY_LEGACY_PROVISION_DISABLED',
+      },
+    });
+
+    expect(identify.execute).not.toHaveBeenCalled();
+    expect(rpc.configureMqtt).not.toHaveBeenCalled();
+    expect(rpc.reboot).not.toHaveBeenCalled();
+    expect(rpc.waitForMqttConnection).not.toHaveBeenCalled();
+    expect(createDevice.execute).not.toHaveBeenCalled();
+  });
+
   it('refuses an unimplemented EMQX Serverless identity adapter in any environment', async () => {
     const identify = { execute: jest.fn() };
     const config = {

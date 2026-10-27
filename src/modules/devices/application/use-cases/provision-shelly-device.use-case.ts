@@ -204,5 +204,13 @@ export class ProvisionShellyDeviceUseCase {
           'El aprovisionamiento productivo requiere credenciales MQTT individuales y verificación del cliente; este flujo local no las emite.',
       });
     }
+
+    throw new ServiceUnavailableException({
+      code: 'SHELLY_LEGACY_PROVISION_DISABLED',
+      message:
+        'El aprovisionamiento heredado está deshabilitado. ' +
+        'Utiliza las sesiones de vinculación Shelly con ' +
+        'credenciales MQTT individuales y autenticación verificada.',
+    });
   }
 }

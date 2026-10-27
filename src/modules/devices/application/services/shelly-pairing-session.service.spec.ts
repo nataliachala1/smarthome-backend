@@ -222,6 +222,7 @@ describe('ShellyPairingSessionService', () => {
       .mockResolvedValueOnce([connected])
       .mockResolvedValueOnce([connected])
       .mockResolvedValueOnce([connected])
+      .mockResolvedValueOnce([{ completed: true }])
       .mockResolvedValueOnce([completed]);
     tx.device.create.mockResolvedValueOnce({
       id_device: completed.completed_device_id,
@@ -250,7 +251,9 @@ describe('ShellyPairingSessionService', () => {
     expect(createCalls).toMatchObject([
       [{ data: { connectivity_status: 'OFFLINE' } }],
     ]);
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(tx.$queryRaw.mock.calls)).toContain(
+      'devices.fn_finish_verified_pairing',
+    );
   });
 
   it('marks mobile-reported identity as unverified and cannot mark pairing complete', async () => {

@@ -1,4 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ShellyMqttPrepareController } from './presentation/controllers/shelly-mqtt-prepare.controller';
+import { ShellyMqttBootstrapController } from './presentation/controllers/shelly-mqtt-bootstrap.controller';
+import { ShellyMqttEnableController } from './presentation/controllers/shelly-mqtt-enable.controller';
+import { shellyMqttDevProviders } from './infrastructure/messaging/shelly-mqtt-dev.providers';
+import { shellyMqttAuthDevProviders } from './infrastructure/messaging/shelly-mqtt-auth-dev.providers';
+import { selectShellyMqttDeploymentMode } from './infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 import { AuthModule } from '../auth/auth.module';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -41,7 +47,19 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
 @Module({
   imports: [AuthModule, RealtimeModule],
 
-  controllers: [DevicesController, ShellyController],
+  controllers: [
+    DevicesController,
+    ShellyController,
+    ...(process.env.NODE_ENV === 'development' &&
+    process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true' &&
+    process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true'
+      ? [ShellyMqttBootstrapController, ShellyMqttEnableController] : []),
+    // Endpoint controlado: no existe fuera del entorno development+opt-in.
+    ...(process.env.NODE_ENV === 'development' &&
+    process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true'
+      ? [ShellyMqttPrepareController]
+      : []),
+  ],
 
   providers: [
     ListHomeDevicesUseCase,
@@ -67,6 +85,16 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
     DiscoverShellyDevicesUseCase,
     ShellyPairingSessionService,
     ShellyDiscoveryService,
+
+    // Opt-in local o VPS DEV aislado. Sin endpoints de pairing en VPS.
+    ...(selectShellyMqttDeploymentMode() !== 'off'
+      ? shellyMqttDevProviders : []),
+
+    // Subsystem de autenticacion inerte salvo doble opt-in en desarrollo;
+    // no endpoint, timer ni ejecucion automatica sobre el broker.
+    ...(selectShellyMqttDeploymentMode() !== 'off' &&
+    process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED === 'true'
+      ? shellyMqttAuthDevProviders : []),
 
     {
       provide: DeviceControlPublisher,

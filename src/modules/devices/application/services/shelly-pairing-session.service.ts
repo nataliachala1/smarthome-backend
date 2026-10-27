@@ -403,13 +403,19 @@ export class ShellyPairingSessionService {
           },
         });
 
-        await tx.$executeRaw`
-          UPDATE devices.device_pairing_session
-          SET status = 'COMPLETED', completed_device_id = ${device.id_device}::uuid
-          WHERE id_device_pairing_session = ${sessionId}::uuid
-            AND id_home = ${homeId}::uuid AND id_user = ${userId}::uuid
-            AND status = 'CONNECTED' AND expires_at > CURRENT_TIMESTAMP
+        // SQL029: misma transaccion Prisma que crea el device. Nunca cerrar
+        // la sesion antes de registrar mqtt_identity y asociar la operacion.
+        const [attached] = await tx.$queryRaw<{ completed: boolean }[]>`
+          SELECT devices.fn_finish_verified_pairing(
+            ${sessionId}::uuid, ${device.id_device}::uuid
+          ) AS completed
         `;
+        if (attached?.completed !== true) {
+          throw new ConflictException({
+            code: 'PAIRING_MQTT_ATTACH_NOT_CONFIRMED',
+            message: 'No se confirmo la asociacion MQTT del dispositivo.',
+          });
+        }
 
         const completed = await this.loadAndAuthorize(
           tx,
