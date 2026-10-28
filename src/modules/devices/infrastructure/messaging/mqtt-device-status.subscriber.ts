@@ -175,8 +175,6 @@ export class MqttDeviceStatusSubscriber
 
     const readAt = message.readAt ? new Date(message.readAt) : now;
 
-    const metricStartAt = this.getUtcDayStart(readAt);
-    const metricEndAt = this.addDays(metricStartAt, 1);
 
     const deviceData: {
       connectivity_status?: DeviceConnectivityStatus;
@@ -252,7 +250,7 @@ export class MqttDeviceStatusSubscriber
         readAt: Date;
       } | null = null;
 
-      let consumptionRecipients: { id_user: string }[] = [];
+      const consumptionRecipients: { id_user: string }[] = [];
 
       if (shouldCreateConsumption && powerW !== undefined) {
         const previousConsumption =

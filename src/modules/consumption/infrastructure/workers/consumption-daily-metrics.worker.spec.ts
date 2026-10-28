@@ -39,8 +39,8 @@ describe('ConsumptionDailyMetricsWorker', () => {
     const worker = new ConsumptionDailyMetricsWorker();
     await worker.onModuleInit();
     expect(query).toHaveBeenCalledTimes(2);
-    expect(query.mock.calls[0][0]).toContain('pg_has_role');
-    expect(query.mock.calls[1][0]).toContain('consumption.consumption_metric');
+    expect((query.mock.calls as unknown as string[][])[0]?.[0]).toContain('pg_has_role');
+    expect((query.mock.calls as unknown as string[][])[1]?.[0]).toContain('consumption.consumption_metric');
     await worker.onModuleDestroy();
     expect(end).toHaveBeenCalledTimes(1);
   });

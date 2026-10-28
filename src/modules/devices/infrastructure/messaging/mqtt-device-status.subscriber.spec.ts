@@ -50,11 +50,11 @@ describe('MQTT - persistencia independiente del estado', () => {
           updated_at: new Date('2026-10-28T10:00:00Z'),
         }),
       },
-      $transaction: jest.fn(async (callback: any) => {
+      $transaction: jest.fn((callback: (tx: typeof tx) => Promise<unknown>) => {
         transactions++;
 
         if (transactions === 2 && consumptionFailure) {
-          throw new Error('SIMULATED_CONSUMPTION_FAILURE');
+          return Promise.reject(new Error('SIMULATED_CONSUMPTION_FAILURE'));
         }
 
         return callback(tx);
@@ -68,7 +68,16 @@ describe('MQTT - persistencia independiente del estado', () => {
       { emitToUser } as never,
     );
 
-    const internal = subscriber as any;
+    const internal = subscriber as unknown as {
+      extractManufacturerDeviceId: (topic: string) => string | null;
+      parsePayload: (topic: string, payload: Buffer) => unknown;
+      findHomeRealtimeRecipients: (
+        tx: unknown,
+        deviceId: string,
+        homeId: string,
+      ) => Promise<{ id_user: string }[]>;
+      handleStatusMessage: (topic: string, payload: Buffer) => Promise<void>;
+    };
 
     jest
       .spyOn(internal, 'extractManufacturerDeviceId')
