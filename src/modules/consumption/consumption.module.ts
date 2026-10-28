@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConsumptionDailyMetricsWorker } from './infrastructure/workers/consumption-daily-metrics.worker';
 
 import { AuthModule } from '../auth/auth.module';
 
@@ -17,8 +18,9 @@ import { GetDeviceDailyConsumptionUseCase } from './application/use-cases/get-de
   imports: [AuthModule],
   controllers: [ConsumptionController, HomeConsumptionController],
   providers: [
-    ListDeviceConsumptionUseCase, 
-    GetDeviceConsumptionSummaryUseCase, 
+    ListDeviceConsumptionUseCase,
+    ConsumptionDailyMetricsWorker,
+    GetDeviceConsumptionSummaryUseCase,
     GetHomeConsumptionSummaryUseCase,
     ListHomeConsumptionUseCase,
     GetHomeDailyConsumptionUseCase,
