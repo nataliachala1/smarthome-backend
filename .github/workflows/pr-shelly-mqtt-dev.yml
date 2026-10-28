@@ -23,7 +23,7 @@ concurrency:
 jobs:
   verify:
     name: Verify backend (no deploy)
-    if: ${{ github.event.pull_request.head.ref == 'feat/shelly-mqtt-backend-vps' }}
+    if: ${{ github.event.pull_request.head.ref == 'feat/shelly-mqtt-backend-vps' || github.event.pull_request.head.ref == 'fix/mqtt-ingest-consumption-online' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
