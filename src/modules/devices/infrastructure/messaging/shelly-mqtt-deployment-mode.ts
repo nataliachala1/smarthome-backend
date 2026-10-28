@@ -35,7 +35,8 @@ function isVpsDevDatabaseUrl(raw: string | undefined): boolean {
     return ['postgres:', 'postgresql:'].includes(url.protocol) &&
       url.hostname === VPS_DEV_DATABASE_HOST && url.port === '5432' &&
       url.pathname === '/smarthome_dev' && Boolean(url.username) &&
-      Boolean(url.password) && !url.search && !url.hash;
+      Boolean(url.password) &&
+      (url.search === '' || url.search === '?sslmode=require') && !url.hash;
   } catch {
     return false;
   }
