@@ -197,6 +197,53 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
+  it.each(['DATABASE_URL', 'DATABASE_IOT_URL'] as const)(
+    'permite sslmode=require en la conexion general %s', (key) => {
+      const env = {
+        ...vpsPairing(),
+        [key]: `${vpsDevDatabase()}?sslmode=require`,
+      };
+
+      expect(selectShellyMqttProviderPlan(env).vpsPairing).toBe(true);
+      expect(selectShellyMqttProviderPlan(env).vpsRevocationWorker).toBe(true);
+    },
+  );
+
+  it.each([
+    '?sslmode=verify-ca',
+    '?sslmode=require&application_name=backend',
+    '?application_name=backend',
+    '?SSLMode=require',
+    '?sslmode=require&',
+  ])('rechaza el parámetro no autorizado %s en ambas conexiones generales', (query) => {
+    for (const key of ['DATABASE_URL', 'DATABASE_IOT_URL'] as const) {
+      const env = {
+        ...vpsPairing(),
+        [key]: `${vpsDevDatabase()}${query}`,
+      };
+
+      expect(selectShellyMqttProviderPlan(env).vpsPairing).toBe(false);
+      expect(selectShellyMqttProviderPlan(env).vpsRevocationWorker).toBe(false);
+    }
+  });
+
+  it.each([
+    ['MQTT_RESERVER_DATABASE_URL', 'smarthome_mqtt_reserver_dev_login'],
+    ['MQTT_LEASE_DATABASE_URL', 'smarthome_mqtt_lease_dev_login'],
+    ['MQTT_CONFIRMER_DATABASE_URL', 'smarthome_mqtt_confirmer_dev_login'],
+    ['MQTT_SECRET_DATABASE_URL', 'smarthome_mqtt_secret_dev_login'],
+    ['MQTT_REVOCATION_DATABASE_URL', 'smarthome_mqtt_revoke_dev_login'],
+  ] as const)(
+    'continúa rechazando parámetros en la conexión especializada %s', (key, username) => {
+      const env = {
+        ...vpsPairing(),
+        [key]: `${dedicatedDb(username)}?sslmode=require`,
+      };
+
+      expect(selectShellyMqttProviderPlan(env).vpsPairing).toBe(false);
+    },
+  );
+
   it('registra el worker de autenticación VPS solo con ambos opt-ins', () => {
     const env = {
       ...vpsPairing(),
