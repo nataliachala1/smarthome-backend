@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Injectable,
   Logger,
@@ -202,8 +203,7 @@ export class MqttDeviceStatusSubscriber
 
     const shouldCreateConsumption = typeof powerW === 'number';
 
-    const transactionResult = await this.prisma.$transaction(async (tx) => {
-      const updatedDevice = await tx.device.update({
+      const updatedDevice = await this.prisma.device.update({
         where: {
           id_device: device.id_device,
         },
@@ -218,11 +218,22 @@ export class MqttDeviceStatusSubscriber
         },
       });
 
-      const recipients = await this.findHomeRealtimeRecipients(
-        tx,
-        device.id_home,
-      );
+    let recipients: { id_user: string }[] = [];
 
+    try {
+      recipients = await this.prisma.$transaction(async (tx) =>
+        this.findHomeRealtimeRecipients(
+          tx,
+          device.id_device,
+          device.id_home,
+        ),
+      );
+    } catch (error: unknown) {
+      const name = error instanceof Error ? error.name : 'unknown';
+      this.logger.error(`MQTT_REALTIME_RECIPIENTS_FAILED: ${name}`);
+    }
+
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
       const notifications: CreatedNotification[] = [];
 
       let consumptionEvent: {
@@ -271,8 +282,13 @@ export class MqttDeviceStatusSubscriber
             previousConsumption?.energy_total_kwh ?? null,
           );
 
-        const createdConsumption = await tx.consumption.create({
-          data: {
+        // La ingesta no necesita consultar columnas adicionales al insertar.
+        // El agregado estadistico pertenece a un worker independiente.
+        const consumptionId = randomUUID();
+
+        await tx.consumption.createMany({
+          data: [{
+            id_consumption: consumptionId,
             id_device: device.id_device,
             id_home: device.id_home,
             power_w: powerW,
@@ -283,75 +299,25 @@ export class MqttDeviceStatusSubscriber
             frequency_hz: message.frequencyHz ?? null,
             temperature_c: message.temperatureC ?? null,
             read_at: readAt,
-          },
-          select: {
-            id_consumption: true,
-            id_device: true,
-            id_home: true,
-            power_w: true,
-            energy_delta_kwh: true,
-            energy_total_kwh: true,
-            voltage_v: true,
-            current_a: true,
-            frequency_hz: true,
-            temperature_c: true,
-            read_at: true,
-          },
+          }],
         });
 
-        consumptionRecipients = await this.findHomeRealtimeRecipients(
-          tx,
-          device.id_home,
-        );
-
         consumptionEvent = {
-          id: createdConsumption.id_consumption,
-          homeId: createdConsumption.id_home,
-          deviceId: createdConsumption.id_device,
+          id: consumptionId,
+          homeId: device.id_home,
+          deviceId: device.id_device,
           deviceName: device.name,
           manufacturerDeviceId: device.manufacturer_device_id,
-          powerW: Number(createdConsumption.power_w),
-          energyDeltaKwh: Number(createdConsumption.energy_delta_kwh),
-          energyTotalKwh:
-            createdConsumption.energy_total_kwh === null
-              ? null
-              : Number(createdConsumption.energy_total_kwh),
-          voltageV:
-            createdConsumption.voltage_v === null
-              ? null
-              : Number(createdConsumption.voltage_v),
-          currentA:
-            createdConsumption.current_a === null
-              ? null
-              : Number(createdConsumption.current_a),
-          frequencyHz:
-            createdConsumption.frequency_hz === null
-              ? null
-              : Number(createdConsumption.frequency_hz),
-          temperatureC:
-            createdConsumption.temperature_c === null
-              ? null
-              : Number(createdConsumption.temperature_c),
-          readAt: createdConsumption.read_at,
+          powerW,
+          energyDeltaKwh,
+          energyTotalKwh: message.energyTotalKwh ?? null,
+          voltageV: message.voltageV ?? null,
+          currentA: message.currentA ?? null,
+          frequencyHz: message.frequencyHz ?? null,
+          temperatureC: message.temperatureC ?? null,
+          readAt,
         };
-
-        await this.refreshDailyDeviceMetric(
-          tx,
-          device.id_device,
-          device.id_home,
-          metricStartAt,
-          metricEndAt,
-        );
-
-        const anomalyNotifications = await this.evaluateDailyConsumptionAnomaly(
-          tx,
-          device.id_device,
-          device.id_home,
-          metricStartAt,
-          metricEndAt,
-        );
-
-        notifications.push(...anomalyNotifications);
+        // Estadisticas y alertas: pendientes de worker con permisos propios.
       }
 
       return {
@@ -361,6 +327,23 @@ export class MqttDeviceStatusSubscriber
         consumptionEvent,
         consumptionRecipients,
       };
+    }).catch((error: unknown) => {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String(error.code)
+          : error instanceof Error
+            ? error.name
+            : 'unknown';
+
+      this.logger.error(`MQTT_CONSUMPTION_PERSISTENCE_FAILED: ${code}`);
+
+      return {
+        updatedDevice,
+        recipients,
+        notifications: [] as CreatedNotification[],
+        consumptionEvent: null,
+        consumptionRecipients: [] as { id_user: string }[],
+      };
     });
 
     /*
@@ -369,7 +352,7 @@ export class MqttDeviceStatusSubscriber
      * podrían ser revertidos por un rollback.
      */
     if (transactionResult.consumptionEvent) {
-      for (const recipient of transactionResult.consumptionRecipients) {
+      for (const recipient of transactionResult.recipients) {
         this.realtimeEventsService.emitToUser(
           recipient.id_user,
           'consumption.created',
@@ -439,7 +422,7 @@ export class MqttDeviceStatusSubscriber
     }
 
     this.logger.log(
-      `Estado MQTT actualizado para ${manufacturerDeviceId}. Consumo guardado=${shouldCreateConsumption}`,
+      `Estado MQTT actualizado para ${manufacturerDeviceId}. Consumo guardado=${transactionResult.consumptionEvent !== null}`,
     );
   }
 
@@ -877,7 +860,7 @@ export class MqttDeviceStatusSubscriber
       },
     });
 
-    const recipients = await this.findHomeRealtimeRecipients(tx, homeId);
+    const recipients = await this.findHomeRealtimeRecipients(tx, deviceId, homeId);
 
     if (recipients.length === 0) {
       return [];
@@ -927,23 +910,15 @@ export class MqttDeviceStatusSubscriber
 
   private async findHomeRealtimeRecipients(
     tx: Prisma.TransactionClient,
+    deviceId: string,
     homeId: string,
   ): Promise<{ id_user: string }[]> {
     return tx.$queryRaw<{ id_user: string }[]>`
-      SELECT DISTINCT recipient.id_user
-      FROM (
-        SELECT h.created_by AS id_user
-        FROM homes.home h
-        WHERE h.id_home = ${homeId}::uuid
-
-        UNION
-
-        SELECT hm.id_user AS id_user
-        FROM homes.home_member hm
-        WHERE hm.id_home = ${homeId}::uuid
-          AND hm.status = 'ACTIVE'
-      ) recipient
-      WHERE recipient.id_user IS NOT NULL
+      SELECT id_user
+      FROM homes.fn_mqtt_realtime_recipients(
+        ${deviceId}::uuid,
+        ${homeId}::uuid
+      )
     `;
   }
 }
