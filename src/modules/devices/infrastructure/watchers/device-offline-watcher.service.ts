@@ -120,6 +120,7 @@ export class DeviceOfflineWatcherService
       );
 
       const recipients = await this.findHomeRealtimeRecipients(
+        updated.id_device,
         updated.id_home,
       );
 
@@ -144,21 +145,15 @@ export class DeviceOfflineWatcherService
   }
 
   private async findHomeRealtimeRecipients(
+    deviceId: string,
     homeId: string,
   ): Promise<RealtimeRecipient[]> {
-    return await this.prisma.$queryRaw<RealtimeRecipient[]>`
-      SELECT h.created_by AS id_user
-      FROM homes.home h
-      WHERE h.id_home = ${homeId}::uuid
-        AND h.status = 'ACTIVE'
-        AND h.deleted_at IS NULL
-
-      UNION
-
-      SELECT hm.id_user
-      FROM homes.home_member hm
-      WHERE hm.id_home = ${homeId}::uuid
-        AND hm.status = 'ACTIVE'
+    return this.prisma.$queryRaw<RealtimeRecipient[]>`
+      SELECT id_user
+      FROM homes.fn_mqtt_realtime_recipients(
+        ${deviceId}::uuid,
+        ${homeId}::uuid
+      )
     `;
   }
 }
