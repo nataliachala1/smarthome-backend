@@ -67,7 +67,8 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     const c = setup(false);
     await c.internal.handleStatusMessage(topic, rpc);
     expect(c.prisma.device.update).not.toHaveBeenCalled();
-    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(c.tx.consumption.findFirst).not.toHaveBeenCalled();
     expect(c.tx.device.update).toHaveBeenCalledTimes(1);
     expect(c.tx.consumption.createMany).toHaveBeenCalledTimes(1);
     expect(c.emitToUser).toHaveBeenCalledWith('user-1', 'consumption.created', expect.anything());

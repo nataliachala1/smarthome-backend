@@ -87,6 +87,12 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     expect(ctx.prisma.device.update).not.toHaveBeenCalled();
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);
     expect(ctx.tx.consumption.createMany).toHaveBeenCalledTimes(1);
+    expect(ctx.tx.consumption.findFirst).not.toHaveBeenCalled();
+    expect(ctx.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    // First query inserts SQL035; second reads only granted columns.
+    const previousSql = (ctx.tx.$queryRaw.mock.calls[1][0] as TemplateStringsArray).join('?');
+    expect(previousSql).toMatch(/SELECT energy_total_kwh\s+FROM consumption\.consumption/);
+    expect(previousSql).not.toMatch(/SELECT\s+\*/i);
     expect(ctx.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
       data: [expect.objectContaining({ energy_delta_kwh: 0, power_w: 15 })],
     }));
@@ -96,6 +102,18 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     expect(ctx.emitToUser).toHaveBeenCalledWith(
       'user-1', 'consumption.created', expect.objectContaining({ powerW: 15 }),
     );
+  });
+
+  it('calcula el delta con la lectura SQL limitada al rol ingest', async () => {
+    const ctx = setup(false, 15);
+    ctx.tx.$queryRaw
+      .mockResolvedValueOnce([{ id_device: 'device-1' }])
+      .mockResolvedValueOnce([{ energy_total_kwh: 1 }]);
+    await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
+    expect(ctx.tx.consumption.findFirst).not.toHaveBeenCalled();
+    expect(ctx.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ energy_delta_kwh: 0.5, power_w: 15 })],
+    }));
   });
 
   it('si falla el consumo no emite estado ni consumo', async () => {

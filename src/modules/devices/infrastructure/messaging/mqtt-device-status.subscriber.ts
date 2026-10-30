@@ -312,21 +312,36 @@ export class MqttDeviceStatusSubscriber
           message.energyTotalKwh === undefined ||
           message.energyTotalKwh === null
             ? null
-            : await tx.consumption.findFirst({
-                where: {
-                  id_device: device.id_device,
-                  id_home: device.id_home,
-                  energy_total_kwh: {
-                    not: null,
+            : isFlespi
+              // smarthome_ingest has column-level SELECT grants only. Prisma
+              // findFirst may read additional columns under this model.
+              // Read only the four authorized fields; keep legacy unchanged.
+              ? ((await tx.$queryRaw<
+                  Array<{ energy_total_kwh: Prisma.Decimal | null }>
+                >`
+                  SELECT energy_total_kwh
+                  FROM consumption.consumption
+                  WHERE id_device = ${device.id_device}::uuid
+                    AND id_home = ${device.id_home}::uuid
+                    AND energy_total_kwh IS NOT NULL
+                  ORDER BY read_at DESC
+                  LIMIT 1
+                `)[0] ?? null)
+              : await tx.consumption.findFirst({
+                  where: {
+                    id_device: device.id_device,
+                    id_home: device.id_home,
+                    energy_total_kwh: {
+                      not: null,
+                    },
                   },
-                },
-                orderBy: {
-                  read_at: 'desc',
-                },
-                select: {
-                  energy_total_kwh: true,
-                },
-              });
+                  orderBy: {
+                    read_at: 'desc',
+                  },
+                  select: {
+                    energy_total_kwh: true,
+                  },
+                });
 
         const energyDeltaKwh =
           message.energyDeltaKwh ??
