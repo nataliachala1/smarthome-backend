@@ -11,7 +11,7 @@ Este documento define **en qué orden** y **con qué comprobaciones** se desplie
 - El backend usa las tablas `config.home_energy_tariff` y `config.home_energy_goal`, las funciones `consumption.fn_can_read_detail` / `homes.fn_can_manage_home` y las políticas RLS de SQL034. Si se despliega **sin** SQL034 en la base, todos los endpoints de energía fallan (500).
 - Un push a `dev` del backend ejecuta `.github/workflows/ci-deploy.yml`: lint, tsc, test y build; publica la imagen en GHCR y, si existen los secretos `DOKPLOY_DEPLOY_WEBHOOK` y `DEPLOYMENT_HEALTH_URL`, **despliega en Dokploy**.
 - En la base de datos, el job `deploy` de su workflow está deshabilitado (`if: ${{ false }}`): **que SQL034 esté fusionado en GitHub no significa que esté aplicado en el VPS.**
-- El workflow de validación de PR (`pr-shelly-mqtt-dev.yml`) solo corre para ramas de Shelly/MQTT; **no valida este PR**. La validación previa al merge se hizo localmente (sección 3).
+- Todo PR hacia `dev` se valida con **`.github/workflows/pr-validate-dev.yml`** ("PR validation (dev) - no deploy"): `npm ci`, lint, typecheck, pruebas unitarias, build y las pruebas aisladas de MQTT. **No** publica imágenes, **no** usa secretos ni webhooks, **no** despliega en Dokploy y **no** se conecta a bases de datos del VPS. El workflow `pr-shelly-mqtt-dev.yml` se conserva sin cambios para las ramas de Shelly/MQTT.
 
 ---
 
@@ -36,17 +36,38 @@ Si el paso 4 da **NO DESPLEGAR**, no se continúa: se corrige primero la base (p
 
 ## 3. Validación del backend antes del merge
 
-Ejecutado sobre la rama del PR #15:
+Ejecutado sobre la rama del PR #15, después de las correcciones de la revisión (P1–P4):
 
 | Validación | Resultado |
 |---|---|
 | `npm run lint` | sin errores |
 | `npx tsc --noEmit -p tsconfig.build.json` | sin errores |
-| `npm test -- --runInBand` | 914 pruebas, 0 FAIL |
+| `npm test -- --runInBand` | 929 pruebas aprobadas, 9 omitidas, 0 FAIL |
 | `npm run build` | sin errores |
+| `test/mqtt-namespace-security.e2e-spec.ts` (aislada, sin broker) | 31/31 |
 | `scripts/test-energy-access.ps1` (PostgreSQL real, 96 changesets, RLS, LOGIN no privilegiado) | 21/21 |
+| CI del PR: `pr-validate-dev.yml` | en verde; el enlace a la ejecución del SHA final va en el PR |
 
-Para repetirlo localmente: ver `docs/SQL034_ENERGY_API.md`, sección 9.
+Para repetirlo localmente: ver `docs/SQL034_ENERGY_API.md`, sección 9. La matriz de casos y las pruebas que los demuestran están en `docs/SQL034_EVIDENCIA_VALIDACION.md`.
+
+### 3.1 Fallos E2E preexistentes (módulo de consumo)
+
+`test/consumption-access-postgres.e2e-spec.ts` **no** forma parte de SQL034. Se ejecutó dos veces, cada una sobre una base PostgreSQL nueva con las mismas migraciones y la fixture oficial:
+
+| Código probado | Resultado |
+|---|---|
+| `dev` antes de SQL034 (commit `1cbaca2`) | 5 fallos, 23 aprobadas, 28 en total |
+| Rama del PR #15 | 5 fallos, 23 aprobadas, 28 en total |
+
+Son **las mismas 5 pruebas** en ambos casos:
+
+1. `preserves access to removed/inactive device histories for user 2`
+2. `does not turn historical visibility into permission to control an inactive device`
+3. `never combines a device from one home with authorization for another`
+4. `returns known kWh/W totals, date filters and limits without foreign rows`
+5. `limits positive direct reads and historical metadata to the authorized home`
+
+Por eso se clasifican como **preexistentes** y no introducidas por este PR. Su causa es que las pruebas esperan que el MEMBER vea historiales de dispositivos desactivados o eliminados, y la release 018 de la base solo le muestra lecturas de dispositivos `ACTIVE`. Su corrección corresponde al módulo de consumo.
 
 ---
 
@@ -163,36 +184,6 @@ Las pruebas 1–3 no modifican datos. Si se quiere probar una escritura del OWNE
 
 ---
 
-## 7. Texto sugerido para la descripción final del PR #15
+## 7. Descripción del PR #15
 
-```markdown
-## SQL034 — API de tarifas, presupuesto mensual y costo estimado
-
-Implementa en el backend la integración de SQL034 (smarthome-database PR #14).
-
-### Endpoints (`/api/v1/homes/:homeId/energy`)
-- `GET /tariffs`, `GET /tariffs/current?at=`, `POST /tariffs`
-- `GET /goals?month=`, `PUT /goals/:month`
-- `GET /summary?month=`: kWh y costo estimado con la tarifa histórica de cada lectura
-
-### Seguridad
-JWT + `PrismaRlsService.withUserContext` + `fn_can_read_detail` / `fn_can_manage_home` + RLS.
-OWNER configura; MEMBER con `view_consumption` consulta; GUEST sin datos económicos.
-
-### Validación
-- lint, tsc, build: OK
-- 914 pruebas unitarias
-- 21/21 pruebas de integración con PostgreSQL real, RLS y LOGIN no privilegiado (`scripts/test-energy-access.ps1`)
-
-### Documentación
-`docs/SQL034_ENERGY_API.md`, `docs/SQL034_CONTRATO_MOVIL.md`, `docs/SQL034_DESPLIEGUE.md`, `docs/ROLES_Y_PERMISOS.md`
-
-### Dependencia de despliegue
-NO fusionar hasta que `scripts/verify-sql034-dev.sql` dé **LISTO** contra la BD DEV del VPS.
-El merge a `dev` despliega automáticamente (`ci-deploy.yml`). No se intervino el VPS.
-
-### Límites conocidos
-- El costo es una estimación con tarifa referencial; no es el valor de la factura.
-- El MEMBER solo ve el consumo de dispositivos activos con permiso (regla de la release 018): su total puede ser menor que el del OWNER.
-- `test/consumption-access-postgres.e2e-spec.ts` tiene 5 fallos que ya existían en `dev` antes de SQL034 (módulo de consumo).
-```
+El texto completo de la descripción del PR está en `docs/SQL034_EVIDENCIA_VALIDACION.md`, sección 4. Resume las funcionalidades, los endpoints, la referencia a SQL034/001 y SQL034/002, la evidencia del SHA final, los fallos E2E preexistentes y la dependencia de infraestructura: **no hacer merge hasta que `scripts/verify-sql034-dev.sql` dé 19 PASS y LISTO en PostgreSQL DEV**.

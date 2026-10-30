@@ -304,6 +304,8 @@ Ejemplo verificado con la fixture de pruebas: OWNER 1,3 kWh; MEMBER 0,3 kWh. Si 
 | 409 | `ENERGY_TARIFF_DUPLICATE` | Tarifa con una `effectiveFrom` ya registrada en el hogar |
 | 409 | `ENERGY_GOAL_CONCURRENT_WRITE` | Dos escrituras simultáneas del mismo mes; reintentar |
 
+Si PostgreSQL rechaza la operación con `42501` (privilegio insuficiente o política RLS), el backend responde según el tipo de operación: en `GET` responde `403 ENERGY_READ_FORBIDDEN` y en `POST`/`PUT` responde `403 ENERGY_MANAGE_FORBIDDEN`. El cuerpo nunca incluye el mensaje SQL, el nombre de la tabla ni el rol.
+
 ```json
 { "code": "ENERGY_READ_FORBIDDEN", "message": "Sin permisos para consultar la configuración energética de este hogar" }
 ```
