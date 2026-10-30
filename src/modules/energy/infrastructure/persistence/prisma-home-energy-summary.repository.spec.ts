@@ -103,4 +103,17 @@ describe('PrismaHomeEnergySummaryRepository', () => {
     ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
     expect(db.queries).toHaveLength(1);
   });
+
+  it('42501 (privilegio o política RLS) se reporta como lectura denegada', async () => {
+    const permissionDenied = Object.assign(new Error('permission denied'), {
+      meta: { driverAdapterError: { cause: { originalCode: '42501' } } },
+    });
+    const withUserContext = jest.fn(() => Promise.reject(permissionDenied));
+
+    await expect(
+      new PrismaHomeEnergySummaryRepository({
+        withUserContext,
+      } as unknown as PrismaRlsService).getMonthFacts(USER_ID, PERIOD),
+    ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
+  });
 });

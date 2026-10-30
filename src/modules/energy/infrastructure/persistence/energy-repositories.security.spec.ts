@@ -175,11 +175,28 @@ describe('Seguridad del repositorio de tarifas', () => {
     expect(db.tx.home_energy_tariff.create).not.toHaveBeenCalled();
   });
 
-  it('traduce el rechazo de PostgreSQL (42501, política RLS) y el duplicado (P2002)', async () => {
+  it('42501 (privilegio o política RLS) en LECTURA se reporta como lectura denegada, no como escritura', async () => {
+    const repository = new PrismaHomeEnergyTariffRepository(
+      failingDatabase(postgresPermissionDenied),
+    );
+
+    await expect(
+      repository.findAllByHome(USER_ID, HOME_ID),
+    ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
+    await expect(
+      repository.findEffectiveAt(USER_ID, HOME_ID, '2026-11-15'),
+    ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
+  });
+
+  it('42501 en ESCRITURA se reporta como gestión denegada; P2002 como duplicado', async () => {
     await expect(
       new PrismaHomeEnergyTariffRepository(
         failingDatabase(postgresPermissionDenied),
-      ).findAllByHome(USER_ID, HOME_ID),
+      ).create(USER_ID, {
+        homeId: HOME_ID,
+        unitPriceCopKwh: '950.25',
+        effectiveFrom: '2026-11-01',
+      }),
     ).rejects.toBeInstanceOf(EnergyManageAccessDeniedError);
 
     await expect(
@@ -257,11 +274,24 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     expect(db.tx.home_energy_goal.upsert).not.toHaveBeenCalled();
   });
 
-  it('traduce 42501 a 403 y la escritura simultánea (P2002) a 409', async () => {
+  it('42501 en LECTURA del mes se reporta como lectura denegada', async () => {
     await expect(
       new PrismaHomeEnergyGoalRepository(
         failingDatabase(postgresPermissionDenied),
       ).findByMonth(USER_ID, HOME_ID, '2026-11'),
+    ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
+  });
+
+  it('42501 en ESCRITURA se reporta como gestión denegada; P2002 como escritura simultánea', async () => {
+    await expect(
+      new PrismaHomeEnergyGoalRepository(
+        failingDatabase(postgresPermissionDenied),
+      ).upsert(USER_ID, {
+        homeId: HOME_ID,
+        month: '2026-11',
+        monthlyBudgetCop: '1.00',
+        targetKwh: null,
+      }),
     ).rejects.toBeInstanceOf(EnergyManageAccessDeniedError);
 
     await expect(
