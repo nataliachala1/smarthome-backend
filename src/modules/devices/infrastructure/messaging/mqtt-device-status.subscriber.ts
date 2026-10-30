@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { connect, MqttClient } from 'mqtt';
 import { MqttRuntimeService } from './mqtt-runtime.service';
+import { parseFlespiShellyTelemetry } from './flespi-shelly-telemetry.parser';
 
 import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
 
@@ -455,6 +456,14 @@ export class MqttDeviceStatusSubscriber
 
       if (this.mqtt.topics.parseStatus(topic)?.kind === 'internal') {
         return this.parseSmartHomePayload(parsed);
+      }
+
+      // Separate, strict parser for the single-device flespi ACL.
+      // Legacy Mosquitto behavior stays unchanged.
+      if (this.mqtt.config.flespiDeviceId) {
+        const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+        if (kind !== 'shelly-switch' && kind !== 'shelly-events') return null;
+        return parseFlespiShellyTelemetry(kind, parsed, this.mqtt.config.switchId);
       }
 
       const shellySwitchStatus = this.extractShellySwitchStatus(topic, parsed);
