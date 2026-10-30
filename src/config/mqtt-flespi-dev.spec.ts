@@ -11,6 +11,7 @@ const base = () => ({
   SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'true',
   SHELLY_MQTT_VPS_DEV_BROKER_HOST: 'mqtt.flespi.io',
   MQTT_BROKER_PROVIDER: 'flespi',
+  MQTT_FLESPI_DEVICE_ID: 'shelly1pmg4-d885acf06990',
   MQTT_BROKER_URL: 'mqtts://mqtt.flespi.io:8883',
   MQTT_USERNAME: 'FlespiToken synthetic-only-not-a-secret',
   MQTT_TOPIC_NAMESPACE: 'smarthome/dev/v1',
@@ -50,6 +51,7 @@ describe('Flespi MQTT: transporte aislado en VPS DEV', () => {
     const e = {
       ...base(),
       MQTT_BROKER_PROVIDER: 'mosquitto',
+      MQTT_FLESPI_DEVICE_ID: undefined,
       SHELLY_MQTT_VPS_DEV_BROKER_HOST: 'mosquitto-dev.internal',
       MQTT_BROKER_URL: 'mqtts://mosquitto-dev.internal:8883',
       MQTT_USERNAME: 'synthetic-service',

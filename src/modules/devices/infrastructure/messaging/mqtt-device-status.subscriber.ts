@@ -75,11 +75,19 @@ export class MqttDeviceStatusSubscriber
     client.on('connect', () => {
       const topics = this.mqtt.topics.subscriptions();
 
-      client.subscribe(topics, { qos: 1 }, (error) => {
-        if (error) {
+      client.subscribe(topics, { qos: 1 }, (error, granted) => {
+        // MQTT 3.1.1 may SUBACK with qos=128 for an unauthorized topic.
+        // Requiring every exact grant prevents a false 'subscribed' log.
+        const grants = granted ?? [];
+        const flespiGrantRejected = Boolean(this.mqtt.config.flespiDeviceId) &&
+          topics.some((topic) => !grants.some(
+            (grant) => grant.topic === topic && grant.qos !== 128,
+          ));
+        if (error || flespiGrantRejected) {
           this.logger.error(
             'MQTT_SUBSCRIBE_FAILED: no se pudo suscribir a los tópicos de estado.',
           );
+          if (flespiGrantRejected) client.end(true);
           return;
         }
 
@@ -89,7 +97,12 @@ export class MqttDeviceStatusSubscriber
       });
     });
 
-    client.on('message', (topic, payload) => {
+    client.on('message', (topic, payload, packet) => {
+      // A previously retained switch state must not overwrite live telemetry.
+      if (this.mqtt.config.flespiDeviceId && packet.retain) {
+        this.logger.warn('MQTT_FLESPI_RETAINED_STATUS_IGNORED');
+        return;
+      }
       void this.handleStatusMessage(topic, payload).catch(() => {
         this.logger.error(
           'MQTT_STATUS_PROCESSING_FAILED: no se pudo procesar el mensaje de estado.',

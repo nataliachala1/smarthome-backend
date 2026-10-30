@@ -10,6 +10,7 @@ export const MQTT_SETTINGS = [
   'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
   'MQTT_ENABLED',
   'MQTT_BROKER_PROVIDER',
+  'MQTT_FLESPI_DEVICE_ID',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
   'MQTT_USERNAME',
@@ -40,6 +41,8 @@ export interface MqttConfiguration {
   statusClientId?: string;
   caFile?: string;
   namespace?: string;
+  /** Scope explicitly authorized by the single-device flespi MQTT ACL token. */
+  flespiDeviceId?: string;
   devicePrefix: string;
   rpcSource: string;
   switchId: number;
@@ -88,6 +91,16 @@ export function parseMqttConfig(
   const flespi = brokerProvider === 'flespi';
   if (flespi && (!vpsDev || enabledSetting !== 'true')) {
     throw new Error('MQTT_FLESPI_DEV_MODE_NOT_ALLOWED');
+  }
+  // Fail closed: the ACL grants only exact topics for this single Shelly.
+  const flespiDeviceId = read('MQTT_FLESPI_DEVICE_ID');
+  if (flespi) {
+    if (!flespiDeviceId || !mqttDeviceId.test(flespiDeviceId) ||
+        !/^shelly[a-z0-9-]+$/.test(flespiDeviceId)) {
+      throw new Error('MQTT_FLESPI_DEVICE_ID_INVALID');
+    }
+  } else if (flespiDeviceId) {
+    throw new Error('MQTT_FLESPI_DEVICE_ID_UNEXPECTED');
   }
   const transportOptIn = read('SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED') === 'true';
   if (vpsDev && enabledSetting !== 'false' && enabledSetting !== 'true') {
@@ -206,6 +219,9 @@ export function parseMqttConfig(
       !namespace?.startsWith('smarthome/dev/')) {
     throw new Error('MQTT_VPS_DEV_NAMESPACE_NOT_ALLOWED');
   }
+  if (flespi && namespace !== 'smarthome/dev/v1') {
+    throw new Error('MQTT_FLESPI_NAMESPACE_NOT_ALLOWED');
+  }
   const legacyPrefix = read('MQTT_CONTROL_TOPIC_PREFIX');
   const devicePrefix = namespace
     ? `${namespace}/devices`
@@ -221,7 +237,9 @@ export function parseMqttConfig(
     throw new Error('MQTT_SHELLY_SWITCH_ID debe ser un entero no negativo.');
   }
   const switchId = +rawSwitchId;
-  const shellyPrefix = namespace ? `${devicePrefix}/+` : '+';
+  const shellyPrefix = flespi
+    ? `${devicePrefix}/${flespiDeviceId}`
+    : namespace ? `${devicePrefix}/+` : '+';
   const derived: Record<string, string> = {
     MQTT_CONTROL_TOPIC_PREFIX: devicePrefix,
     MQTT_STATUS_TOPIC_FILTER: `${devicePrefix}/+/status`,
@@ -275,6 +293,7 @@ export function parseMqttConfig(
     statusClientId,
     caFile,
     namespace,
+    flespiDeviceId: flespi ? flespiDeviceId : undefined,
     devicePrefix,
     rpcSource,
     switchId,
