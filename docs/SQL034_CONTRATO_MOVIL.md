@@ -10,11 +10,26 @@ Este documento resume lo que la app necesita para construir las pantallas de **t
 
 ## 1. Lo esencial
 
-- **Base:** `{API_URL}/api/v1/homes/{homeId}/energy`
+- **Rutas:** `/api/v1/homes/{homeId}/energy/...`, siempre escritas con el prefijo `/api/v1`, igual que el resto de servicios de la app (`consumption-service`, `smart-home-service`). La URL completa la arma el `ApiClient` de la app con `EXPO_PUBLIC_API_URL` (sección 1.1).
 - **Auth:** `Authorization: Bearer {accessToken}`, igual que el resto de la API. Ante un `401`, aplicar el flujo actual de refresh o login.
 - **Decimales como texto:** todos los montos y kWh viajan como **string**: `"950.2500"`, `"120000.00"`, `"125.000000"`. **Enviar** también strings. No hacer cálculos de dinero con `number`; para mostrarlos, formatear (sección 6).
 - **Fechas:** `YYYY-MM-DD` · **Meses:** `YYYY-MM` · años 2000–2099 · calendario de **Bogotá**.
 - **El backend decide los permisos.** La app puede ocultar botones según el rol del usuario en el hogar, pero **siempre** debe manejar `403`.
+
+### 1.1 URL base: `EXPO_PUBLIC_API_URL` y `ApiClient`
+
+En la app móvil, `EXPO_PUBLIC_API_URL` es la **URL base de la API**, y ya **termina en `/api/v1`** (por ejemplo `http://192.168.1.50:3000/api/v1` en local o `https://<dominio-dev>/api/v1` en Preview). El `ApiClient` (`lib/api/api-client.ts`) usa esa URL como `baseUrl`. Cuando `baseUrl` termina en `/api/v1` y la ruta empieza por `/api/v1/`, **quita el prefijo repetido** antes de llamar al servidor:
+
+| `EXPO_PUBLIC_API_URL` (`baseUrl`) | Ruta pasada al `ApiClient` | URL final |
+|---|---|---|
+| `https://<dominio-dev>/api/v1` | `/api/v1/homes/{homeId}/energy/summary` | `https://<dominio-dev>/api/v1/homes/{homeId}/energy/summary` |
+| `https://<dominio-dev>` (solo host) | `/api/v1/homes/{homeId}/energy/summary` | `https://<dominio-dev>/api/v1/homes/{homeId}/energy/summary` |
+
+Reglas para no duplicar `/api/v1`:
+
+- **Usar siempre el `ApiClient`** (`apiClient.get/post/put`) con rutas que empiezan por `/api/v1/...`, como en la sección 4.
+- **No** concatenar a mano `EXPO_PUBLIC_API_URL` con `/api/v1/...` en un `fetch` propio: como esa variable ya termina en `/api/v1`, la URL quedaría `.../api/v1/api/v1/...`.
+- Si en algún caso hace falta `fetch` directo, partir del **host** (sin `/api/v1`) y agregar la ruta completa una sola vez.
 
 ---
 
@@ -136,29 +151,44 @@ export interface ValidationApiError {
 
 ## 4. Ejemplos de llamadas
 
+Con el `ApiClient` existente, siguiendo el mismo patrón de `lib/services/consumption-service.ts`. El `ApiClient` ya agrega `Authorization: Bearer ...`, gestiona el refresh ante `401` y no duplica `/api/v1`:
+
 ```ts
-const base = `${API_URL}/api/v1/homes/${homeId}/energy`;
-const headers = {
-  Authorization: `Bearer ${accessToken}`,
-  'Content-Type': 'application/json',
+// lib/services/energy-service.ts (propuesta)
+import { apiClient } from '@/lib/api/api-client';
+
+const energyPath = (homeId: string) => `/api/v1/homes/${homeId}/energy`;
+
+export const energyService = {
+  listTariffs(homeId: string, token?: string) {
+    return apiClient.get<TariffList>(`${energyPath(homeId)}/tariffs`, { token });
+  },
+  getCurrentTariff(homeId: string, at?: LocalDate, token?: string) {
+    const query = at ? `?at=${at}` : '';
+    return apiClient.get<CurrentTariff>(`${energyPath(homeId)}/tariffs/current${query}`, { token });
+  },
+  createTariff(homeId: string, body: CreateTariffRequest, token?: string) {
+    // unitPriceCopKwh como TEXTO: '950.25', nunca 950.25
+    return apiClient.post<Tariff, CreateTariffRequest>(`${energyPath(homeId)}/tariffs`, body, { token });
+  },
+  getGoal(homeId: string, month?: Month, token?: string) {
+    const query = month ? `?month=${month}` : '';
+    return apiClient.get<MonthGoal>(`${energyPath(homeId)}/goals${query}`, { token });
+  },
+  saveGoal(homeId: string, month: Month, body: UpsertGoalRequest, token?: string) {
+    // Siempre los dos campos; el vacío va como null
+    return apiClient.put<Goal, UpsertGoalRequest>(`${energyPath(homeId)}/goals/${month}`, body, { token });
+  },
+  getSummary(homeId: string, month?: Month, token?: string) {
+    const query = month ? `?month=${month}` : '';
+    return apiClient.get<EnergySummary>(`${energyPath(homeId)}/summary${query}`, { token });
+  },
 };
 
-// Resumen del mes actual
-const summary: EnergySummary = await fetch(`${base}/summary`, { headers }).then((r) => r.json());
-
-// Registrar tarifa (solo OWNER)
-await fetch(`${base}/tariffs`, {
-  method: 'POST',
-  headers,
-  body: JSON.stringify({ unitPriceCopKwh: '950.25', effectiveFrom: '2026-11-01' } satisfies CreateTariffRequest),
-});
-
-// Guardar solo la meta de kWh de noviembre (solo OWNER)
-await fetch(`${base}/goals/2026-11`, {
-  method: 'PUT',
-  headers,
-  body: JSON.stringify({ monthlyBudgetCop: null, targetKwh: '125' } satisfies UpsertGoalRequest),
-});
+// Uso
+await energyService.createTariff(homeId, { unitPriceCopKwh: '950.25', effectiveFrom: '2026-11-01' });
+await energyService.saveGoal(homeId, '2026-11', { monthlyBudgetCop: null, targetKwh: '125' });
+const summary = await energyService.getSummary(homeId, '2026-11');
 ```
 
 Respuesta real de `GET /summary?month=2026-10`:
@@ -250,6 +280,15 @@ const mesBogota = hoyBogota.slice(0, 7); // 'YYYY-MM'
 
 ## 7. Errores y mensajes sugeridos
 
+**Cómo llegan a la app con el `ApiClient` actual:** ante una respuesta no exitosa, el `ApiClient` lanza un `ApiError` con `status` (HTTP), `code` genérico (`'FORBIDDEN'`, `'CONFLICT'`, `'VALIDATION_ERROR'`, `'UNAUTHORIZED'`, `'SERVER_ERROR'`) y `message` (el texto que envía el backend). **No conserva el `code` específico de energía** (`ENERGY_READ_FORBIDDEN`, etc.). Con el `ApiClient` actual se identifica así:
+
+- `403` en un **GET** de energía = lectura denegada (`ENERGY_READ_FORBIDDEN`).
+- `403` en **POST** `/tariffs` o **PUT** `/goals/:month` = gestión denegada (`ENERGY_MANAGE_FORBIDDEN`).
+- `409` en **POST** `/tariffs` = tarifa duplicada; `409` en **PUT** `/goals/:month` = escritura simultánea.
+- `400` en **PUT** `/goals/:month` con los dos campos en `null` = `ENERGY_GOAL_VALUE_REQUIRED` (la app debe evitarlo validando antes).
+
+Si el equipo móvil prefiere leer el `code` exacto, puede ampliar el `ApiClient` para guardar `payload.code` en el `ApiError`. Es una mejora opcional de la app; el backend ya lo envía en el cuerpo.
+
 | HTTP | Identificación | Mensaje sugerido / acción |
 |---|---|---|
 | 400 | `ENERGY_GOAL_VALUE_REQUIRED` | "Indica el presupuesto, la meta de kWh o ambos." |
@@ -266,6 +305,7 @@ const mesBogota = hoyBogota.slice(0, 7); // 'YYYY-MM'
 ## 8. Checklist de integración móvil
 
 - [ ] Tipos de la sección 3 agregados a la app.
+- [ ] Llamadas hechas con el `ApiClient` y rutas `/api/v1/homes/{homeId}/energy/...` (sin concatenar `EXPO_PUBLIC_API_URL` a mano; sin `/api/v1/api/v1`).
 - [ ] Sección de costos visible solo si el `GET` responde 200; oculta ante 403.
 - [ ] Botones **Agregar tarifa** y **Editar presupuesto/meta** solo para OWNER.
 - [ ] Decimales enviados como texto con punto; nunca como `number`.
