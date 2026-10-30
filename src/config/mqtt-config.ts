@@ -9,6 +9,7 @@ export const MQTT_SETTINGS = [
   'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL',
   'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
   'MQTT_ENABLED',
+  'MQTT_BROKER_PROVIDER',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
   'MQTT_USERNAME',
@@ -79,6 +80,15 @@ export function parseMqttConfig(
   if (enabledSetting !== undefined && !['true', 'false'].includes(enabledSetting)) {
     throw new Error('MQTT_ENABLED debe ser true o false.');
   }
+  // Opt-in: fuera de VPS DEV el comportamiento histórico se conserva.
+  const brokerProvider = read('MQTT_BROKER_PROVIDER') ?? 'mosquitto';
+  if (!['mosquitto', 'flespi'].includes(brokerProvider)) {
+    throw new Error('MQTT_BROKER_PROVIDER_INVALID');
+  }
+  const flespi = brokerProvider === 'flespi';
+  if (flespi && (!vpsDev || enabledSetting !== 'true')) {
+    throw new Error('MQTT_FLESPI_DEV_MODE_NOT_ALLOWED');
+  }
   const transportOptIn = read('SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED') === 'true';
   if (vpsDev && enabledSetting !== 'false' && enabledSetting !== 'true') {
     throw new Error('MQTT_VPS_DEV_EXPLICIT_FLAG_REQUIRED');
@@ -110,6 +120,9 @@ export function parseMqttConfig(
     };
   }
   const brokerUrl = read('MQTT_BROKER_URL');
+  if (flespi && brokerUrl !== 'mqtts://mqtt.flespi.io:8883') {
+    throw new Error('MQTT_FLESPI_BROKER_NOT_ALLOWED');
+  }
   let tls = false;
   if (brokerUrl) {
     let url: URL;
@@ -152,13 +165,22 @@ export function parseMqttConfig(
   }
   const username = read('MQTT_USERNAME');
   const password = read('MQTT_PASSWORD');
-  if (Boolean(username) !== Boolean(password) || (production && !username)) {
+  if (flespi) {
+    // En flespi el token MQTT ACL es el username y no hay password.
+    if (!username || password) {
+      throw new Error('MQTT_FLESPI_TOKEN_AUTH_REQUIRED');
+    }
+  } else if (Boolean(username) !== Boolean(password) || (production && !username)) {
     throw new Error(
       'MQTT_USERNAME y MQTT_PASSWORD deben configurarse juntos; son obligatorios en producción.',
     );
   }
   const caFile = read('MQTT_TLS_CA_FILE');
-  if (vpsDev && enabledSetting === 'true' && !caFile) {
+  if (flespi && caFile) {
+    // No mezclar la CA privada del Mosquitto DEV con las raíces públicas.
+    throw new Error('MQTT_FLESPI_SYSTEM_TRUST_REQUIRED');
+  }
+  if (vpsDev && enabledSetting === 'true' && !caFile && !flespi) {
     throw new Error('MQTT_VPS_DEV_TLS_CA_REQUIRED');
   }
   if (caFile && !tls) {
