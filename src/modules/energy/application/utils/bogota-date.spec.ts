@@ -1,0 +1,13 @@
+import { todayInBogota } from './bogota-date';
+
+describe('todayInBogota', () => {
+  it('usa el calendario de Bogotá (UTC-5) y no el de UTC', () => {
+    // 2026-11-01 03:00 UTC = 2026-10-31 22:00 en Bogotá
+    expect(todayInBogota(new Date('2026-11-01T03:00:00.000Z'))).toBe(
+      '2026-10-31',
+    );
+    expect(todayInBogota(new Date('2026-11-01T05:00:00.000Z'))).toBe(
+      '2026-11-01',
+    );
+  });
+});
