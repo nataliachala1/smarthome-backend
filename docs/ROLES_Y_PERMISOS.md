@@ -51,3 +51,31 @@ En permisos por dispositivo, enviar `null` hereda la base del hogar y omitir un 
 - `GUEST` no recibe telemetría ni históricos energéticos individuales.
 - Las invitaciones iniciales aplican valores base por rol; `OWNER` puede ajustarlos.
 - La aplicación debe comprobar el permiso efectivo tanto en sus endpoints como en la base de datos.
+
+## Configuración energética y costos (SQL034)
+
+Tarifas COP/kWh, presupuesto mensual y meta de consumo son **datos económicos** del hogar. El backend (`src/modules/energy`) aplica esta matriz en tres capas: JWT, función SQL de autorización y RLS de PostgreSQL.
+
+| Operación | `OWNER` | `MEMBER` | `GUEST` |
+| --- | :---: | :---: | :---: |
+| Consultar historial y tarifa vigente | Sí | Sí, con `view_consumption` efectivo | No |
+| Registrar nueva tarifa (nueva vigencia) | Sí, hogar activo | No | No |
+| Editar o borrar tarifas históricas | No | No | No |
+| Consultar presupuesto y meta del mes | Sí | Sí, con `view_consumption` efectivo | No |
+| Crear o reemplazar presupuesto y meta | Sí, hogar activo | No | No |
+| Consultar resumen mensual de kWh y costo estimado | Sí | Sí, con `view_consumption` efectivo (\*) | No |
+| Borrar presupuesto o meta | No | No | No |
+
+Cómo se aplica:
+
+1. **Autenticación:** todos los controladores de energía usan `JwtAuthGuard`; sin token válido o con sesión revocada responden `401`.
+2. **Contexto RLS:** cada operación corre en `PrismaRlsService.withUserContext(userId, ...)`, que fija `app.current_user_id` solo dentro de la transacción. No se usa una conexión global ni roles con `BYPASSRLS`.
+3. **Autorización explícita, en la misma transacción y antes de tocar las tablas:**
+   - lectura: `consumption.fn_can_read_detail(id_home)` (OWNER; MEMBER activo con `view_consumption` en hogar activo);
+   - escritura: `homes.fn_can_manage_home(id_home)` (OWNER activo, cuenta activa, hogar activo).
+4. **RLS en PostgreSQL** repite las mismas reglas como última barrera; un rechazo (`42501`) se traduce a `403`.
+5. Las respuestas `403` son genéricas (`ENERGY_READ_FORBIDDEN`, `ENERGY_MANAGE_FORBIDDEN`): no distinguen entre hogar inexistente y hogar sin permiso, para evitar enumeración. No se exponen errores SQL.
+6. `GUEST` no obtiene tarifas, presupuestos, metas ni costos. El contrato existente de `GET /api/v1/homes/:homeId/consumption/summary` para `GUEST` no cambia.
+7. El rol global del JWT (`user.role`) **no** sustituye al rol de membresía del hogar.
+
+(\*) El resumen suma solo las lecturas que RLS permite ver al usuario. Por la regla de consumo de la release 018, un `MEMBER` solo ve lecturas de dispositivos **activos** sobre los que tiene `view_consumption`; el `OWNER` ve todas, incluidas las de dispositivos desactivados o eliminados. Por eso, para el mismo mes, el total de kWh y el costo estimado de un `MEMBER` pueden ser menores que los del `OWNER`.
