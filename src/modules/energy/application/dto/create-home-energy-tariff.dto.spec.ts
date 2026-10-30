@@ -48,6 +48,10 @@ describe('CreateHomeEnergyTariffDto', () => {
     ['2026-13-01'],
     ['2026-11-01T00:00:00Z'],
     ['01/11/2026'],
+    ['0000-01-01'],
+    ['1999-12-31'],
+    ['2100-01-01'],
+    ['2026-11-1'],
     [undefined],
   ])('rechaza la fecha %p', async (effectiveFrom) => {
     await expect(

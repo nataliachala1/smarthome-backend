@@ -1,6 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsISO8601, Matches } from 'class-validator';
 
+import {
+  ENERGY_DATE_MESSAGE,
+  ENERGY_DATE_PATTERN,
+} from '../utils/energy-month';
 import { IsPositiveDecimalString } from '../validators/is-positive-decimal-string.validator';
 
 export class CreateHomeEnergyTariffDto {
@@ -13,12 +17,13 @@ export class CreateHomeEnergyTariffDto {
   unitPriceCopKwh: string;
 
   @ApiProperty({
-    description: 'Fecha de entrada en vigor (calendario America/Bogota)',
+    description:
+      'Fecha de entrada en vigor (calendario America/Bogota), año 2000–2099',
     example: '2026-11-01',
     format: 'date',
   })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: 'effectiveFrom debe tener formato YYYY-MM-DD',
+  @Matches(ENERGY_DATE_PATTERN, {
+    message: 'effectiveFrom ' + ENERGY_DATE_MESSAGE,
   })
   @IsISO8601(
     { strict: true, strictSeparator: true },
