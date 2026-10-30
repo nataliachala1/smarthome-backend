@@ -24,6 +24,7 @@ function setup(consumeFailure = false, power?: number) {
   };
   const tx = {
     device: { update: jest.fn().mockResolvedValue(updated) },
+    $queryRaw: jest.fn().mockResolvedValue([{ id_device: 'device-1' }]),
     consumption: {
       findFirst: jest.fn().mockResolvedValue({ energy_total_kwh: 1.5 }),
       createMany: jest.fn().mockImplementation(() => consumeFailure
@@ -42,7 +43,7 @@ function setup(consumeFailure = false, power?: number) {
     $transaction: jest.fn(async (cb: (transaction: typeof tx) => Promise<unknown>) => cb(tx)),
   };
   const subscriber = new MqttDeviceStatusSubscriber(
-    { config: { flespiDeviceId: 'shelly1pmg4-d885acf06990' } } as never,
+    { config: { flespiDeviceId: 'shelly1pmg4-d885acf06990', switchId: 0 } } as never,
     prisma as never,
     {} as never,
     { emitToUser } as never,
@@ -69,12 +70,19 @@ function setup(consumeFailure = false, power?: number) {
   return { subscriber: privateSubscriber, prisma, tx, emitToUser };
 }
 
+const rpcTopic = 'smarthome/dev/v1/devices/shelly1pmg4-d885acf06990/events/rpc';
+const rpcPayload = Buffer.from(JSON.stringify({
+  src: 'shelly1pmg4-d885acf06990',
+  method: 'NotifyStatus',
+  params: { ts: 1793388600.25, 'switch:0': { output: false, apower: 15 } },
+}));
+
 describe('flespi: persistencia atómica de estado y consumo', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('escribe estado y consumo desde la misma transacción', async () => {
     const ctx = setup(false, 15);
-    await ctx.subscriber.handleStatusMessage('test/status', Buffer.from('{}'));
+    await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
 
     expect(ctx.prisma.device.update).not.toHaveBeenCalled();
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);
@@ -92,7 +100,7 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
 
   it('si falla el consumo no emite estado ni consumo', async () => {
     const ctx = setup(true, 15);
-    await expect(ctx.subscriber.handleStatusMessage('test/status', Buffer.from('{}')))
+    await expect(ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload))
       .rejects.toThrow('SIMULATED_CONSUMPTION_FAILURE');
     expect(ctx.prisma.device.update).not.toHaveBeenCalled();
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);
@@ -102,7 +110,7 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
 
   it('NotifyStatus sin potencia actualiza solo el estado sin crear consumo', async () => {
     const ctx = setup(false);
-    await ctx.subscriber.handleStatusMessage('test/status', Buffer.from('{}'));
+    await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);
     const updateArgs = ctx.tx.device.update.mock.calls[0][0] as {
       data: Record<string, unknown>;

@@ -8,6 +8,7 @@ import {
 import { connect, MqttClient } from 'mqtt';
 import { MqttRuntimeService } from './mqtt-runtime.service';
 import { parseFlespiShellyTelemetry } from './flespi-shelly-telemetry.parser';
+import { identifyFlespiShellyEvent } from './flespi-shelly-event-key';
 
 import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
 
@@ -212,8 +213,17 @@ export class MqttDeviceStatusSubscriber
     }
 
     const powerW = message.currentPowerW;
-
-    const shouldCreateConsumption = typeof powerW === 'number';
+    const isFlespi = Boolean(this.mqtt.config?.flespiDeviceId);
+    // A stable origin event identity is required for durable consumption on flespi.
+    // Component /status/switch:0 does not include an origin event ID: state only.
+    const eventIdentity = isFlespi && typeof powerW === 'number'
+      ? identifyFlespiShellyEvent(topic, payload, this.mqtt.config.switchId)
+      : null;
+    const shouldCreateConsumption = typeof powerW === 'number' &&
+      (!isFlespi || eventIdentity !== null);
+    if (isFlespi && typeof powerW === 'number' && !eventIdentity) {
+      this.logger.debug('MQTT_FLESPI_CONSUMPTION_SKIPPED_UNIDENTIFIED_FRAME');
+    }
 
     // Mosquitto conserva la política histórica: estado independiente del consumo.
     // flespi actualiza el estado DENTRO de la transacción de consumo.
@@ -248,6 +258,21 @@ export class MqttDeviceStatusSubscriber
     }
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
+      if (isFlespi && shouldCreateConsumption && eventIdentity) {
+        // SQL035: the unique (id_device, event_key) constraint serializes
+        // duplicate deliveries. The ledger and consumption share this tx.
+        const inserted = await tx.$queryRaw<Array<{ id_device: string }>>`
+          INSERT INTO consumption.mqtt_ingest_dedup
+            (id_device, id_home, event_key, source_topic, device_event_ts)
+          VALUES
+            (${device.id_device}::uuid, ${device.id_home}::uuid,
+             ${eventIdentity.eventKey}, ${topic},
+             ${eventIdentity.deviceEventTs}::numeric)
+          ON CONFLICT (id_device, event_key) DO NOTHING
+          RETURNING id_device
+        `;
+        if (inserted.length === 0) return null;
+      }
       const updatedDevice = this.mqtt.config?.flespiDeviceId
         ? await tx.device.update({
             where: { id_device: device.id_device },
@@ -377,6 +402,11 @@ export class MqttDeviceStatusSubscriber
         consumptionRecipients: [] as { id_user: string }[],
       };
     });
+
+    if (transactionResult === null) {
+      this.logger.debug('MQTT_FLESPI_DUPLICATE_EVENT_IGNORED');
+      return;
+    }
 
     /*
      * Los eventos se emiten DESPUÉS de que la transacción termina
