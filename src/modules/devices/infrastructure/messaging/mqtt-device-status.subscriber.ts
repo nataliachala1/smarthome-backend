@@ -215,20 +215,22 @@ export class MqttDeviceStatusSubscriber
 
     const shouldCreateConsumption = typeof powerW === 'number';
 
-      const updatedDevice = await this.prisma.device.update({
-        where: {
-          id_device: device.id_device,
-        },
-        data: deviceData,
-        select: {
-          id_device: true,
-          id_home: true,
-          connectivity_status: true,
-          is_on: true,
-          current_power_w: true,
-          updated_at: true,
-        },
-      });
+    // Mosquitto conserva la política histórica: estado independiente del consumo.
+    // flespi actualiza el estado DENTRO de la transacción de consumo.
+    const legacyUpdatedDevice = this.mqtt.config?.flespiDeviceId
+      ? null
+      : await this.prisma.device.update({
+          where: { id_device: device.id_device },
+          data: deviceData,
+          select: {
+            id_device: true,
+            id_home: true,
+            connectivity_status: true,
+            is_on: true,
+            current_power_w: true,
+            updated_at: true,
+          },
+        });
 
     let recipients: { id_user: string }[] = [];
 
@@ -246,6 +248,20 @@ export class MqttDeviceStatusSubscriber
     }
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
+      const updatedDevice = this.mqtt.config?.flespiDeviceId
+        ? await tx.device.update({
+            where: { id_device: device.id_device },
+            data: deviceData,
+            select: {
+              id_device: true,
+              id_home: true,
+              connectivity_status: true,
+              is_on: true,
+              current_power_w: true,
+              updated_at: true,
+            },
+          })
+        : legacyUpdatedDevice!;
       const notifications: CreatedNotification[] = [];
 
       let consumptionEvent: {
@@ -349,8 +365,12 @@ export class MqttDeviceStatusSubscriber
 
       this.logger.error(`MQTT_CONSUMPTION_PERSISTENCE_FAILED: ${code}`);
 
+      // No emitir estado confirmado si el consumo del mismo mensaje falló.
+      // PostgreSQL revierte la actualización del dispositivo al fallar tx.
+      if (this.mqtt.config?.flespiDeviceId) throw error;
+
       return {
-        updatedDevice,
+        updatedDevice: legacyUpdatedDevice!,
         recipients,
         notifications: [] as CreatedNotification[],
         consumptionEvent: null,
