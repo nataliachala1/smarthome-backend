@@ -5,10 +5,7 @@ import { PrismaRlsService } from '../../../../infrastructure/database/prisma/pri
 import { isPostgresAccessDeniedError } from '../../../../infrastructure/database/prisma/prisma-error.util';
 
 import { HomeEnergyGoal } from '../../domain/entities/home-energy-goal.entity';
-import {
-  EnergyGoalConcurrentWriteError,
-  EnergyManageAccessDeniedError,
-} from '../../domain/errors/energy.errors';
+import { EnergyGoalConcurrentWriteError } from '../../domain/errors/energy.errors';
 import {
   HomeEnergyGoalRepository,
   UpsertHomeEnergyGoalData,
@@ -18,6 +15,8 @@ import {
   assertCanManageEnergy,
   assertCanReadEnergy,
   isUniqueViolation,
+  energyAccessDeniedError,
+  EnergyAccessKind,
 } from './energy-access';
 import {
   PrismaHomeEnergyGoalMapper,
@@ -39,7 +38,7 @@ export class PrismaHomeEnergyGoalRepository implements HomeEnergyGoalRepository 
     homeId: string,
     month: string,
   ): Promise<HomeEnergyGoal | null> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'read', async (tx) => {
       await assertCanReadEnergy(tx, homeId);
 
       const row = await tx.home_energy_goal.findUnique({
@@ -59,7 +58,7 @@ export class PrismaHomeEnergyGoalRepository implements HomeEnergyGoalRepository 
     userId: string,
     data: UpsertHomeEnergyGoalData,
   ): Promise<HomeEnergyGoal> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'manage', async (tx) => {
       await assertCanManageEnergy(tx, data.homeId);
 
       const monthStart = monthToDbDate(data.month);
@@ -89,13 +88,16 @@ export class PrismaHomeEnergyGoalRepository implements HomeEnergyGoalRepository 
 
   private async run<T>(
     userId: string,
+    access: EnergyAccessKind,
     operation: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
+      // 42501 (privilegio o política RLS): se reporta según la operación,
+      // sin exponer detalles SQL.
       if (isPostgresAccessDeniedError(error)) {
-        throw new EnergyManageAccessDeniedError();
+        throw energyAccessDeniedError(access);
       }
 
       if (isUniqueViolation(error)) {

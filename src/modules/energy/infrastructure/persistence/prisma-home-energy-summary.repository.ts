@@ -5,13 +5,16 @@ import { PrismaRlsService } from '../../../../infrastructure/database/prisma/pri
 import { isPostgresAccessDeniedError } from '../../../../infrastructure/database/prisma/prisma-error.util';
 
 import { EnergyMonthFacts } from '../../domain/entities/home-energy-summary';
-import { EnergyManageAccessDeniedError } from '../../domain/errors/energy.errors';
 import {
   EnergyMonthPeriod,
   HomeEnergySummaryRepository,
 } from '../../domain/repositories/home-energy-summary.repository';
 
-import { assertCanReadEnergy } from './energy-access';
+import {
+  assertCanReadEnergy,
+  energyAccessDeniedError,
+  EnergyAccessKind,
+} from './energy-access';
 
 interface MonthFactsRow {
   readings_count: number;
@@ -40,7 +43,7 @@ export class PrismaHomeEnergySummaryRepository implements HomeEnergySummaryRepos
     userId: string,
     period: EnergyMonthPeriod,
   ): Promise<EnergyMonthFacts> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'read', async (tx) => {
       await assertCanReadEnergy(tx, period.homeId);
 
       const [row] = await tx.$queryRaw<MonthFactsRow[]>`
@@ -95,13 +98,16 @@ export class PrismaHomeEnergySummaryRepository implements HomeEnergySummaryRepos
 
   private async run<T>(
     userId: string,
+    access: EnergyAccessKind,
     operation: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
+      // 42501 (privilegio o política RLS): se reporta según la operación,
+      // sin exponer detalles SQL.
       if (isPostgresAccessDeniedError(error)) {
-        throw new EnergyManageAccessDeniedError();
+        throw energyAccessDeniedError(access);
       }
 
       throw error;

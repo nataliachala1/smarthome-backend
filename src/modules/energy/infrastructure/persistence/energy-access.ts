@@ -37,6 +37,22 @@ export async function assertCanManageEnergy(
   }
 }
 
+/** Tipo de operación sobre datos económicos: consultar o configurar. */
+export type EnergyAccessKind = 'read' | 'manage';
+
+/**
+ * Error de dominio para un rechazo de acceso según el tipo de operación.
+ * Se usa al traducir un rechazo de PostgreSQL (42501, privilegio o política RLS):
+ * una lectura denegada nunca debe reportarse como denegación de escritura.
+ */
+export function energyAccessDeniedError(
+  kind: EnergyAccessKind,
+): EnergyReadAccessDeniedError | EnergyManageAccessDeniedError {
+  return kind === 'read'
+    ? new EnergyReadAccessDeniedError()
+    : new EnergyManageAccessDeniedError();
+}
+
 /** Código Prisma de violación de restricción única. */
 export function isUniqueViolation(error: unknown): boolean {
   return (

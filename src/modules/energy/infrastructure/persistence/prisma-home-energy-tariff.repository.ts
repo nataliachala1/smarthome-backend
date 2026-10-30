@@ -5,10 +5,7 @@ import { PrismaRlsService } from '../../../../infrastructure/database/prisma/pri
 import { isPostgresAccessDeniedError } from '../../../../infrastructure/database/prisma/prisma-error.util';
 
 import { HomeEnergyTariff } from '../../domain/entities/home-energy-tariff.entity';
-import {
-  EnergyManageAccessDeniedError,
-  HomeEnergyTariffAlreadyExistsError,
-} from '../../domain/errors/energy.errors';
+import { HomeEnergyTariffAlreadyExistsError } from '../../domain/errors/energy.errors';
 import {
   CreateHomeEnergyTariffData,
   HomeEnergyTariffRepository,
@@ -18,6 +15,8 @@ import {
   assertCanManageEnergy,
   assertCanReadEnergy,
   isUniqueViolation,
+  energyAccessDeniedError,
+  EnergyAccessKind,
 } from './energy-access';
 import {
   PrismaHomeEnergyTariffMapper,
@@ -37,7 +36,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     userId: string,
     homeId: string,
   ): Promise<HomeEnergyTariff[]> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'read', async (tx) => {
       await assertCanReadEnergy(tx, homeId);
 
       const rows = await tx.home_energy_tariff.findMany({
@@ -54,7 +53,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     homeId: string,
     date: string,
   ): Promise<HomeEnergyTariff | null> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'read', async (tx) => {
       await assertCanReadEnergy(tx, homeId);
 
       const row = await tx.home_energy_tariff.findFirst({
@@ -73,7 +72,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     userId: string,
     data: CreateHomeEnergyTariffData,
   ): Promise<HomeEnergyTariff> {
-    return this.run(userId, async (tx) => {
+    return this.run(userId, 'manage', async (tx) => {
       await assertCanManageEnergy(tx, data.homeId);
 
       const row = await tx.home_energy_tariff.create({
@@ -90,13 +89,16 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
 
   private async run<T>(
     userId: string,
+    access: EnergyAccessKind,
     operation: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
+      // 42501 (privilegio o política RLS): se reporta según la operación,
+      // sin exponer detalles SQL.
       if (isPostgresAccessDeniedError(error)) {
-        throw new EnergyManageAccessDeniedError();
+        throw energyAccessDeniedError(access);
       }
 
       if (isUniqueViolation(error)) {
