@@ -11,3 +11,8 @@ const bogotaDateFormatter = new Intl.DateTimeFormat('en-CA', {
 export function todayInBogota(now: Date = new Date()): string {
   return bogotaDateFormatter.format(now);
 }
+
+/** Mes calendario actual en America/Bogota, formato YYYY-MM. */
+export function currentMonthInBogota(now: Date = new Date()): string {
+  return todayInBogota(now).slice(0, 7);
+}

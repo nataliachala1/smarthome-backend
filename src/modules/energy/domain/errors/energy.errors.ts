@@ -22,3 +22,19 @@ export class HomeEnergyTariffAlreadyExistsError extends Error {
     this.name = 'HomeEnergyTariffAlreadyExistsError';
   }
 }
+
+export class EnergyGoalRequiresValueError extends Error {
+  constructor() {
+    super(
+      'Debe indicar el presupuesto mensual (COP), la meta de consumo (kWh) o ambos',
+    );
+    this.name = 'EnergyGoalRequiresValueError';
+  }
+}
+
+export class EnergyGoalConcurrentWriteError extends Error {
+  constructor() {
+    super('El objetivo del mes se modificó al mismo tiempo; intente de nuevo');
+    this.name = 'EnergyGoalConcurrentWriteError';
+  }
+}

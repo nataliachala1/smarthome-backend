@@ -7,7 +7,6 @@ import { isPostgresAccessDeniedError } from '../../../../infrastructure/database
 import { HomeEnergyTariff } from '../../domain/entities/home-energy-tariff.entity';
 import {
   EnergyManageAccessDeniedError,
-  EnergyReadAccessDeniedError,
   HomeEnergyTariffAlreadyExistsError,
 } from '../../domain/errors/energy.errors';
 import {
@@ -15,6 +14,11 @@ import {
   HomeEnergyTariffRepository,
 } from '../../domain/repositories/home-energy-tariff.repository';
 
+import {
+  assertCanManageEnergy,
+  assertCanReadEnergy,
+  isUniqueViolation,
+} from './energy-access';
 import {
   PrismaHomeEnergyTariffMapper,
   toDbDate,
@@ -34,7 +38,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     homeId: string,
   ): Promise<HomeEnergyTariff[]> {
     return this.run(userId, async (tx) => {
-      await this.assertCanRead(tx, homeId);
+      await assertCanReadEnergy(tx, homeId);
 
       const rows = await tx.home_energy_tariff.findMany({
         where: { id_home: homeId },
@@ -51,7 +55,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     date: string,
   ): Promise<HomeEnergyTariff | null> {
     return this.run(userId, async (tx) => {
-      await this.assertCanRead(tx, homeId);
+      await assertCanReadEnergy(tx, homeId);
 
       const row = await tx.home_energy_tariff.findFirst({
         where: {
@@ -70,7 +74,7 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     data: CreateHomeEnergyTariffData,
   ): Promise<HomeEnergyTariff> {
     return this.run(userId, async (tx) => {
-      await this.assertCanManage(tx, data.homeId);
+      await assertCanManageEnergy(tx, data.homeId);
 
       const row = await tx.home_energy_tariff.create({
         data: {
@@ -91,50 +95,15 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
-      this.translateError(error);
+      if (isPostgresAccessDeniedError(error)) {
+        throw new EnergyManageAccessDeniedError();
+      }
+
+      if (isUniqueViolation(error)) {
+        throw new HomeEnergyTariffAlreadyExistsError();
+      }
+
+      throw error;
     }
-  }
-
-  private async assertCanRead(
-    tx: Prisma.TransactionClient,
-    homeId: string,
-  ): Promise<void> {
-    const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
-      SELECT consumption.fn_can_read_detail(${homeId}::uuid) AS allowed
-    `;
-
-    if (!access?.allowed) {
-      throw new EnergyReadAccessDeniedError();
-    }
-  }
-
-  private async assertCanManage(
-    tx: Prisma.TransactionClient,
-    homeId: string,
-  ): Promise<void> {
-    const [access] = await tx.$queryRaw<{ allowed: boolean }[]>`
-      SELECT homes.fn_can_manage_home(${homeId}::uuid) AS allowed
-    `;
-
-    if (!access?.allowed) {
-      throw new EnergyManageAccessDeniedError();
-    }
-  }
-
-  private translateError(error: unknown): never {
-    if (isPostgresAccessDeniedError(error)) {
-      throw new EnergyManageAccessDeniedError();
-    }
-
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'P2002'
-    ) {
-      throw new HomeEnergyTariffAlreadyExistsError();
-    }
-
-    throw error;
   }
 }

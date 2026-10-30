@@ -1,6 +1,12 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 import {
+  EnergyGoalConcurrentWriteError,
+  EnergyGoalRequiresValueError,
   EnergyManageAccessDeniedError,
   EnergyReadAccessDeniedError,
   HomeEnergyTariffAlreadyExistsError,
@@ -25,6 +31,20 @@ export function throwEnergyHttpError(error: unknown): never {
   if (error instanceof HomeEnergyTariffAlreadyExistsError) {
     throw new ConflictException({
       code: 'ENERGY_TARIFF_DUPLICATE',
+      message: error.message,
+    });
+  }
+
+  if (error instanceof EnergyGoalRequiresValueError) {
+    throw new BadRequestException({
+      code: 'ENERGY_GOAL_VALUE_REQUIRED',
+      message: error.message,
+    });
+  }
+
+  if (error instanceof EnergyGoalConcurrentWriteError) {
+    throw new ConflictException({
+      code: 'ENERGY_GOAL_CONCURRENT_WRITE',
       message: error.message,
     });
   }
