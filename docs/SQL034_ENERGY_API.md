@@ -384,6 +384,8 @@ El script de integración crea un PostgreSQL desechable en Docker, aplica Liquib
 
 ## 10. Despliegue y dependencias
 
+Procedimiento completo, script de verificación de la BD DEV (`scripts/verify-sql034-dev.sql`) y pruebas de humo en [`SQL034_DESPLIEGUE.md`](./SQL034_DESPLIEGUE.md). Contrato resumido para la app en [`SQL034_CONTRATO_MOVIL.md`](./SQL034_CONTRATO_MOVIL.md).
+
 1. **Antes de desplegar este backend**, confirmar que la base **DEV del VPS** (la de `DATABASE_URL`) tiene aplicados los dos changesets de SQL034 y la columna `monthly_budget_cop` acepta `null`. Haber fusionado SQL034 en GitHub no lo garantiza: el `deploy` del workflow de la base está deshabilitado.
 2. Orden recomendado: respaldo de la BD DEV → aplicación controlada de SQL034 → verificación SQL → merge y despliegue del backend → pruebas autenticadas OWNER/MEMBER/GUEST → integración con la app móvil.
 3. `DATABASE_URL` debe usar un LOGIN miembro de `smarthome_runtime_app`, sin superusuario ni `BYPASSRLS`.
