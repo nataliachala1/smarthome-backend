@@ -219,6 +219,14 @@ export class MqttDeviceStatusSubscriber
     const eventIdentity = isFlespi
       ? identifyFlespiShellyEvent(topic, payload, this.mqtt.config.switchId)
       : null;
+    // A future source timestamp would poison SQL036's durable watermark and
+    // suppress legitimate later device events. Require server/NTP sanity;
+    // use a narrow tolerance for short clock drift, never adjust the source.
+    if (isFlespi && eventIdentity &&
+        eventIdentity.deviceEventTs > Date.now() / 1000 + 300) {
+      this.logger.warn('MQTT_FLESPI_FUTURE_TIMESTAMP_IGNORED');
+      return;
+    }
     if (isFlespi && !eventIdentity) {
       this.logger.debug('MQTT_FLESPI_UNORDERED_FRAME_IGNORED');
       return;

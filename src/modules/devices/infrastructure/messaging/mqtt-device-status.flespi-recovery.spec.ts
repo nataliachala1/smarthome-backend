@@ -70,6 +70,26 @@ function setup({ watermark, previousKwh }: Options = {}) {
 describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
   afterEach(() => jest.restoreAllMocks());
 
+
+  it('rechaza un evento Shelly con reloj adelantado una hora antes de toda escritura', async () => {
+    const c = setup();
+    await c.internal.handleStatusMessage(
+      TOPIC, frame(Date.now() / 1000 + 3600, true, 40, 7500),
+    );
+    expect(c.tx.$queryRaw).not.toHaveBeenCalled();
+    expect(c.tx.device.update).not.toHaveBeenCalled();
+    expect(c.tx.consumption.createMany).not.toHaveBeenCalled();
+    expect(c.emitToUser).not.toHaveBeenCalled();
+  });
+
+  it('acepta una pequeña desviación positiva del reloj para conservar telemetría válida', async () => {
+    const c = setup();
+    await c.internal.handleStatusMessage(
+      TOPIC, frame(Date.now() / 1000 + 60, true, 40, 7500),
+    );
+    expect(c.tx.device.update).toHaveBeenCalledTimes(1);
+    expect(c.tx.consumption.createMany).toHaveBeenCalledTimes(1);
+  });
   it('reconoce hashes distintos pero rechaza el segundo frame con el mismo ts', async () => {
     const first = frame(1793388603.75, false, 10, 1800);
     const changed = frame(1793388603.75, true, 20, 1900);
