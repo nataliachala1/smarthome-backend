@@ -272,7 +272,12 @@ export function parseMqttConfig(
   }
   const rpcSource =
     read('MQTT_SHELLY_RPC_SOURCE') ??
-    (namespace ? `${namespace}/backend` : 'smarthome-backend');
+    (flespi && namespace && flespiDeviceId
+      ? `${namespace}/backend/${flespiDeviceId}`
+      : namespace ? `${namespace}/backend` : 'smarthome-backend');
+  if (flespi && rpcSource !== `${namespace}/backend/${flespiDeviceId}`) {
+    throw new Error('MQTT_FLESPI_RPC_SOURCE_INVALID');
+  }
   if (
     !topicPath.test(rpcSource) ||
     rpcSource.length > 256 ||

@@ -28,6 +28,9 @@ import { PrismaDeviceRepository } from './infrastructure/persistence/prisma-devi
 import { MqttDeviceControlPublisher } from './infrastructure/messaging/mqtt-device-control.publisher';
 import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-device-status.subscriber';
 import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.service';
+import { FlespiShellyStatusRpcClient } from './infrastructure/messaging/flespi-shelly-status-rpc.client';
+import { FlespiShellyStateReconciler } from './infrastructure/messaging/flespi-shelly-state.reconciler';
+import { FlespiShellyStateSyncWorker } from './infrastructure/messaging/flespi-shelly-state-sync.worker';
 
 import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
 import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
@@ -59,6 +62,18 @@ import { ShellyController } from './presentation/controllers/shelly.controller';
 
 import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-offline-watcher.service';
 
+// Polling is strictly opt-in and allowed only on a single-replica VPS DEV
+// backed by the single-device flespi ACL. No HTTP input can enable it.
+const flespiStateSyncEnabled = process.env.SHELLY_FLESPI_STATE_SYNC_ENABLED === 'true';
+if (flespiStateSyncEnabled && (
+  process.env.NODE_ENV !== 'production' ||
+  process.env.APP_ENV !== 'development' ||
+  process.env.MQTT_ENABLED !== 'true' ||
+  process.env.MQTT_BROKER_PROVIDER !== 'flespi' ||
+  process.env.SHELLY_FLESPI_STATE_SYNC_SINGLE_REPLICA !== 'true'
+)) {
+  throw new Error('SHELLY_FLESPI_STATE_SYNC_DEV_ONLY');
+}
 // Se decide una sola vez al cargar el modulo. Nunca a partir de HTTP.
 const shellyMqttPlan = selectShellyMqttProviderPlan();
 
@@ -101,6 +116,9 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
 
     MqttDeviceStatusSubscriber,
     MqttRuntimeService,
+    FlespiShellyStatusRpcClient,
+    FlespiShellyStateReconciler,
+    ...(flespiStateSyncEnabled ? [FlespiShellyStateSyncWorker] : []),
     DeviceOfflineWatcherService,
 
     IdentifyShellyDeviceUseCase,
