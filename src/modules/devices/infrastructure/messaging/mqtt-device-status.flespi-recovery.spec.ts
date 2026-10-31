@@ -21,8 +21,8 @@ const frame = (ts: number, output: boolean, watts: number, totalWh: number) =>
     },
   }));
 
-type Options = { watermark?: number; previousKwh?: number };
-function setup({ watermark, previousKwh }: Options = {}) {
+type Options = { watermark?: number; previousKwh?: number; latestReadAt?: Date };
+function setup({ watermark, previousKwh, latestReadAt }: Options = {}) {
   const emitToUser = jest.fn();
   const tx = {
     $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray, ...values: unknown[]) => {
@@ -36,7 +36,7 @@ function setup({ watermark, previousKwh }: Options = {}) {
       if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
         return [{ id_device: 'device-1' }];
       if (/SELECT energy_total_kwh/.test(statement))
-        return previousKwh === undefined ? [] : [{ energy_total_kwh: previousKwh }];
+        return [{ energy_total_kwh: previousKwh ?? null, latest_read_at: latestReadAt ?? null }];
       throw new Error(`Unexpected SQL 3D.3: ${statement}`);
     }),
     device: { update: jest.fn().mockImplementation(async ({ data }) => ({
@@ -61,6 +61,7 @@ function setup({ watermark, previousKwh }: Options = {}) {
     prisma as never, {} as never, { emitToUser } as never,
   ) as unknown as {
     handleStatusMessage(topic: string, payload: Buffer): Promise<void>;
+    parsePayload(topic: string, payload: Buffer): unknown;
     findHomeRealtimeRecipients(tx: unknown, deviceId: string, homeId: string): Promise<{id_user:string}[]>;
   };
   jest.spyOn(internal, 'findHomeRealtimeRecipients').mockResolvedValue([{ id_user: 'user-1' }]);
@@ -90,6 +91,41 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     expect(c.tx.device.update).toHaveBeenCalledTimes(1);
     expect(c.tx.consumption.createMany).toHaveBeenCalledTimes(1);
   });
+  it('3D.3-B2: read_at anterior al ultimo persistido se eleva sin perder delta', async () => {
+    const last = new Date(Date.now() + 15_000);
+    const c = setup({ previousKwh: 1.0, latestReadAt: last });
+    jest.spyOn(c.internal, 'parsePayload').mockReturnValue({
+      connectivityStatus: 'ONLINE', isOn: true, currentPowerW: 25,
+      energyTotalKwh: 1.5,
+      readAt: new Date(Date.now() - 30_000).toISOString(),
+    });
+    await c.internal.handleStatusMessage(TOPIC, frame(1793388604.8, true, 25, 1500));
+    expect(c.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        energy_delta_kwh: 0.5, read_at: new Date(last.getTime() + 1),
+      })],
+    }));
+    expect(c.emitToUser).toHaveBeenCalledWith(
+      'user-1', 'consumption.created',
+      expect.objectContaining({ readAt: new Date(last.getTime() + 1) }),
+    );
+  });
+
+  it('3D.3-B2: consumo sin total tambien mantiene read_at posterior', async () => {
+    const last = new Date(Date.now() + 15_000);
+    const c = setup({ latestReadAt: last });
+    jest.spyOn(c.internal, 'parsePayload').mockReturnValue({
+      connectivityStatus: 'ONLINE', isOn: false, currentPowerW: 0,
+      readAt: new Date(Date.now() - 30_000).toISOString(),
+    });
+    await c.internal.handleStatusMessage(TOPIC, frame(1793388604.8, false, 0, 0));
+    expect(c.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        energy_delta_kwh: 0, read_at: new Date(last.getTime() + 1),
+      })],
+    }));
+  });
+
   it('reconoce hashes distintos pero rechaza el segundo frame con el mismo ts', async () => {
     const first = frame(1793388603.75, false, 10, 1800);
     const changed = frame(1793388603.75, true, 20, 1900);

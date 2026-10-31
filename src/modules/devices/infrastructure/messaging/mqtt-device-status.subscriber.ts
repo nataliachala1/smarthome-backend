@@ -342,40 +342,53 @@ export class MqttDeviceStatusSubscriber
       const consumptionRecipients: { id_user: string }[] = [];
 
       if (shouldCreateConsumption && powerW !== undefined) {
-        const previousConsumption =
-          message.energyTotalKwh === undefined ||
-          message.energyTotalKwh === null
+        // Device row is already locked above for flespi. read_at is used
+        // to find the last cumulative-energy baseline; a message received
+        // earlier can be committed later. Keep persisted read_at monotonic
+        // per device without changing the origin timestamp in SQL035.
+        let orderedReadAt = readAt;
+        const previousConsumption = isFlespi
+          ? ((await tx.$queryRaw<Array<{
+              energy_total_kwh: Prisma.Decimal | null;
+              latest_read_at: Date | null;
+            }>>`
+              SELECT
+                (SELECT energy_total_kwh
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                   AND energy_total_kwh IS NOT NULL
+                 ORDER BY read_at DESC LIMIT 1) AS energy_total_kwh,
+                (SELECT read_at
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                 ORDER BY read_at DESC LIMIT 1) AS latest_read_at
+            `)[0] ?? null)
+          : message.energyTotalKwh === undefined ||
+              message.energyTotalKwh === null
             ? null
-            : isFlespi
-              // smarthome_ingest has column-level SELECT grants only. Prisma
-              // findFirst may read additional columns under this model.
-              // Read only the four authorized fields; keep legacy unchanged.
-              ? ((await tx.$queryRaw<
-                  Array<{ energy_total_kwh: Prisma.Decimal | null }>
-                >`
-                  SELECT energy_total_kwh
-                  FROM consumption.consumption
-                  WHERE id_device = ${device.id_device}::uuid
-                    AND id_home = ${device.id_home}::uuid
-                    AND energy_total_kwh IS NOT NULL
-                  ORDER BY read_at DESC
-                  LIMIT 1
-                `)[0] ?? null)
-              : await tx.consumption.findFirst({
-                  where: {
-                    id_device: device.id_device,
-                    id_home: device.id_home,
-                    energy_total_kwh: {
-                      not: null,
-                    },
-                  },
-                  orderBy: {
-                    read_at: 'desc',
-                  },
-                  select: {
-                    energy_total_kwh: true,
-                  },
-                });
+            : await tx.consumption.findFirst({
+                where: {
+                  id_device: device.id_device,
+                  id_home: device.id_home,
+                  energy_total_kwh: { not: null },
+                },
+                orderBy: { read_at: 'desc' },
+                select: { energy_total_kwh: true },
+              });
+
+        if (isFlespi) {
+          const latest = (previousConsumption as {
+            latest_read_at?: Date | null;
+          } | null)?.latest_read_at;
+          const lastMillis = latest?.getTime() ?? 0;
+          // +1 ms resolves equal timestamp ties, including across workers.
+          // This is the effective persistence timestamp (not Shelly ts).
+          orderedReadAt = new Date(Math.max(
+            Date.now(), readAt.getTime(), lastMillis + 1,
+          ));
+        }
 
         const energyDeltaKwh =
           message.energyDeltaKwh ??
@@ -400,7 +413,7 @@ export class MqttDeviceStatusSubscriber
             current_a: message.currentA ?? null,
             frequency_hz: message.frequencyHz ?? null,
             temperature_c: message.temperatureC ?? null,
-            read_at: readAt,
+            read_at: orderedReadAt,
           }],
         });
 
@@ -417,7 +430,7 @@ export class MqttDeviceStatusSubscriber
           currentA: message.currentA ?? null,
           frequencyHz: message.frequencyHz ?? null,
           temperatureC: message.temperatureC ?? null,
-          readAt,
+          readAt: orderedReadAt,
         };
         // Estadisticas y alertas: pendientes de worker con permisos propios.
       }
