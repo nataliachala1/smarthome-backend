@@ -31,6 +31,14 @@ export class MqttTopicContract {
   }
 
   subscriptions(): string[] {
+    // Single-device flespi ACL: no wildcard subscriptions or internal topic.
+    if (this.config.flespiDeviceId) {
+      const prefix = this.shellyPrefix(this.config.flespiDeviceId);
+      return [
+        `${prefix}/status/switch:${this.config.switchId}`,
+        `${prefix}/events/rpc`,
+      ];
+    }
     const shelly = this.config.namespace
       ? `${this.config.devicePrefix}/+`
       : '+';
@@ -42,6 +50,17 @@ export class MqttTopicContract {
   }
 
   parseStatus(topic: string): MqttStatusTopic | null {
+    if (this.config.flespiDeviceId) {
+      const id = this.config.flespiDeviceId;
+      const prefix = this.shellyPrefix(id);
+      if (topic === `${prefix}/status/switch:${this.config.switchId}`) {
+        return { manufacturerDeviceId: id, kind: 'shelly-switch' };
+      }
+      if (topic === `${prefix}/events/rpc`) {
+        return { manufacturerDeviceId: id, kind: 'shelly-events' };
+      }
+      return null;
+    }
     const parts = topic.split('/');
     for (const [index, filter] of this.subscriptions().entries()) {
       const expected = filter.split('/');

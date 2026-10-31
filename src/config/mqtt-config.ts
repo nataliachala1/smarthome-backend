@@ -9,6 +9,8 @@ export const MQTT_SETTINGS = [
   'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL',
   'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE',
   'MQTT_ENABLED',
+  'MQTT_BROKER_PROVIDER',
+  'MQTT_FLESPI_DEVICE_ID',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
   'MQTT_USERNAME',
@@ -39,6 +41,8 @@ export interface MqttConfiguration {
   statusClientId?: string;
   caFile?: string;
   namespace?: string;
+  /** Scope explicitly authorized by the single-device flespi MQTT ACL token. */
+  flespiDeviceId?: string;
   devicePrefix: string;
   rpcSource: string;
   switchId: number;
@@ -79,6 +83,25 @@ export function parseMqttConfig(
   if (enabledSetting !== undefined && !['true', 'false'].includes(enabledSetting)) {
     throw new Error('MQTT_ENABLED debe ser true o false.');
   }
+  // Opt-in: fuera de VPS DEV el comportamiento histórico se conserva.
+  const brokerProvider = read('MQTT_BROKER_PROVIDER') ?? 'mosquitto';
+  if (!['mosquitto', 'flespi'].includes(brokerProvider)) {
+    throw new Error('MQTT_BROKER_PROVIDER_INVALID');
+  }
+  const flespi = brokerProvider === 'flespi';
+  if (flespi && (!vpsDev || enabledSetting !== 'true')) {
+    throw new Error('MQTT_FLESPI_DEV_MODE_NOT_ALLOWED');
+  }
+  // Fail closed: the ACL grants only exact topics for this single Shelly.
+  const flespiDeviceId = read('MQTT_FLESPI_DEVICE_ID');
+  if (flespi) {
+    if (!flespiDeviceId || !mqttDeviceId.test(flespiDeviceId) ||
+        !/^shelly[a-z0-9-]+$/.test(flespiDeviceId)) {
+      throw new Error('MQTT_FLESPI_DEVICE_ID_INVALID');
+    }
+  } else if (flespiDeviceId) {
+    throw new Error('MQTT_FLESPI_DEVICE_ID_UNEXPECTED');
+  }
   const transportOptIn = read('SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED') === 'true';
   if (vpsDev && enabledSetting !== 'false' && enabledSetting !== 'true') {
     throw new Error('MQTT_VPS_DEV_EXPLICIT_FLAG_REQUIRED');
@@ -110,6 +133,9 @@ export function parseMqttConfig(
     };
   }
   const brokerUrl = read('MQTT_BROKER_URL');
+  if (flespi && brokerUrl !== 'mqtts://mqtt.flespi.io:8883') {
+    throw new Error('MQTT_FLESPI_BROKER_NOT_ALLOWED');
+  }
   let tls = false;
   if (brokerUrl) {
     let url: URL;
@@ -152,13 +178,22 @@ export function parseMqttConfig(
   }
   const username = read('MQTT_USERNAME');
   const password = read('MQTT_PASSWORD');
-  if (Boolean(username) !== Boolean(password) || (production && !username)) {
+  if (flespi) {
+    // En flespi el token MQTT ACL es el username y no hay password.
+    if (!username || password) {
+      throw new Error('MQTT_FLESPI_TOKEN_AUTH_REQUIRED');
+    }
+  } else if (Boolean(username) !== Boolean(password) || (production && !username)) {
     throw new Error(
       'MQTT_USERNAME y MQTT_PASSWORD deben configurarse juntos; son obligatorios en producción.',
     );
   }
   const caFile = read('MQTT_TLS_CA_FILE');
-  if (vpsDev && enabledSetting === 'true' && !caFile) {
+  if (flespi && caFile) {
+    // No mezclar la CA privada del Mosquitto DEV con las raíces públicas.
+    throw new Error('MQTT_FLESPI_SYSTEM_TRUST_REQUIRED');
+  }
+  if (vpsDev && enabledSetting === 'true' && !caFile && !flespi) {
     throw new Error('MQTT_VPS_DEV_TLS_CA_REQUIRED');
   }
   if (caFile && !tls) {
@@ -184,6 +219,9 @@ export function parseMqttConfig(
       !namespace?.startsWith('smarthome/dev/')) {
     throw new Error('MQTT_VPS_DEV_NAMESPACE_NOT_ALLOWED');
   }
+  if (flespi && namespace !== 'smarthome/dev/v1') {
+    throw new Error('MQTT_FLESPI_NAMESPACE_NOT_ALLOWED');
+  }
   const legacyPrefix = read('MQTT_CONTROL_TOPIC_PREFIX');
   const devicePrefix = namespace
     ? `${namespace}/devices`
@@ -199,7 +237,9 @@ export function parseMqttConfig(
     throw new Error('MQTT_SHELLY_SWITCH_ID debe ser un entero no negativo.');
   }
   const switchId = +rawSwitchId;
-  const shellyPrefix = namespace ? `${devicePrefix}/+` : '+';
+  const shellyPrefix = flespi
+    ? `${devicePrefix}/${flespiDeviceId}`
+    : namespace ? `${devicePrefix}/+` : '+';
   const derived: Record<string, string> = {
     MQTT_CONTROL_TOPIC_PREFIX: devicePrefix,
     MQTT_STATUS_TOPIC_FILTER: `${devicePrefix}/+/status`,
@@ -232,7 +272,12 @@ export function parseMqttConfig(
   }
   const rpcSource =
     read('MQTT_SHELLY_RPC_SOURCE') ??
-    (namespace ? `${namespace}/backend` : 'smarthome-backend');
+    (flespi && namespace && flespiDeviceId
+      ? `${namespace}/backend/${flespiDeviceId}`
+      : namespace ? `${namespace}/backend` : 'smarthome-backend');
+  if (flespi && rpcSource !== `${namespace}/backend/${flespiDeviceId}`) {
+    throw new Error('MQTT_FLESPI_RPC_SOURCE_INVALID');
+  }
   if (
     !topicPath.test(rpcSource) ||
     rpcSource.length > 256 ||
@@ -253,6 +298,7 @@ export function parseMqttConfig(
     statusClientId,
     caFile,
     namespace,
+    flespiDeviceId: flespi ? flespiDeviceId : undefined,
     devicePrefix,
     rpcSource,
     switchId,

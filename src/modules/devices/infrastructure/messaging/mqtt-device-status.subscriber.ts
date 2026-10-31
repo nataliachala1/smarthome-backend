@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { connect, MqttClient } from 'mqtt';
 import { MqttRuntimeService } from './mqtt-runtime.service';
+import { parseFlespiShellyTelemetry } from './flespi-shelly-telemetry.parser';
+import { identifyFlespiShellyEvent } from './flespi-shelly-event-key';
 
 import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
 
@@ -75,11 +77,19 @@ export class MqttDeviceStatusSubscriber
     client.on('connect', () => {
       const topics = this.mqtt.topics.subscriptions();
 
-      client.subscribe(topics, { qos: 1 }, (error) => {
-        if (error) {
+      client.subscribe(topics, { qos: 1 }, (error, granted) => {
+        // MQTT 3.1.1 may SUBACK with qos=128 for an unauthorized topic.
+        // Requiring every exact grant prevents a false 'subscribed' log.
+        const grants = granted ?? [];
+        const flespiGrantRejected = Boolean(this.mqtt.config.flespiDeviceId) &&
+          topics.some((topic) => !grants.some(
+            (grant) => grant.topic === topic && grant.qos !== 128,
+          ));
+        if (error || flespiGrantRejected) {
           this.logger.error(
             'MQTT_SUBSCRIBE_FAILED: no se pudo suscribir a los tópicos de estado.',
           );
+          if (flespiGrantRejected) client.end(true);
           return;
         }
 
@@ -89,7 +99,12 @@ export class MqttDeviceStatusSubscriber
       });
     });
 
-    client.on('message', (topic, payload) => {
+    client.on('message', (topic, payload, packet) => {
+      // A previously retained switch state must not overwrite live telemetry.
+      if (this.mqtt.config.flespiDeviceId && packet.retain) {
+        this.logger.warn('MQTT_FLESPI_RETAINED_STATUS_IGNORED');
+        return;
+      }
       void this.handleStatusMessage(topic, payload).catch(() => {
         this.logger.error(
           'MQTT_STATUS_PROCESSING_FAILED: no se pudo procesar el mensaje de estado.',
@@ -198,23 +213,43 @@ export class MqttDeviceStatusSubscriber
     }
 
     const powerW = message.currentPowerW;
+    const isFlespi = Boolean(this.mqtt.config?.flespiDeviceId);
+    // Unordered flespi frames cannot safely replace newer state, even if
+    // they contain power. Ignore them rather than invent an origin timestamp.
+    const eventIdentity = isFlespi
+      ? identifyFlespiShellyEvent(topic, payload, this.mqtt.config.switchId)
+      : null;
+    // A future source timestamp would poison SQL036's durable watermark and
+    // suppress legitimate later device events. Require server/NTP sanity;
+    // use a narrow tolerance for short clock drift, never adjust the source.
+    if (isFlespi && eventIdentity &&
+        eventIdentity.deviceEventTs > Date.now() / 1000 + 300) {
+      this.logger.warn('MQTT_FLESPI_FUTURE_TIMESTAMP_IGNORED');
+      return;
+    }
+    if (isFlespi && !eventIdentity) {
+      this.logger.debug('MQTT_FLESPI_UNORDERED_FRAME_IGNORED');
+      return;
+    }
+    const shouldCreateConsumption = typeof powerW === 'number' &&
+      (!isFlespi || eventIdentity !== null);
 
-    const shouldCreateConsumption = typeof powerW === 'number';
-
-      const updatedDevice = await this.prisma.device.update({
-        where: {
-          id_device: device.id_device,
-        },
-        data: deviceData,
-        select: {
-          id_device: true,
-          id_home: true,
-          connectivity_status: true,
-          is_on: true,
-          current_power_w: true,
-          updated_at: true,
-        },
-      });
+    // Mosquitto conserva la política histórica: estado independiente del consumo.
+    // flespi actualiza el estado DENTRO de la transacción de consumo.
+    const legacyUpdatedDevice = this.mqtt.config?.flespiDeviceId
+      ? null
+      : await this.prisma.device.update({
+          where: { id_device: device.id_device },
+          data: deviceData,
+          select: {
+            id_device: true,
+            id_home: true,
+            connectivity_status: true,
+            is_on: true,
+            current_power_w: true,
+            updated_at: true,
+          },
+        });
 
     let recipients: { id_user: string }[] = [];
 
@@ -232,6 +267,60 @@ export class MqttDeviceStatusSubscriber
     }
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
+      if (isFlespi && eventIdentity) {
+        // Lock the real device row, in this same transaction, before checking
+        // SQL036 or touching SQL035. Serializes events across app instances.
+        // RLS and the existing smarthome_ingest SELECT/UPDATE grants apply.
+        const locked = await tx.$queryRaw<Array<{ id_device: string }>>`
+          SELECT id_device FROM devices.device
+          WHERE id_device = ${device.id_device}::uuid
+            AND id_home = ${device.id_home}::uuid
+            AND status = 'ACTIVE' AND deleted_at IS NULL
+          FOR UPDATE
+        `;
+        if (locked.length !== 1) throw new Error('MQTT_FLESPI_DEVICE_LOCK_FAILED');
+
+        // Equality is also rejected: two different frames with equal source
+        // timestamp cannot be safely ordered. No state, ledger or energy write.
+        const newerOrEqual = await tx.$queryRaw<
+          Array<{ device_event_ts: Prisma.Decimal }>
+        >`
+          SELECT device_event_ts
+          FROM consumption.mqtt_ingest_dedup
+          WHERE id_device = ${device.id_device}::uuid
+            AND device_event_ts >= ${eventIdentity.deviceEventTs}::numeric
+          ORDER BY device_event_ts DESC LIMIT 1
+        `;
+        if (newerOrEqual.length > 0) return null;
+
+        // SQL035 ledger also records timestamped state-only RPC events:
+        // they advance the watermark but never invent consumption readings.
+        const inserted = await tx.$queryRaw<Array<{ id_device: string }>>`
+          INSERT INTO consumption.mqtt_ingest_dedup
+            (id_device, id_home, event_key, source_topic, device_event_ts)
+          VALUES
+            (${device.id_device}::uuid, ${device.id_home}::uuid,
+             ${eventIdentity.eventKey}, ${topic},
+             ${eventIdentity.deviceEventTs}::numeric)
+          ON CONFLICT (id_device, event_key) DO NOTHING
+          RETURNING id_device
+        `;
+        if (inserted.length === 0) return null;
+      }
+      const updatedDevice = this.mqtt.config?.flespiDeviceId
+        ? await tx.device.update({
+            where: { id_device: device.id_device },
+            data: deviceData,
+            select: {
+              id_device: true,
+              id_home: true,
+              connectivity_status: true,
+              is_on: true,
+              current_power_w: true,
+              updated_at: true,
+            },
+          })
+        : legacyUpdatedDevice!;
       const notifications: CreatedNotification[] = [];
 
       let consumptionEvent: {
@@ -253,25 +342,53 @@ export class MqttDeviceStatusSubscriber
       const consumptionRecipients: { id_user: string }[] = [];
 
       if (shouldCreateConsumption && powerW !== undefined) {
-        const previousConsumption =
-          message.energyTotalKwh === undefined ||
-          message.energyTotalKwh === null
+        // Device row is already locked above for flespi. read_at is used
+        // to find the last cumulative-energy baseline; a message received
+        // earlier can be committed later. Keep persisted read_at monotonic
+        // per device without changing the origin timestamp in SQL035.
+        let orderedReadAt = readAt;
+        const previousConsumption = isFlespi
+          ? ((await tx.$queryRaw<Array<{
+              energy_total_kwh: Prisma.Decimal | null;
+              latest_read_at: Date | null;
+            }>>`
+              SELECT
+                (SELECT energy_total_kwh
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                   AND energy_total_kwh IS NOT NULL
+                 ORDER BY read_at DESC LIMIT 1) AS energy_total_kwh,
+                (SELECT read_at
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                 ORDER BY read_at DESC LIMIT 1) AS latest_read_at
+            `)[0] ?? null)
+          : message.energyTotalKwh === undefined ||
+              message.energyTotalKwh === null
             ? null
             : await tx.consumption.findFirst({
                 where: {
                   id_device: device.id_device,
                   id_home: device.id_home,
-                  energy_total_kwh: {
-                    not: null,
-                  },
+                  energy_total_kwh: { not: null },
                 },
-                orderBy: {
-                  read_at: 'desc',
-                },
-                select: {
-                  energy_total_kwh: true,
-                },
+                orderBy: { read_at: 'desc' },
+                select: { energy_total_kwh: true },
               });
+
+        if (isFlespi) {
+          const latest = (previousConsumption as {
+            latest_read_at?: Date | null;
+          } | null)?.latest_read_at;
+          const lastMillis = latest?.getTime() ?? 0;
+          // +1 ms resolves equal timestamp ties, including across workers.
+          // This is the effective persistence timestamp (not Shelly ts).
+          orderedReadAt = new Date(Math.max(
+            Date.now(), readAt.getTime(), lastMillis + 1,
+          ));
+        }
 
         const energyDeltaKwh =
           message.energyDeltaKwh ??
@@ -296,7 +413,7 @@ export class MqttDeviceStatusSubscriber
             current_a: message.currentA ?? null,
             frequency_hz: message.frequencyHz ?? null,
             temperature_c: message.temperatureC ?? null,
-            read_at: readAt,
+            read_at: orderedReadAt,
           }],
         });
 
@@ -313,7 +430,7 @@ export class MqttDeviceStatusSubscriber
           currentA: message.currentA ?? null,
           frequencyHz: message.frequencyHz ?? null,
           temperatureC: message.temperatureC ?? null,
-          readAt,
+          readAt: orderedReadAt,
         };
         // Estadisticas y alertas: pendientes de worker con permisos propios.
       }
@@ -335,14 +452,23 @@ export class MqttDeviceStatusSubscriber
 
       this.logger.error(`MQTT_CONSUMPTION_PERSISTENCE_FAILED: ${code}`);
 
+      // No emitir estado confirmado si el consumo del mismo mensaje falló.
+      // PostgreSQL revierte la actualización del dispositivo al fallar tx.
+      if (this.mqtt.config?.flespiDeviceId) throw error;
+
       return {
-        updatedDevice,
+        updatedDevice: legacyUpdatedDevice!,
         recipients,
         notifications: [] as CreatedNotification[],
         consumptionEvent: null,
         consumptionRecipients: [] as { id_user: string }[],
       };
     });
+
+    if (transactionResult === null) {
+      this.logger.debug('MQTT_FLESPI_DUPLICATE_OR_STALE_EVENT_IGNORED');
+      return;
+    }
 
     /*
      * Los eventos se emiten DESPUÉS de que la transacción termina
@@ -442,6 +568,14 @@ export class MqttDeviceStatusSubscriber
 
       if (this.mqtt.topics.parseStatus(topic)?.kind === 'internal') {
         return this.parseSmartHomePayload(parsed);
+      }
+
+      // Separate, strict parser for the single-device flespi ACL.
+      // Legacy Mosquitto behavior stays unchanged.
+      if (this.mqtt.config.flespiDeviceId) {
+        const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+        if (kind !== 'shelly-switch' && kind !== 'shelly-events') return null;
+        return parseFlespiShellyTelemetry(kind, parsed, this.mqtt.config.switchId);
       }
 
       const shellySwitchStatus = this.extractShellySwitchStatus(topic, parsed);
