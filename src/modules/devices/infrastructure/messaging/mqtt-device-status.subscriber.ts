@@ -214,16 +214,17 @@ export class MqttDeviceStatusSubscriber
 
     const powerW = message.currentPowerW;
     const isFlespi = Boolean(this.mqtt.config?.flespiDeviceId);
-    // A stable origin event identity is required for durable consumption on flespi.
-    // Component /status/switch:0 does not include an origin event ID: state only.
-    const eventIdentity = isFlespi && typeof powerW === 'number'
+    // Unordered flespi frames cannot safely replace newer state, even if
+    // they contain power. Ignore them rather than invent an origin timestamp.
+    const eventIdentity = isFlespi
       ? identifyFlespiShellyEvent(topic, payload, this.mqtt.config.switchId)
       : null;
+    if (isFlespi && !eventIdentity) {
+      this.logger.debug('MQTT_FLESPI_UNORDERED_FRAME_IGNORED');
+      return;
+    }
     const shouldCreateConsumption = typeof powerW === 'number' &&
       (!isFlespi || eventIdentity !== null);
-    if (isFlespi && typeof powerW === 'number' && !eventIdentity) {
-      this.logger.debug('MQTT_FLESPI_CONSUMPTION_SKIPPED_UNIDENTIFIED_FRAME');
-    }
 
     // Mosquitto conserva la política histórica: estado independiente del consumo.
     // flespi actualiza el estado DENTRO de la transacción de consumo.
@@ -258,9 +259,34 @@ export class MqttDeviceStatusSubscriber
     }
 
     const transactionResult = await this.prisma.$transaction(async (tx) => {
-      if (isFlespi && shouldCreateConsumption && eventIdentity) {
-        // SQL035: the unique (id_device, event_key) constraint serializes
-        // duplicate deliveries. The ledger and consumption share this tx.
+      if (isFlespi && eventIdentity) {
+        // Lock the real device row, in this same transaction, before checking
+        // SQL036 or touching SQL035. Serializes events across app instances.
+        // RLS and the existing smarthome_ingest SELECT/UPDATE grants apply.
+        const locked = await tx.$queryRaw<Array<{ id_device: string }>>`
+          SELECT id_device FROM devices.device
+          WHERE id_device = ${device.id_device}::uuid
+            AND id_home = ${device.id_home}::uuid
+            AND status = 'ACTIVE' AND deleted_at IS NULL
+          FOR UPDATE
+        `;
+        if (locked.length !== 1) throw new Error('MQTT_FLESPI_DEVICE_LOCK_FAILED');
+
+        // Equality is also rejected: two different frames with equal source
+        // timestamp cannot be safely ordered. No state, ledger or energy write.
+        const newerOrEqual = await tx.$queryRaw<
+          Array<{ device_event_ts: Prisma.Decimal }>
+        >`
+          SELECT device_event_ts
+          FROM consumption.mqtt_ingest_dedup
+          WHERE id_device = ${device.id_device}::uuid
+            AND device_event_ts >= ${eventIdentity.deviceEventTs}::numeric
+          ORDER BY device_event_ts DESC LIMIT 1
+        `;
+        if (newerOrEqual.length > 0) return null;
+
+        // SQL035 ledger also records timestamped state-only RPC events:
+        // they advance the watermark but never invent consumption readings.
         const inserted = await tx.$queryRaw<Array<{ id_device: string }>>`
           INSERT INTO consumption.mqtt_ingest_dedup
             (id_device, id_home, event_key, source_topic, device_event_ts)
@@ -419,7 +445,7 @@ export class MqttDeviceStatusSubscriber
     });
 
     if (transactionResult === null) {
-      this.logger.debug('MQTT_FLESPI_DUPLICATE_EVENT_IGNORED');
+      this.logger.debug('MQTT_FLESPI_DUPLICATE_OR_STALE_EVENT_IGNORED');
       return;
     }
 

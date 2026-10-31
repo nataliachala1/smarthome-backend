@@ -21,7 +21,15 @@ function setup(duplicate: boolean) {
     is_on: true, current_power_w: 25, updated_at: new Date('2026-10-30T22:00:00Z'),
   };
   const tx = {
-    $queryRaw: jest.fn().mockResolvedValue(duplicate ? [] : [{ id_device: 'device-1' }]),
+    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+      const statement = sql.join('?');
+      if (/FOR UPDATE/.test(statement)) return [{ id_device: 'device-1' }];
+      if (/SELECT device_event_ts/.test(statement)) return [];
+      if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
+        return duplicate ? [] : [{ id_device: 'device-1' }];
+      if (/SELECT energy_total_kwh/.test(statement)) return [];
+      throw new Error(`Unexpected SQL in test: ${statement}`);
+    }),
     device: { update: jest.fn().mockResolvedValue(updated) },
     consumption: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -67,35 +75,37 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     const c = setup(false);
     await c.internal.handleStatusMessage(topic, rpc);
     expect(c.prisma.device.update).not.toHaveBeenCalled();
-    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(4);
     expect(c.tx.consumption.findFirst).not.toHaveBeenCalled();
     expect(c.tx.device.update).toHaveBeenCalledTimes(1);
     expect(c.tx.consumption.createMany).toHaveBeenCalledTimes(1);
     expect(c.emitToUser).toHaveBeenCalledWith('user-1', 'consumption.created', expect.anything());
-    const insertOrder = c.tx.$queryRaw.mock.invocationCallOrder[0];
+    const lockOrder = c.tx.$queryRaw.mock.invocationCallOrder[0];
+    const ledgerOrder = c.tx.$queryRaw.mock.invocationCallOrder[2];
     const deviceOrder = c.tx.device.update.mock.invocationCallOrder[0];
-    expect(insertOrder).toBeLessThan(deviceOrder);
+    expect(lockOrder).toBeLessThan(ledgerOrder);
+    expect(ledgerOrder).toBeLessThan(deviceOrder);
   });
 
   it('no actualiza estado, consumo ni realtime al detectar duplicado', async () => {
     const c = setup(true);
     await c.internal.handleStatusMessage(topic, rpc);
-    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(c.tx.$queryRaw).toHaveBeenCalledTimes(3);
     expect(c.tx.device.update).not.toHaveBeenCalled();
     expect(c.tx.consumption.createMany).not.toHaveBeenCalled();
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('sin timestamp de origen actualiza estado, pero no almacena consumo', async () => {
+  it('sin timestamp de origen no altera estado ni inventa consumo', async () => {
     const c = setup(false);
     const noTs = Buffer.from(JSON.stringify({
       method: 'NotifyStatus', params: { 'switch:0': { output: true, apower: 25 } },
     }));
     await c.internal.handleStatusMessage(topic, noTs);
     expect(c.tx.$queryRaw).not.toHaveBeenCalled();
-    expect(c.tx.device.update).toHaveBeenCalledTimes(1);
+    expect(c.tx.device.update).not.toHaveBeenCalled();
     expect(c.tx.consumption.createMany).not.toHaveBeenCalled();
-    expect(c.emitToUser).toHaveBeenCalledWith('user-1', 'device.status.updated', expect.anything());
+    expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
   it('status/switch:0 no inventa una identidad por hora de recepción', async () => {
@@ -103,6 +113,6 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     await c.internal.handleStatusMessage(direct, Buffer.from(JSON.stringify({ output: true, apower: 25 })));
     expect(c.tx.$queryRaw).not.toHaveBeenCalled();
     expect(c.tx.consumption.createMany).not.toHaveBeenCalled();
-    expect(c.tx.device.update).toHaveBeenCalledTimes(1);
+    expect(c.tx.device.update).not.toHaveBeenCalled();
   });
 });

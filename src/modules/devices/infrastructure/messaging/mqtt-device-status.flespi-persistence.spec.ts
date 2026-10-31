@@ -24,7 +24,15 @@ function setup(consumeFailure = false, power?: number) {
   };
   const tx = {
     device: { update: jest.fn().mockResolvedValue(updated) },
-    $queryRaw: jest.fn().mockResolvedValue([{ id_device: 'device-1' }]),
+    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+      const statement = sql.join('?');
+      if (/FOR UPDATE/.test(statement)) return [{ id_device: 'device-1' }];
+      if (/SELECT device_event_ts/.test(statement)) return [];
+      if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
+        return [{ id_device: 'device-1' }];
+      if (/SELECT energy_total_kwh/.test(statement)) return [{ energy_total_kwh: 1.5 }];
+      throw new Error(`Unexpected SQL in test: ${statement}`);
+    }),
     consumption: {
       findFirst: jest.fn().mockResolvedValue({ energy_total_kwh: 1.5 }),
       createMany: jest.fn().mockImplementation(() => consumeFailure
@@ -88,9 +96,11 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);
     expect(ctx.tx.consumption.createMany).toHaveBeenCalledTimes(1);
     expect(ctx.tx.consumption.findFirst).not.toHaveBeenCalled();
-    expect(ctx.tx.$queryRaw).toHaveBeenCalledTimes(2);
-    // First query inserts SQL035; second reads only granted columns.
-    const previousSql = (ctx.tx.$queryRaw.mock.calls[1][0] as TemplateStringsArray).join('?');
+    expect(ctx.tx.$queryRaw).toHaveBeenCalledTimes(4);
+    // Lock + SQL036 check precede SQL035 insert; last read uses permitted columns.
+    const lockSql = (ctx.tx.$queryRaw.mock.calls[0][0] as TemplateStringsArray).join('?');
+    expect(lockSql).toMatch(/FOR UPDATE/);
+    const previousSql = (ctx.tx.$queryRaw.mock.calls[3][0] as TemplateStringsArray).join('?');
     expect(previousSql).toMatch(/SELECT energy_total_kwh\s+FROM consumption\.consumption/);
     expect(previousSql).not.toMatch(/SELECT\s+\*/i);
     expect(ctx.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -106,9 +116,12 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
 
   it('calcula el delta con la lectura SQL limitada al rol ingest', async () => {
     const ctx = setup(false, 15);
-    ctx.tx.$queryRaw
-      .mockResolvedValueOnce([{ id_device: 'device-1' }])
-      .mockResolvedValueOnce([{ energy_total_kwh: 1 }]);
+    const queryRaw = ctx.tx.$queryRaw.getMockImplementation()!;
+    ctx.tx.$queryRaw.mockImplementation(async (sql: TemplateStringsArray) => {
+      if (/SELECT energy_total_kwh/.test(sql.join('?')))
+        return [{ energy_total_kwh: 1 }];
+      return queryRaw(sql);
+    });
     await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
     expect(ctx.tx.consumption.findFirst).not.toHaveBeenCalled();
     expect(ctx.tx.consumption.createMany).toHaveBeenCalledWith(expect.objectContaining({
