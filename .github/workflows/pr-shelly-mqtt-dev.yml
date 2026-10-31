@@ -23,7 +23,7 @@ concurrency:
 jobs:
   verify:
     name: Verify backend (no deploy)
-    if: ${{ github.event.pull_request.head.ref == 'feat/shelly-mqtt-backend-vps' || github.event.pull_request.head.ref == 'fix/mqtt-ingest-consumption-online' || github.event.pull_request.head.ref == 'feat/flespi-mqtt-vps-dev' }}
+    if: ${{ github.event.pull_request.head.ref == 'feat/shelly-mqtt-backend-vps' || github.event.pull_request.head.ref == 'fix/mqtt-ingest-consumption-online' || github.event.pull_request.head.ref == 'feat/flespi-mqtt-vps-dev' || github.event.pull_request.head.ref == 'feat/flespi-parallel-ingest-dev' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
