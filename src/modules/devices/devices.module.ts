@@ -30,7 +30,11 @@ import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-devi
 import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.service';
 import { FlespiShellyStatusRpcClient } from './infrastructure/messaging/flespi-shelly-status-rpc.client';
 import { FlespiShellyStateReconciler } from './infrastructure/messaging/flespi-shelly-state.reconciler';
-import { FlespiShellyStateSyncWorker } from './infrastructure/messaging/flespi-shelly-state-sync.worker';
+import {
+  FLESPI_MQTT_CONTROL,
+  flespiMqttParallelProviders,
+  RoutedMqttDeviceControlPublisher,
+} from './infrastructure/messaging/flespi-mqtt-parallel.providers';
 
 import { ShellyRpcClientService } from './infrastructure/shelly/shelly-rpc-client.service';
 import { ShellyDiscoveryService } from './infrastructure/shelly/shelly-discovery.service';
@@ -65,11 +69,25 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
 // Polling is strictly opt-in and allowed only on a single-replica VPS DEV
 // backed by the single-device flespi ACL. No HTTP input can enable it.
 const flespiStateSyncEnabled = process.env.SHELLY_FLESPI_STATE_SYNC_ENABLED === 'true';
+const flespiParallelEnabled = process.env.FLESPI_MQTT_DEV_ENABLED === 'true';
+if (flespiParallelEnabled && (
+  process.env.NODE_ENV !== 'production' ||
+  process.env.APP_ENV !== 'development' ||
+  process.env.MQTT_ENABLED !== 'true' ||
+  process.env.MQTT_BROKER_PROVIDER === 'flespi' ||
+  process.env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED !== 'true' ||
+  process.env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED !== 'true' ||
+  process.env.SHELLY_FLESPI_STATE_SYNC_SINGLE_REPLICA !== 'true' ||
+  process.env.FLESPI_MQTT_DEVICE_ID !== 'shelly1pmg4-d885acf06990' ||
+  !process.env.FLESPI_MQTT_BACKEND_TOKEN
+)) {
+  throw new Error('FLESPI_MQTT_PARALLEL_DEV_CONFIGURATION_INVALID');
+}
 if (flespiStateSyncEnabled && (
   process.env.NODE_ENV !== 'production' ||
   process.env.APP_ENV !== 'development' ||
   process.env.MQTT_ENABLED !== 'true' ||
-  process.env.MQTT_BROKER_PROVIDER !== 'flespi' ||
+  !flespiParallelEnabled ||
   process.env.SHELLY_FLESPI_STATE_SYNC_SINGLE_REPLICA !== 'true'
 )) {
   throw new Error('SHELLY_FLESPI_STATE_SYNC_DEV_ONLY');
@@ -118,7 +136,10 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     MqttRuntimeService,
     FlespiShellyStatusRpcClient,
     FlespiShellyStateReconciler,
-    ...(flespiStateSyncEnabled ? [FlespiShellyStateSyncWorker] : []),
+    // The legacy Mosquitto subscriber remains unchanged. Add an independent
+    // strict-ACL flespi subscriber and optional read-only reconciler worker.
+    ...(flespiParallelEnabled ? flespiMqttParallelProviders : []),
+    ...(flespiParallelEnabled ? [MqttDeviceControlPublisher] : []),
     DeviceOfflineWatcherService,
 
     IdentifyShellyDeviceUseCase,
@@ -149,10 +170,18 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
       ? shellyMqttVpsAuthWorkerProviders
       : shellyMqttPlan.vpsAuthPgOnly ? shellyMqttAuthPgDevProviders : []),
 
-    {
-      provide: DeviceControlPublisher,
-      useClass: MqttDeviceControlPublisher,
-    },
+    ...(flespiParallelEnabled
+      ? [{
+          provide: DeviceControlPublisher,
+          useFactory: (
+            mosquitto: MqttDeviceControlPublisher,
+            flespi: MqttDeviceControlPublisher,
+          ) => new RoutedMqttDeviceControlPublisher(
+            mosquitto, flespi, process.env.FLESPI_MQTT_DEVICE_ID!,
+          ),
+          inject: [MqttDeviceControlPublisher, FLESPI_MQTT_CONTROL],
+        }]
+      : [{ provide: DeviceControlPublisher, useClass: MqttDeviceControlPublisher }]),
 
     {
       provide: DeviceRepository,
