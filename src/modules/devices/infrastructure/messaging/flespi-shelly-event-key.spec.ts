@@ -54,7 +54,7 @@ describe('SQL035: identidad de evento Shelly (sin claves por recepción)', () =>
     ['componente vacío', topic, frame(1793388600.25, {})],
     ['método ajeno', topic, frame(1793388600.25, { apower: 1 }, 'NotifyEvent')],
   ])('no crea una identidad falsa: %s', (_name, t, value) => {
-    expect(identifyFlespiShellyEvent(t as string, payload(value), 0)).toBeNull();
+    expect(identifyFlespiShellyEvent(t, payload(value), 0)).toBeNull();
   });
 
   it('rechaza JSON inválido', () => {

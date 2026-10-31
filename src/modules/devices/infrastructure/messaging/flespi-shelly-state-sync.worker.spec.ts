@@ -69,7 +69,7 @@ describe('3D.6-D: Shelly DEV state sync worker opt-in', () => {
     await Promise.resolve();
     await jest.advanceTimersByTimeAsync(30_000);
     expect(c.reconcile).toHaveBeenCalledTimes(2);
-    expect(Logger.prototype.warn).toHaveBeenCalledWith('SHELLY_STATE_RECONCILE_RETRY_SCHEDULED');
+    expect(jest.spyOn(Logger.prototype, 'warn')).toHaveBeenCalledWith('SHELLY_STATE_RECONCILE_RETRY_SCHEDULED');
     c.worker.onModuleDestroy();
   });
 

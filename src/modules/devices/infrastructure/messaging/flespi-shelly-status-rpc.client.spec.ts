@@ -17,10 +17,14 @@ function setup(options: { denied?: boolean; responder?: (request: Record<string,
     end: jest.Mock;
   };
   client.end = jest.fn();
-  client.subscribe = jest.fn((_topic: string, _opt: unknown, callback: Function) =>
+  client.subscribe = jest.fn((_topic: string, _opt: unknown, callback: (error: Error | null, granted?: Array<{ topic: string; qos: number }>) => void) =>
     callback(null, [{ topic: responseTopic, qos: options.denied ? 128 : 1 }]));
-  client.publish = jest.fn((_topic: string, payload: string, _opt: unknown, callback: Function) => {
-    const request = JSON.parse(payload) as Record<string, unknown>;
+  client.publish = jest.fn((_topic: string, payload: string, _opt: unknown, callback: (error: Error | null) => void) => {
+    const parsed: unknown = JSON.parse(payload);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('INVALID_MOCK_RPC_PAYLOAD');
+    }
+    const request = parsed as Record<string, unknown>;
     callback(null);
     const replies = options.responder?.(request) ?? [{
       id: request.id, src: ID, dst: source,
@@ -55,16 +59,17 @@ describe('3D.6-A flespi Switch.GetStatus readonly adapter', () => {
     const result = await pending;
     expect(result).toEqual(expect.objectContaining({
       output: true, powerW: 98.5, voltageV: 116.9, currentA: 0.842,
-      receivedAt: expect.any(Date),
+      receivedAt: expect.any(Date) as unknown,
     }));
-    const request = JSON.parse(client.publish.mock.calls[0][1] as string);
+    const publishCall = (client.publish.mock.calls as Array<[string, string, unknown, unknown]>)[0];
+    const request: unknown = JSON.parse(publishCall[1]);
     expect(request).toMatchObject({ method: 'Switch.GetStatus', src: source, params: { id: 0 } });
     expect(client.subscribe).toHaveBeenCalledWith(responseTopic, { qos: 1 }, expect.any(Function));
     expect(client.subscribe.mock.invocationCallOrder[0]).toBeLessThan(client.publish.mock.invocationCallOrder[0]);
-    expect(client.publish.mock.calls[0][0]).toBe(requestTopic);
-    expect(client.publish.mock.calls[0][2]).toEqual({ qos: 1, retain: false });
+    expect(publishCall[0]).toBe(requestTopic);
+    expect(publishCall[2]).toEqual({ qos: 1, retain: false });
     expect(client.end).toHaveBeenCalledWith(true);
-    expect((connect as jest.Mock).mock.calls[0][1].clientId).not.toBe('shared-status-id');
+    expect(((connect as jest.Mock).mock.calls as Array<[string, { clientId: string }]>)[0][1].clientId).not.toBe('shared-status-id');
   });
 
   it('ignores an unrelated id, wrong source and wrong destination before a valid reply', async () => {

@@ -25,21 +25,21 @@ type Options = { watermark?: number; previousKwh?: number; latestReadAt?: Date }
 function setup({ watermark, previousKwh, latestReadAt }: Options = {}) {
   const emitToUser = jest.fn();
   const tx = {
-    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray, ...values: unknown[]) => {
+    $queryRaw: jest.fn().mockImplementation((sql: TemplateStringsArray, ...values: unknown[]) => {
       const statement = sql.join('?');
-      if (/FOR UPDATE/.test(statement)) return [{ id_device: 'device-1' }];
+      if (/FOR UPDATE/.test(statement)) return Promise.resolve([{ id_device: 'device-1' }]);
       if (/SELECT device_event_ts/.test(statement)) {
         const incomingTs = Number(values[1]);
-        return watermark !== undefined && watermark >= incomingTs
-          ? [{ device_event_ts: watermark }] : [];
+        return Promise.resolve(watermark !== undefined && watermark >= incomingTs
+          ? [{ device_event_ts: watermark }] : []);
       }
       if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
-        return [{ id_device: 'device-1' }];
+        return Promise.resolve([{ id_device: 'device-1' }]);
       if (/SELECT energy_total_kwh/.test(statement))
-        return [{ energy_total_kwh: previousKwh ?? null, latest_read_at: latestReadAt ?? null }];
+        return Promise.resolve([{ energy_total_kwh: previousKwh ?? null, latest_read_at: latestReadAt ?? null }]);
       throw new Error(`Unexpected SQL 3D.3: ${statement}`);
     }),
-    device: { update: jest.fn().mockImplementation(async ({ data }) => ({
+    device: { update: jest.fn().mockImplementation(({ data }: { data: { is_on: boolean; current_power_w: number | null } }) => Promise.resolve({
       id_device: 'device-1', id_home: 'home-1', connectivity_status: 'ONLINE',
       is_on: data.is_on, current_power_w: data.current_power_w,
       updated_at: new Date('2026-10-30T20:00:00Z'),

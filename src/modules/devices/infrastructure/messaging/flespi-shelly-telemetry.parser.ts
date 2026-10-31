@@ -78,7 +78,7 @@ export function parseFlespiShellyTelemetry(
 
   return {
     connectivityStatus: 'ONLINE',
-    isOn: data.output as boolean | undefined,
+    isOn: data.output,
     currentPowerW: power as number | null | undefined,
     voltageV: voltage as number | null | undefined,
     currentA: current as number | null | undefined,

@@ -29,19 +29,19 @@ function setup(options: { enabled?: boolean; found?: boolean; initiallyOn?: bool
   let watermark = '1793388600.50';
   const emitToUser = jest.fn();
   const getSwitchStatus = jest.fn().mockResolvedValue({ output: true, receivedAt: REPLY, powerW: 98.5 });
-  const findFirst = jest.fn().mockImplementation(async () =>
-    options.found === false ? null : { ...state });
-  const update = jest.fn().mockImplementation(async ({ data }) => {
+  const findFirst = jest.fn().mockImplementation(() => Promise.resolve(
+    options.found === false ? null : { ...state }));
+  const update = jest.fn().mockImplementation(({ data }: { data: Partial<FakeState> }) => {
     state = { ...state, ...data, updated_at: REPLY };
-    return { ...state, current_power_w: 50 };
+    return Promise.resolve({ ...state, current_power_w: 50 });
   });
   const tx = {
     device: { findFirst, update },
-    $queryRaw: jest.fn().mockImplementation(async (strings: TemplateStringsArray) => {
+    $queryRaw: jest.fn().mockImplementation((strings: TemplateStringsArray) => {
       const sql = strings.join('?');
-      if (/FOR UPDATE/.test(sql)) return options.found === false ? [] : [{ id_device: 'device-1' }];
-      if (/SELECT device_event_ts/.test(sql)) return [{ device_event_ts: watermark }];
-      if (/fn_mqtt_realtime_recipients/.test(sql)) return [{ id_user: 'user-1' }];
+      if (/FOR UPDATE/.test(sql)) return Promise.resolve(options.found === false ? [] : [{ id_device: 'device-1' }]);
+      if (/SELECT device_event_ts/.test(sql)) return Promise.resolve([{ device_event_ts: watermark }]);
+      if (/fn_mqtt_realtime_recipients/.test(sql)) return Promise.resolve([{ id_user: 'user-1' }]);
       throw new Error(`Unexpected SQL: ${sql}`);
     }),
   };
@@ -49,7 +49,7 @@ function setup(options: { enabled?: boolean; found?: boolean; initiallyOn?: bool
     device: { findFirst: jest.fn().mockResolvedValue(
       options.found === false ? null : { id_device: 'device-1', id_home: 'home-1' },
     ) },
-    $transaction: jest.fn(async (cb: (trx: typeof tx) => Promise<unknown>) => cb(tx)),
+    $transaction: jest.fn((cb: (trx: typeof tx) => Promise<unknown>) => cb(tx)),
   };
   const mqtt = { config: {
     flespiDeviceId: options.enabled === false ? undefined : DEVICE,
@@ -79,15 +79,15 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
     expect(c.emitToUser).toHaveBeenCalledWith('user-1', 'device.status.updated', expect.objectContaining({
       isOn: true, currentPowerW: 50,
     }));
-    expect(c.tx.$queryRaw.mock.calls.map(call => (call[0] as TemplateStringsArray).join('?')).join('\n'))
+    expect((c.tx.$queryRaw.mock.calls as Array<[TemplateStringsArray]>).map(([sql]) => sql.join('?')).join('\n'))
       .not.toMatch(/INSERT INTO|consumption\.consumption/);
   });
 
   it('omite un RPC atrasado cuando avanzó SQL036 durante el vuelo', async () => {
     const c = setup();
-    c.getSwitchStatus.mockImplementation(async () => {
+    c.getSwitchStatus.mockImplementation(() => {
       c.setWatermark('1793388601.00');
-      return { output: true, receivedAt: REPLY };
+      return Promise.resolve({ output: true, receivedAt: REPLY });
     });
     expect(await c.reconciler.reconcile()).toBe('stale');
     expect(c.tx.device.update).not.toHaveBeenCalled();
@@ -96,9 +96,9 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
 
   it('omite un RPC atrasado cuando otra transaccion cambió el estado', async () => {
     const c = setup();
-    c.getSwitchStatus.mockImplementation(async () => {
+    c.getSwitchStatus.mockImplementation(() => {
       c.setState({ updated_at: new Date('2026-10-30T22:00:00.500Z') });
-      return { output: true, receivedAt: REPLY };
+      return Promise.resolve({ output: true, receivedAt: REPLY });
     });
     expect(await c.reconciler.reconcile()).toBe('stale');
     expect(c.tx.device.update).not.toHaveBeenCalled();

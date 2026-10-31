@@ -19,10 +19,10 @@ function setup(lastSeen: Date) {
   const update = jest.fn().mockResolvedValue({ ...state, updated_at: now });
   const tx = {
     device: { findFirst: jest.fn().mockResolvedValue(state), update },
-    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+    $queryRaw: jest.fn().mockImplementation((sql: TemplateStringsArray) => {
       const statement = sql.join('?');
-      if (/FOR UPDATE/.test(statement)) return [{ id_device: state.id_device }];
-      if (/SELECT device_event_ts/.test(statement)) return [{ device_event_ts: '1793388600.5' }];
+      if (/FOR UPDATE/.test(statement)) return Promise.resolve([{ id_device: state.id_device }]);
+      if (/SELECT device_event_ts/.test(statement)) return Promise.resolve([{ device_event_ts: '1793388600.5' }]);
       throw new Error(`Unexpected SQL: ${statement}`);
     }),
   };
@@ -30,7 +30,7 @@ function setup(lastSeen: Date) {
   const emitToUser = jest.fn();
   const prisma = {
     device: { findFirst: jest.fn().mockResolvedValue({ id_device: state.id_device, id_home: state.id_home }) },
-    $transaction: jest.fn(async (cb: (arg: typeof tx) => Promise<unknown>) => cb(tx)),
+    $transaction: jest.fn((cb: (arg: typeof tx) => Promise<unknown>) => cb(tx)),
   };
   const reconciler = new FlespiShellyStateReconciler(
     { config: { flespiDeviceId: ID, brokerUrl: 'mqtts://mqtt.flespi.io:8883' } } as never,
@@ -48,7 +48,7 @@ describe('3D.6-D: update reachability without false telemetry', () => {
       data: { last_seen_at: new Date('2026-10-30T23:00:00Z') },
     });
     expect(c.emitToUser).not.toHaveBeenCalled();
-    expect(c.tx.$queryRaw.mock.calls.map(call => (call[0] as TemplateStringsArray).join('?')).join('\n'))
+    expect((c.tx.$queryRaw.mock.calls as Array<[TemplateStringsArray]>).map(([sql]) => sql.join('?')).join('\n'))
       .not.toMatch(/INSERT INTO|DELETE FROM|consumption\.consumption/);
   });
 

@@ -16,14 +16,14 @@ const frame = (ts: number, power?: number) => Buffer.from(JSON.stringify({
 function setup(newer: boolean) {
   const emitToUser = jest.fn();
   const tx = {
-    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+    $queryRaw: jest.fn().mockImplementation((sql: TemplateStringsArray) => {
       const statement = sql.join('?');
-      if (/FOR UPDATE/.test(statement)) return [{ id_device: 'dev-1' }];
+      if (/FOR UPDATE/.test(statement)) return Promise.resolve([{ id_device: 'dev-1' }]);
       if (/SELECT device_event_ts/.test(statement))
-        return newer ? [{ device_event_ts: 1793388602 }] : [];
+        return Promise.resolve(newer ? [{ device_event_ts: 1793388602 }] : []);
       if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
-        return [{ id_device: 'dev-1' }];
-      if (/SELECT energy_total_kwh/.test(statement)) return [];
+        return Promise.resolve([{ id_device: 'dev-1' }]);
+      if (/SELECT energy_total_kwh/.test(statement)) return Promise.resolve([]);
       throw new Error(`Unexpected SQL: ${statement}`);
     }),
     device: { update: jest.fn().mockResolvedValue({

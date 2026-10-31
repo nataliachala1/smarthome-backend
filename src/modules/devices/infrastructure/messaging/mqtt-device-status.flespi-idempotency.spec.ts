@@ -21,13 +21,13 @@ function setup(duplicate: boolean) {
     is_on: true, current_power_w: 25, updated_at: new Date('2026-10-30T22:00:00Z'),
   };
   const tx = {
-    $queryRaw: jest.fn().mockImplementation(async (sql: TemplateStringsArray) => {
+    $queryRaw: jest.fn().mockImplementation((sql: TemplateStringsArray) => {
       const statement = sql.join('?');
-      if (/FOR UPDATE/.test(statement)) return [{ id_device: 'device-1' }];
-      if (/SELECT device_event_ts/.test(statement)) return [];
+      if (/FOR UPDATE/.test(statement)) return Promise.resolve([{ id_device: 'device-1' }]);
+      if (/SELECT device_event_ts/.test(statement)) return Promise.resolve([]);
       if (/INSERT INTO consumption\.mqtt_ingest_dedup/.test(statement))
-        return duplicate ? [] : [{ id_device: 'device-1' }];
-      if (/SELECT energy_total_kwh/.test(statement)) return [];
+        return Promise.resolve(duplicate ? [] : [{ id_device: 'device-1' }]);
+      if (/SELECT energy_total_kwh/.test(statement)) return Promise.resolve([]);
       throw new Error(`Unexpected SQL in test: ${statement}`);
     }),
     device: { update: jest.fn().mockResolvedValue(updated) },
