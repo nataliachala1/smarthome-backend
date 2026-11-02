@@ -9,6 +9,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { ConsumptionModule } from './modules/consumption/consumption.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { EnergyModule } from './modules/energy/energy.module';
 import { RateLimitModule } from './security/rate-limit.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { RateLimitModule } from './security/rate-limit.module';
     DevicesModule,
     NotificationsModule,
     RealtimeModule,
+    EnergyModule,
   ],
 })
 export class AppModule {}

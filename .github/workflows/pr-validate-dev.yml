@@ -1,0 +1,47 @@
+name: PR validation (dev) - no deploy
+
+# Validacion de TODO pull request hacia dev, sin importar el nombre de la rama.
+# Solo verifica el codigo: NO publica imagenes en GHCR, NO usa secretos ni
+# webhooks, NO despliega en Dokploy y NO se conecta a bases de datos del VPS.
+# El workflow pr-shelly-mqtt-dev.yml se conserva sin cambios para sus ramas.
+
+on:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validate-dev-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Lint, typecheck, unit tests and build (no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MQTT_ENABLED: 'false'
+      SHELLY_MQTT_DEV_DI_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: TypeScript check
+        run: npx tsc --noEmit -p tsconfig.build.json
+      - name: Unit tests
+        run: npm test -- --runInBand
+      - name: Build
+        run: npm run build
+      - name: Isolated MQTT namespace security E2E
+        run: npm run test:e2e -- --runInBand --runTestsByPath test/mqtt-namespace-security.e2e-spec.ts
