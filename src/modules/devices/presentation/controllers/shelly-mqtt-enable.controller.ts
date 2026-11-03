@@ -8,8 +8,9 @@ import { CurrentUser } from '../../../auth/presentation/http/decorators/current-
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
 import { ShellyMqttEnableCoordinator } from '../../application/services/shelly-mqtt-enable.coordinator';
 import { ShellyMqttOperationRequestDto } from '../../application/dto/shelly-mqtt-operation-request.dto';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 
-/** Local readback is a gate only; VPS ignores mobile claims. Never marks CONNECTED. */
+/** Local readback is lab-only; VPS/production require backend and broker proof. */
 @Controller('api/v1/homes/:homeId/shelly/setup-sessions/:sessionId/mqtt')
 @UseGuards(JwtAuthGuard)
 @ApiTags('shelly')
@@ -37,21 +38,13 @@ export class ShellyMqttEnableController {
     const localProfile = process.env.NODE_ENV === 'development' &&
       process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true' &&
       process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true';
-    const vpsProfile = process.env.NODE_ENV === 'production' &&
-      process.env.APP_ENV === 'development' &&
-      process.env.SHELLY_MQTT_DEV_DI_ENABLED === 'true' &&
-      process.env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED === 'true' &&
-      process.env.SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED === 'true' &&
-      process.env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED === 'true' &&
-      process.env.MQTT_ENABLED === 'true' &&
-      process.env.MQTT_TLS_REJECT_UNAUTHORIZED !== 'false' &&
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' &&
-      process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED === 'true' &&
-      process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED === 'true';
+    const plan = selectShellyMqttProviderPlan();
+    const vpsProfile = plan.vpsAuthWorker;
+    const productionProfile = plan.productionAuthWorker;
     const localAuthorized = localProfile &&
       approval === 'isolated-dev-lan-only' &&
       body?.localConfigurationReadbackVerified === true;
-    if ((!localAuthorized && !vpsProfile) || !token || !operationId) {
+    if ((!localAuthorized && !vpsProfile && !productionProfile) || !token || !operationId) {
       throw new ServiceUnavailableException({code: 'MQTT_ENABLE_DEV_AUTHORIZATION_REQUIRED'});
     }
     try {

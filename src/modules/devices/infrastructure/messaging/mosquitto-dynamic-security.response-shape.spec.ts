@@ -6,6 +6,7 @@ import { MosquittoDynamicSecurityProvider } from './mosquitto-dynamic-security.p
 import type { VerifyPreparedMqttIdentityInput } from '../../domain/services/mqtt-device-identity-provider';
 
 const scope = 'shelly1pmg4-testdevice503152';
+const adminUsername = 'dynsec-admin';
 const expected: VerifyPreparedMqttIdentityInput = {
   username: 'lab_503152_device',
   clientId: 'lab-503152-device',
@@ -22,7 +23,9 @@ const expected: VerifyPreparedMqttIdentityInput = {
 
 type Overrides = { roleName?: string | null; dropAcl?: boolean; extraAcl?: boolean };
 function prepare(overrides: Overrides = {}) {
-  const provider = new MosquittoDynamicSecurityProvider({ get: () => undefined } as never);
+  const provider = new MosquittoDynamicSecurityProvider({
+    get: (name: string) => name === 'MQTT_DYNSEC_ADMIN_USERNAME' ? adminUsername : undefined,
+  } as never);
   const acls: Array<Record<string, unknown>> = expected.acls.map((a) => ({
     acltype: a.type,
     topic: a.topic,
@@ -38,8 +41,17 @@ function prepare(overrides: Overrides = {}) {
     role.rolename = overrides.roleName;
   }
   const command = jest.spyOn(provider as unknown as {
-    command: (name: string) => Promise<Record<string, unknown>>;
-  }, 'command').mockImplementation((name) => {
+    command: (name: string, parameters?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  }, 'command').mockImplementation((name, parameters) => {
+    if (name === 'getDefaultACLAccess') return Promise.resolve({ acls: [
+      { acltype: 'publishClientSend', allow: false },
+      { acltype: 'publishClientReceive', allow: false },
+      { acltype: 'subscribe', allow: false },
+      { acltype: 'unsubscribe', allow: false },
+    ] });
+    if (name === 'getClient' && parameters?.username === adminUsername) return Promise.resolve({
+      client: { username: adminUsername, connections: [{ address: '127.0.0.1' }] },
+    });
     if (name === 'getClient') return Promise.resolve({
       client: {
         username: expected.username,
@@ -47,6 +59,7 @@ function prepare(overrides: Overrides = {}) {
         disabled: true,
         roles: [{ rolename: expected.roleName, priority: 10 }],
         groups: [],
+        connections: [],
       },
     });
     if (name === 'getRole') return Promise.resolve({ role });
@@ -59,7 +72,7 @@ describe('DynSec getRole omite rolename: regresion observada en broker real', ()
   it('acepta rol sin rolename solo cuando tiene exactamente las cinco ACL correctas', async () => {
     const { provider, command } = prepare();
     await expect(provider.verifyPreparedDisabled(expected)).resolves.toBeUndefined();
-    expect(command).toHaveBeenCalledTimes(2);
+    expect(command).toHaveBeenCalledTimes(4);
     expect(command).toHaveBeenCalledWith('getRole', { rolename: expected.roleName });
   });
 

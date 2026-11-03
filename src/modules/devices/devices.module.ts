@@ -8,13 +8,19 @@ import {
   shellyMqttPgDevProviders,
   shellyMqttVpsPairingProviders,
   shellyMqttVpsBootstrapProviders,
+  shellyMqttProductionPairingProviders,
+  shellyMqttProductionBootstrapProviders,
 } from './infrastructure/messaging/shelly-mqtt-dev.providers';
 import {
   shellyMqttAuthDevProviders,
   shellyMqttAuthPgDevProviders,
   shellyMqttVpsAuthWorkerProviders,
+  shellyMqttProductionAuthWorkerProviders,
 } from './infrastructure/messaging/shelly-mqtt-auth-dev.providers';
-import { shellyMqttVpsRevocationProviders } from './infrastructure/messaging/shelly-mqtt-revocation.providers';
+import {
+  shellyMqttVpsRevocationProviders,
+  shellyMqttProductionRevocationProviders,
+} from './infrastructure/messaging/shelly-mqtt-revocation.providers';
 import { selectShellyMqttProviderPlan } from './infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 import { AuthModule } from '../auth/auth.module';
@@ -112,6 +118,12 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ...(shellyMqttPlan.vpsAuthWorker
       ? [ShellyMqttEnableController, ShellyMqttAuthenticationController]
       : []),
+    ...(shellyMqttPlan.productionPairing
+      ? [ShellyMqttPrepareController, ShellyMqttBootstrapController]
+      : []),
+    ...(shellyMqttPlan.productionAuthWorker
+      ? [ShellyMqttEnableController, ShellyMqttAuthenticationController]
+      : []),
     // Endpoint controlado: no existe fuera del entorno development+opt-in.
     ...(shellyMqttPlan.localWorkflow
       ? [ShellyMqttPrepareController]
@@ -161,6 +173,18 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ...(shellyMqttPlan.vpsPairing ? shellyMqttVpsBootstrapProviders : []),
     ...(shellyMqttPlan.vpsRevocationWorker
       ? shellyMqttVpsRevocationProviders
+      : []),
+    ...(shellyMqttPlan.productionPairing
+      ? shellyMqttProductionPairingProviders
+      : []),
+    ...(shellyMqttPlan.productionPairing
+      ? shellyMqttProductionBootstrapProviders
+      : []),
+    ...(shellyMqttPlan.productionRevocationWorker
+      ? shellyMqttProductionRevocationProviders
+      : []),
+    ...(shellyMqttPlan.productionAuthWorker
+      ? shellyMqttProductionAuthWorkerProviders
       : []),
 
     // Auth SQL requires its opt-in; VPS adds the worker only with a separate

@@ -10,6 +10,11 @@ import { requireShellyMqttDeploymentMode } from './shelly-mqtt-deployment-mode';
 
 const logger = new Logger('ShellyMqttRevocationLoop');
 
+function requireRevocationDatabaseMode(): 'local-dev' | 'vps-dev-tls' | 'production' {
+  const mode = requireShellyMqttDeploymentMode();
+  return mode === 'production-mosquitto' ? 'production' : mode;
+}
+
 export class ShellyMqttRevocationLifecycle implements OnApplicationBootstrap, OnModuleDestroy {
   constructor(private readonly loop: MqttRevocationLoop) {}
 
@@ -31,7 +36,7 @@ export const shellyMqttVpsRevocationProviders: Provider[] = [
     inject: [ConfigService],
     useFactory: (config: ConfigService) => openMqttRevocationPgGateway(
       config.get<string>('MQTT_REVOCATION_DATABASE_URL'),
-      requireShellyMqttDeploymentMode(),
+      requireRevocationDatabaseMode(),
     ),
   },
   {
@@ -70,3 +75,7 @@ export const shellyMqttVpsRevocationProviders: Provider[] = [
     useFactory: (loop: MqttRevocationLoop) => new ShellyMqttRevocationLifecycle(loop),
   },
 ];
+
+/** The same durable worker runs under the independent production profile. */
+export const shellyMqttProductionRevocationProviders =
+  shellyMqttVpsRevocationProviders;

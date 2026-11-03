@@ -52,7 +52,10 @@ export class ShellyMqttAuthenticationWorker {
   constructor(
     private readonly challenges: SqlMqttRpcChallengePort,
     private readonly auth: SqlMqttAuthenticatedConfirmationPort,
-    private readonly broker: Pick<MqttDeviceIdentityProvider, 'inspectIdentity'>,
+    private readonly broker: Pick<
+      MqttDeviceIdentityProvider,
+      'inspectIdentity' | 'verifyBrokerPrerequisites'
+    >,
     private readonly mqttTransport: AuthMqttChallengeTransport,
     private readonly topics: MqttTopicContract,
     private readonly switchId: number,
@@ -66,6 +69,10 @@ export class ShellyMqttAuthenticationWorker {
         !/^shelly[a-z0-9_-]{1,100}$/.test(expectedManufacturerDeviceId)) {
       throw new Error('MQTT_AUTH_OPERATION_INVALID');
     }
+
+    // No issue a short-lived SQL challenge if the broker has lost its
+    // authenticated-connection evidence or default-deny guarantees.
+    await this.broker.verifyBrokerPrerequisites();
 
     // SQL026 valida OWNER, vigencia, estado AWAITING_AUTH, no-revocacion,
     // historial de reintentos y emite un RPC id no elegido por HTTP.

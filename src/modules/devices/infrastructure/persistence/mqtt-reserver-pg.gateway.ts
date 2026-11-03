@@ -1,12 +1,18 @@
 import type { OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolConfig } from 'pg';
 import type { MqttRegistrarQueryClient } from './pg-mqtt-reservation.port';
+import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
 /**
  * Solo se puede configurar para la cuenta de reserva HU16. Nunca toma
  * DATABASE_URL, la cuenta normal de Prisma ni credenciales de Mosquitto.
  */
-export type ReserverConnectionMode = 'lab' | 'local-dev' | 'remote-tls' | 'vps-dev-tls';
+export type ReserverConnectionMode =
+  | 'lab'
+  | 'local-dev'
+  | 'remote-tls'
+  | 'vps-dev-tls'
+  | 'production';
 
 export interface ReserverConnectionTarget {
   role: string;
@@ -49,6 +55,7 @@ export function parseMqttReserverConnection(
   const lab = mode === 'lab';
   const localDev = mode === 'local-dev';
   const vpsDevTls = mode === 'vps-dev-tls';
+  const production = mode === 'production';
   if (localDev && (
     environment !== 'development' ||
     url.hostname !== '127.0.0.1' ||
@@ -76,7 +83,14 @@ export function parseMqttReserverConnection(
   )) {
     throw new Error('MQTT_RESERVER_DATABASE_TARGET_NOT_ALLOWED');
   }
-  if (!lab && !localDev && !vpsDevTls && (
+  if (production && (
+    role !== 'smarthome_mqtt_reserver_prod_login' ||
+    !/^[A-Za-z0-9_-]{43}$/.test(url.password) ||
+    !isProductionMqttDatabaseTarget(url.hostname, database, environment)
+  )) {
+    throw new Error('MQTT_RESERVER_DATABASE_TARGET_NOT_ALLOWED');
+  }
+  if (!lab && !localDev && !vpsDevTls && !production && (
     database === 'smarthome_test' ||
     ['127.0.0.1', 'localhost', '::1'].includes(url.hostname) ||
     role === 'smarthome_mqtt_reserver_lab_login'

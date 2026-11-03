@@ -59,11 +59,9 @@ const UUID_V4 =
 const SUPPORTED_MODEL = 'S4SW-001P16EU';
 
 /**
- * Una coordinacion conservadora SOLO de reserva. NO llama Mosquitto, NO
- * crea dispositivos, NO modifica estados HU16 y NO entrega passwords.
- *
- * Se deja SIN REGISTRAR en DevicesModule hasta implementar un gateway
- * PostgreSQL separado, las transiciones durables y recuperacion de fallos.
+ * La reserva SQL valida OWNER, sesión e identidad reportada; el scope llega
+ * derivado del contrato backend. No llama Mosquitto, crea dispositivos ni
+ * entrega passwords.
  */
 export class ShellyMqttReservationCoordinator {
   constructor(

@@ -1,11 +1,16 @@
 import type { OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolConfig } from 'pg';
 import type { IsolatedMqttAuthSqlClient } from './pg-mqtt-authentication.ports';
+import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
 export type MqttAuthKind = 'rpc' | 'confirm';
 const LOGINS: Record<MqttAuthKind, string> = {
   rpc: 'smarthome_mqtt_rpc_dev_login',
   confirm: 'smarthome_mqtt_auth_dev_login',
+};
+const PRODUCTION_LOGINS: Record<MqttAuthKind, string> = {
+  rpc: 'smarthome_mqtt_rpc_prod_login',
+  confirm: 'smarthome_mqtt_auth_prod_login',
 };
 const TEMPLATES: Record<MqttAuthKind, readonly [string, number][]> = {
   rpc: [
@@ -25,7 +30,7 @@ const TEMPLATES: Record<MqttAuthKind, readonly [string, number][]> = {
 };
 const normalize = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
 
-export type MqttAuthPgMode = 'local-dev' | 'vps-dev-tls';
+export type MqttAuthPgMode = 'local-dev' | 'vps-dev-tls' | 'production';
 
 export interface MqttAuthPgTarget {
   readonly role: string;
@@ -54,8 +59,9 @@ export function parseMqttAuthPgConnection(
   } catch {
     throw new Error('MQTT_AUTH_PG_URL_INVALID');
   }
+  const expectedLogin = mode === 'production' ? PRODUCTION_LOGINS[kind] : LOGINS[kind];
   if (url.protocol !== 'postgresql:' || url.port !== '5432' ||
-      username !== LOGINS[kind] ||
+      username !== expectedLogin ||
       !/^[A-Za-z0-9_-]{43}$/.test(url.password) ||
       url.search !== '' || url.hash !== '') {
     throw new Error('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
@@ -65,7 +71,9 @@ export function parseMqttAuthPgConnection(
   const vps = mode === 'vps-dev-tls' && environment === 'production' &&
     url.hostname === 'smart-home-smarthomepostgresdev-vrmtpz' &&
     database === 'smarthome_dev';
-  if (!local && !vps) {
+  const production = mode === 'production' &&
+    isProductionMqttDatabaseTarget(url.hostname, database, environment);
+  if (!local && !vps && !production) {
     throw new Error('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
   }
   return {
@@ -73,7 +81,7 @@ export function parseMqttAuthPgConnection(
     database,
     options: {
       connectionString: raw,
-      ssl: vps ? { rejectUnauthorized: true, minVersion: 'TLSv1.2' } : false,
+      ssl: local ? false : { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
       max: 1,
       connectionTimeoutMillis: 3000,
       idleTimeoutMillis: 10000,
@@ -95,10 +103,11 @@ export function parseMqttAuthPgUrl(raw: string | undefined, kind: MqttAuthKind):
 
 export function isMinimalMqttAuthPgPrivileges(
   row: unknown, kind: MqttAuthKind, database = 'smarthome',
+  expectedLogin = LOGINS[kind],
 ): boolean {
   if (!row || typeof row !== 'object') return false;
   const v = row as Record<string, unknown>;
-  return v.login === LOGINS[kind] && v.db === database &&
+  return v.login === expectedLogin && v.db === database &&
     v.member_rpc === (kind === 'rpc') && v.member_confirm === (kind === 'confirm') &&
     v.usable_rpc === (kind === 'rpc') && v.usable_confirm === (kind === 'confirm') &&
     v.memberships === 1 &&
@@ -142,14 +151,17 @@ export class MqttAuthenticationPgGateway implements IsolatedMqttAuthSqlClient, O
   private verified = false;
   constructor(private readonly pool: MqttAuthPgPool,
               private readonly kind: MqttAuthKind,
-              private readonly database = 'smarthome') {}
+              private readonly database = 'smarthome',
+              private readonly login = LOGINS[kind]) {}
 
   async verifyPrivileges(): Promise<void> {
     this.verified = false;
     try {
       const result = await this.pool.query(CHECK_SQL);
       if (result.rows.length !== 1 ||
-          !isMinimalMqttAuthPgPrivileges(result.rows[0], this.kind, this.database)) {
+          !isMinimalMqttAuthPgPrivileges(
+            result.rows[0], this.kind, this.database, this.login,
+          )) {
         throw new Error('INVALID_PRIVILEGES');
       }
       this.verified = true;
@@ -179,7 +191,9 @@ export async function openMqttAuthPgGateway(
 ): Promise<MqttAuthenticationPgGateway> {
   const target = parseMqttAuthPgConnection(raw, kind, mode);
   const pool = new Pool(target.options);
-  const gateway = new MqttAuthenticationPgGateway(pool, kind, target.database);
+  const gateway = new MqttAuthenticationPgGateway(
+    pool, kind, target.database, target.role,
+  );
   try {
     await gateway.verifyPrivileges();
     return gateway;

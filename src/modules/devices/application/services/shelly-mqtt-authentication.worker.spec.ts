@@ -35,7 +35,7 @@ const reply = (c: { rpcId: string; responseTopic: string; source: string }) => (
 
 function harness(options: {
   reportedId?: string; disabled?: boolean; retained?: boolean;
-  wrongScope?: boolean; disconnectedAfter?: boolean;
+  wrongScope?: boolean; disconnectedAfter?: boolean; brokerNotReady?: boolean;
 } = {}) {
   const issueSpy = jest.fn().mockResolvedValue({ ...issue(),
     rpcId: options.reportedId ?? rpcId,
@@ -47,6 +47,9 @@ function harness(options: {
     .mockResolvedValueOnce({ ...snapshot, disabled: options.disabled ?? false })
     .mockResolvedValueOnce({ ...snapshot,
       authenticatedConnectionCount: options.disconnectedAfter ? 0 : 1 });
+  const verifyBrokerPrerequisites = jest.fn(options.brokerNotReady
+    ? () => Promise.reject(new Error('BROKER_PREREQUISITES_NOT_READY'))
+    : () => Promise.resolve());
   const observedChallenges: ShellyRpcChallenge[] = [];
   const exchange = jest.fn<(c: ShellyRpcChallenge) => Promise<ReturnType<typeof reply>>>()
     .mockImplementation((c: ShellyRpcChallenge) => {
@@ -56,9 +59,11 @@ function harness(options: {
       });
     });
   const worker = new ShellyMqttAuthenticationWorker(
-    { issue: issueSpy, consume }, { confirm }, { inspectIdentity }, { exchange }, topics, 0,
+    { issue: issueSpy, consume }, { confirm },
+    { inspectIdentity, verifyBrokerPrerequisites }, { exchange }, topics, 0,
   );
-  return { worker, issueSpy, consume, confirm, inspectIdentity, exchange, observedChallenges };
+  return { worker, issueSpy, consume, confirm, inspectIdentity,
+    verifyBrokerPrerequisites, exchange, observedChallenges };
 }
 
 describe('Etapa 1: SQL026 + prueba broker + SQL029 (sin red)', () => {
@@ -75,6 +80,14 @@ describe('Etapa 1: SQL026 + prueba broker + SQL029 (sin red)', () => {
     const rpcRequest: unknown = JSON.parse(challenge.payload);
     expect(rpcRequest).toMatchObject({ id: rpcId });
     expect(t.inspectIdentity).toHaveBeenCalledTimes(2);
+    expect(t.verifyBrokerPrerequisites).toHaveBeenCalledTimes(1);
+  });
+
+  it('no emite desafío SQL si el broker no demuestra conexiones ni default-deny', async () => {
+    const t = harness({ brokerNotReady: true });
+    await expect(t.worker.confirm(op, id)).rejects.toThrow('BROKER_PREREQUISITES_NOT_READY');
+    expect(t.issueSpy).not.toHaveBeenCalled();
+    expect(t.exchange).not.toHaveBeenCalled();
   });
   it('nunca publica ni persiste si la identidad esta deshabilitada', async () => {
     const t = harness({ disabled: true });

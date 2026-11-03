@@ -58,6 +58,9 @@ export interface MqttBrokerIdentitySnapshot {
  * No debe interpretarse como identidad ausente o revocada.
  */
 export abstract class MqttDeviceIdentityProvider {
+  /** Read-only broker checks required before provisioning can be advertised. */
+  abstract verifyBrokerPrerequisites(): Promise<void>;
+
   /**
    * Prepara la identidad sin permitir todavia su conexion.
    * Al retornar, deben estar confirmados el clientId,
@@ -83,8 +86,8 @@ export abstract class MqttDeviceIdentityProvider {
   abstract enableIdentity(username: string): Promise<void>;
 
   /**
-   * La implementacion debe confirmar la revocacion
-   * consultando nuevamente el estado del broker.
+   * La implementacion debe confirmar el estado deshabilitado y cero
+   * conexiones autenticadas; evidencia ausente o incierta no es revocacion.
    */
   abstract disableIdentity(username: string): Promise<void>;
 }

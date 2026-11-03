@@ -44,6 +44,26 @@ describe('Shelly MQTT ACL policy', () => {
       .toBe(true);
   });
 
+  it('keeps two reserved Shelly identities in disjoint topic scopes', () => {
+    const first = buildShellyMqttAclPlan(
+      topics('smarthome/prod/v1'), 'shelly1pmg4-device_a', 0,
+    );
+    const second = buildShellyMqttAclPlan(
+      topics('smarthome/prod/v1'), 'shelly1pmg4-device_b', 0,
+    );
+    const firstTopics = new Set(first.acls.map((acl) => acl.topic));
+    const secondTopics = new Set(second.acls.map((acl) => acl.topic));
+
+    expect(first.topicScope).not.toBe(second.topicScope);
+    expect(first.acls).toHaveLength(5);
+    expect(second.acls).toHaveLength(5);
+    expect([...firstTopics].some((topic) => secondTopics.has(topic))).toBe(false);
+    expect(first.acls.every((acl) => acl.topic.startsWith(`${first.topicScope}/`)))
+      .toBe(true);
+    expect(second.acls.every((acl) => acl.topic.startsWith(`${second.topicScope}/`)))
+      .toBe(true);
+  });
+
   it.each([
     'other-device',
     `${DEVICE_ID}/other`,

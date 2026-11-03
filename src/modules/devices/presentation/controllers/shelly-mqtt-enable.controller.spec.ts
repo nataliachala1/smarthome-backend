@@ -5,8 +5,12 @@ jest.mock('../../../auth/presentation/http/guards/jwt-auth.guard', () => ({
     canActivate() { return true; }
   },
 }));
+jest.mock('../../infrastructure/messaging/shelly-mqtt-deployment-mode', () => ({
+  selectShellyMqttProviderPlan: jest.fn(),
+}));
 
 import { ShellyMqttEnableController } from './shelly-mqtt-enable.controller';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 import type { ShellyMqttEnableCoordinator } from '../../application/services/shelly-mqtt-enable.coordinator';
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
 
@@ -23,6 +27,9 @@ describe('Etapa2: enable HTTP dev no confunde readback con autenticacion', () =>
   const controller = new ShellyMqttEnableController({enable} as unknown as ShellyMqttEnableCoordinator);
   beforeEach(() => {
     enable.mockReset();
+    (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
+      vpsAuthWorker: false, productionAuthWorker: false,
+    });
     process.env.NODE_ENV='development';
     process.env.SHELLY_MQTT_DEV_DI_ENABLED='true';
     process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP='true';
@@ -49,6 +56,9 @@ describe('Etapa2: enable HTTP dev no confunde readback con autenticacion', () =>
     });
   });
   it('acepta VPS DEV sin header ni readback local y no declara MQTT autenticado',async()=>{
+    (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
+      vpsAuthWorker: true, productionAuthWorker: false,
+    });
     process.env.NODE_ENV='production';
     process.env.APP_ENV='development';
     process.env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED='true';
@@ -57,6 +67,19 @@ describe('Etapa2: enable HTTP dev no confunde readback con autenticacion', () =>
     process.env.MQTT_ENABLED='true';
     process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED='true';
     process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED='true';
+    enable.mockResolvedValue({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
+    await expect(controller.enable(actor,home,session,token,undefined,{operationId}))
+      .resolves.toEqual({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
+    expect(enable).toHaveBeenCalledWith({
+      userId:actor.userId,homeId:home,sessionId:session,sessionToken:token,operationId,
+    });
+  });
+  it('acepta producción únicamente cuando el plan completo registra su worker de autenticación', async () => {
+    process.env.NODE_ENV='production';
+    process.env.APP_ENV='production';
+    (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
+      vpsAuthWorker: false, productionAuthWorker: true,
+    });
     enable.mockResolvedValue({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
     await expect(controller.enable(actor,home,session,token,undefined,{operationId}))
       .resolves.toEqual({phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});

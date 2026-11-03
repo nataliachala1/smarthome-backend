@@ -25,6 +25,11 @@ import { EncryptedMqttPreparationSecretPort } from '../secrets/encrypted-mqtt-pr
 export const MQTT_LEASE_GATEWAY = Symbol('MQTT_LEASE_GATEWAY');
 export const MQTT_CONFIRMER_GATEWAY = Symbol('MQTT_CONFIRMER_GATEWAY');
 
+function requireMqttDatabaseMode(): 'local-dev' | 'vps-dev-tls' | 'production' {
+  const mode = requireShellyMqttDeploymentMode();
+  return mode === 'production-mosquitto' ? 'production' : mode;
+}
+
 /**
  * Base VPS DEV: solo gateways PostgreSQL especializados. Sus factories
  * validan cuenta, destino, TLS y privilegios. El modo requiere opt-in.
@@ -34,28 +39,28 @@ export const shellyMqttPgDevProviders: Provider[] = [
     provide: MqttReserverPgGateway,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttReserverPgGateway(
-      c.get<string>('MQTT_RESERVER_DATABASE_URL'), requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_RESERVER_DATABASE_URL'), requireMqttDatabaseMode(),
     ),
   },
   {
     provide: MQTT_LEASE_GATEWAY,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttWorkerPgGateway(
-      c.get<string>('MQTT_LEASE_DATABASE_URL'), 'lease', requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_LEASE_DATABASE_URL'), 'lease', requireMqttDatabaseMode(),
     ),
   },
   {
     provide: MQTT_CONFIRMER_GATEWAY,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttWorkerPgGateway(
-      c.get<string>('MQTT_CONFIRMER_DATABASE_URL'), 'confirmer', requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_CONFIRMER_DATABASE_URL'), 'confirmer', requireMqttDatabaseMode(),
     ),
   },
   {
     provide: MqttSecretPgGateway,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttSecretPgGateway(
-      c.get<string>('MQTT_SECRET_DATABASE_URL'), requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_SECRET_DATABASE_URL'), requireMqttDatabaseMode(),
     ),
   },
   // El perfil DB-only termina aqui: no se crean acciones ni identidades MQTT.
@@ -94,8 +99,11 @@ export const shellyMqttDevProviders: Provider[] = [
     useFactory: (repository: PgMqttPreparationSecretRepository, c: ConfigService) => {
       const encoded = c.get<string>('MQTT_PREPARATION_AES_KEY_B64URL');
       const id = c.get<string>('MQTT_PREPARATION_AES_KEY_ID');
+      const expectedKeyId = requireShellyMqttDeploymentMode() === 'production-mosquitto'
+        ? 'prod-mqtt-aes-v1'
+        : 'dev-mqtt-aes-v1';
       if (!encoded || !/^[A-Za-z0-9_-]{43}$/.test(encoded) ||
-          id !== 'dev-mqtt-aes-v1') {
+          id !== expectedKeyId) {
         throw new Error('MQTT_DEV_PREPARATION_KEY_NOT_READY');
       }
       const material = Buffer.from(encoded, 'base64url');
@@ -210,8 +218,10 @@ const vpsPairingProviderTokens = new Set<unknown>([
   PgMqttEnablePort,
 ]);
 
-export const shellyMqttVpsPairingProviders: Provider[] =
-  [
+function createPairingProviders(
+  profile: 'vps-dev-tls' | 'production-mosquitto',
+): Provider[] {
+  return [
     ...shellyMqttDevProviders.filter((provider) =>
       vpsPairingProviderTokens.has(
         (provider as { provide?: unknown }).provide,
@@ -227,13 +237,24 @@ export const shellyMqttVpsPairingProviders: Provider[] =
         broker: MqttDeviceIdentityProvider,
         runtime: MqttRuntimeService,
       ) => new ShellyMqttEnableCoordinator(
-        sessions, port, broker, runtime, 'vps-dev-tls',
+        sessions, port, broker, runtime, profile,
       ),
     },
   ];
+}
+
+export const shellyMqttVpsPairingProviders =
+  createPairingProviders('vps-dev-tls');
+
+export const shellyMqttProductionPairingProviders =
+  createPairingProviders('production-mosquitto');
 
 /** Bootstrap credentials are delivered only through the separately authorized route. */
-export const shellyMqttVpsBootstrapProviders: Provider[] = [
+function createBootstrapProviders(
+  profile: 'vps-dev-tls' | 'production-mosquitto',
+): Provider[] {
+  const isProduction = profile === 'production-mosquitto';
+  return [
   {
     provide: PgMqttBootstrapPort,
     inject: [MqttSecretPgGateway],
@@ -262,11 +283,22 @@ export const shellyMqttVpsBootstrapProviders: Provider[] = [
       c.get<string>('MQTT_PREPARATION_AES_KEY_B64URL') ?? '',
       c.get<string>('MQTT_PREPARATION_AES_KEY_ID') ?? '',
       {
-        profile: 'vps-dev-tls',
-        publicBrokerUrl: c.get<string>('SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL'),
-        publicCaFile: c.get<string>('SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE'),
+        profile,
+        publicBrokerUrl: c.get<string>(isProduction
+          ? 'SHELLY_MQTT_PRODUCTION_DEVICE_BROKER_URL'
+          : 'SHELLY_MQTT_VPS_DEV_DEVICE_BROKER_URL'),
+        publicCaFile: c.get<string>(isProduction
+          ? 'SHELLY_MQTT_PRODUCTION_DEVICE_CA_FILE'
+          : 'SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE'),
         adminCaFile: c.get<string>('MQTT_DYNSEC_ADMIN_CA_FILE'),
       },
     ),
   },
-];
+  ];
+}
+
+export const shellyMqttVpsBootstrapProviders =
+  createBootstrapProviders('vps-dev-tls');
+
+export const shellyMqttProductionBootstrapProviders =
+  createBootstrapProviders('production-mosquitto');

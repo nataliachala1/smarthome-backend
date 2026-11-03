@@ -22,6 +22,41 @@ const vpsDevDatabase = (database = 'smarthome_dev', username = 'app_user') =>
 const dedicatedDb = (username: string) =>
   `postgresql://${username}:${'A'.repeat(43)}@smart-home-smarthomepostgresdev-vrmtpz:5432/smarthome_dev`;
 
+const productionDb = (username: string, database = 'smarthome') =>
+  `postgresql://${username}:${'B'.repeat(43)}@postgres-prod.example.com:5432/${database}`;
+
+const productionPairing = () => ({
+  NODE_ENV: 'production',
+  APP_ENV: 'production',
+  SHELLY_MQTT_PRODUCTION_PAIRING_ENABLED: 'true',
+  SHELLY_MQTT_PRODUCTION_REVOCATION_WORKER_ENABLED: 'true',
+  SHELLY_MQTT_PRODUCTION_AUTH_WORKER_ENABLED: 'true',
+  MQTT_ENABLED: 'true',
+  MQTT_BROKER_PROVIDER: 'mosquitto',
+  MQTT_BROKER_URL: 'mqtts://mosquitto-internal:8883',
+  MQTT_DYNSEC_ADMIN_URL: 'mqtts://mosquitto-internal:8883',
+  MQTT_USERNAME: 'backend-service',
+  MQTT_PASSWORD: 'synthetic-backend-password',
+  MQTT_DYNSEC_ADMIN_USERNAME: 'dynsec-admin',
+  MQTT_DYNSEC_ADMIN_PASSWORD: 'synthetic-independent-admin-password',
+  MQTT_TOPIC_NAMESPACE: 'smarthome/prod/v1',
+  MQTT_TLS_CA_FILE: '/run/secrets/prod-broker-root.pem',
+  MQTT_DYNSEC_ADMIN_CA_FILE: '/run/secrets/prod-broker-root.pem',
+  SHELLY_MQTT_PRODUCTION_DEVICE_BROKER_URL: 'mqtts://mqtt.prod.example.com:8883',
+  SHELLY_MQTT_PRODUCTION_DEVICE_CA_FILE: '/run/secrets/prod-broker-root.pem',
+  DATABASE_URL: productionDb('smarthome_app_login'),
+  DATABASE_IOT_URL: productionDb('smarthome_ingest_login'),
+  MQTT_RESERVER_DATABASE_URL: productionDb('smarthome_mqtt_reserver_prod_login'),
+  MQTT_LEASE_DATABASE_URL: productionDb('smarthome_mqtt_lease_prod_login'),
+  MQTT_CONFIRMER_DATABASE_URL: productionDb('smarthome_mqtt_confirmer_prod_login'),
+  MQTT_SECRET_DATABASE_URL: productionDb('smarthome_mqtt_secret_prod_login'),
+  MQTT_REVOCATION_DATABASE_URL: productionDb('smarthome_mqtt_revoke_prod_login'),
+  MQTT_RPC_DATABASE_URL: productionDb('smarthome_mqtt_rpc_prod_login'),
+  MQTT_AUTH_DATABASE_URL: productionDb('smarthome_mqtt_auth_prod_login'),
+  MQTT_PREPARATION_AES_KEY_B64URL: Buffer.alloc(32, 9).toString('base64url'),
+  MQTT_PREPARATION_AES_KEY_ID: 'prod-mqtt-aes-v1',
+});
+
 const vpsPairing = () => ({
   ...vps(),
   MQTT_ENABLED: 'true',
@@ -133,6 +168,9 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       vpsAuthPgOnly: false,
       vpsAuthWorker: false,
       vpsRevocationWorker: false,
+      productionPairing: false,
+      productionAuthWorker: false,
+      productionRevocationWorker: false,
     });
   });
 
@@ -146,6 +184,9 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       localAuthWorker: false,
       vpsAuthWorker: false,
       vpsRevocationWorker: false,
+      productionPairing: false,
+      productionAuthWorker: false,
+      productionRevocationWorker: false,
     });
   });
 
@@ -165,6 +206,9 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       vpsAuthPgOnly: false,
       vpsAuthWorker: false,
       vpsRevocationWorker: false,
+      productionPairing: false,
+      productionAuthWorker: false,
+      productionRevocationWorker: false,
     });
   });
 
@@ -181,6 +225,9 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       vpsAuthPgOnly: false,
       vpsAuthWorker: false,
       vpsRevocationWorker: false,
+      productionPairing: false,
+      productionAuthWorker: false,
+      productionRevocationWorker: false,
     });
   });
 
@@ -194,6 +241,9 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       vpsAuthPgOnly: false,
       vpsAuthWorker: false,
       vpsRevocationWorker: true,
+      productionPairing: false,
+      productionAuthWorker: false,
+      productionRevocationWorker: false,
     });
   });
 
@@ -338,5 +388,50 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     expect(() => selectShellyMqttProviderPlan({
       ...vpsPairing(), SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'false',
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
+  });
+
+  it('mantiene el perfil Mosquitto de producción apagado por defecto', () => {
+    expect(selectShellyMqttProviderPlan({
+      NODE_ENV: 'production', APP_ENV: 'production',
+    })).toMatchObject({
+      mode: 'off', productionPairing: false,
+      productionAuthWorker: false, productionRevocationWorker: false,
+    });
+  });
+
+  it('selecciona producción solo con Mosquitto TLS, logins productivos aislados, revocación, auth y clave propia', () => {
+    expect(selectShellyMqttProviderPlan(productionPairing())).toMatchObject({
+      mode: 'production-mosquitto',
+      productionPairing: true,
+      productionAuthWorker: true,
+      productionRevocationWorker: true,
+      vpsPairing: false,
+      vpsAuthWorker: false,
+    });
+  });
+
+  it.each([
+    { SHELLY_MQTT_PRODUCTION_REVOCATION_WORKER_ENABLED: 'false' },
+    { SHELLY_MQTT_PRODUCTION_AUTH_WORKER_ENABLED: 'false' },
+    { SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'true' },
+    { SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'true' },
+    { SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'true' },
+    { MQTT_BROKER_PROVIDER: 'flespi' },
+    { MQTT_BROKER_URL: 'mqtt://mqtt.prod.example.com:1883' },
+    { MQTT_DYNSEC_ADMIN_URL: 'mqtts://other.prod.example.com:8883' },
+    { SHELLY_MQTT_PRODUCTION_DEVICE_BROKER_URL: 'mqtts://mosquitto-internal:8883' },
+    { MQTT_DYNSEC_ADMIN_PASSWORD: 'synthetic-backend-password' },
+    { MQTT_DYNSEC_ADMIN_USERNAME: 'invalid admin' },
+    { MQTT_TOPIC_NAMESPACE: 'smarthome/dev/v1' },
+    { MQTT_RESERVER_DATABASE_URL: productionDb('smarthome_mqtt_reserver_dev_login') },
+    { MQTT_SECRET_DATABASE_URL: productionDb('smarthome_mqtt_secret_prod_login', 'smarthome_dev') },
+    { MQTT_REVOCATION_DATABASE_URL: undefined },
+    { MQTT_PREPARATION_AES_KEY_ID: 'dev-mqtt-aes-v1' },
+    { SHELLY_MQTT_PRODUCTION_DEVICE_BROKER_URL: 'mqtts://mqtt-dev.179-236-82-122.sslip.io:443' },
+    { SHELLY_MQTT_PRODUCTION_DEVICE_CA_FILE: '/run/secrets/mosquitto-dev-device-ca.pem',
+      SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE: '/run/secrets/mosquitto-dev-device-ca.pem' },
+  ])('rechaza perfil de producción incompleto o reutilizado: %j', (override) => {
+    expect(() => selectShellyMqttProviderPlan({ ...productionPairing(), ...override }))
+      .toThrow('MQTT_PRODUCTION_PAIRING_NOT_ALLOWED');
   });
 });

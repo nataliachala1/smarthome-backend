@@ -2,10 +2,16 @@ import type { OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolConfig } from 'pg';
 import type { MqttLeaseQueryClient } from './pg-mqtt-preparation-lease.port';
 import type { MqttPreparedConfirmationQueryClient } from './pg-mqtt-prepared-confirmation.port';
+import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
 /** Separa conexiones y permisos del worker de leases y del confirmador 027. */
 export type MqttWorkerKind = 'lease' | 'confirmer';
-export type MqttWorkerConnectionMode = 'lab' | 'local-dev' | 'remote-tls' | 'vps-dev-tls';
+export type MqttWorkerConnectionMode =
+  | 'lab'
+  | 'local-dev'
+  | 'remote-tls'
+  | 'vps-dev-tls'
+  | 'production';
 
 export interface MqttWorkerConnectionTarget {
   readonly role: string;
@@ -24,6 +30,10 @@ const LAB_ROLE: Record<MqttWorkerKind, string> = {
 const REMOTE_ROLE: Record<MqttWorkerKind, RegExp> = {
   lease: /^smarthome_mqtt_lease_[a-z0-9_]+$/,
   confirmer: /^smarthome_mqtt_confirmer_[a-z0-9_]+$/,
+};
+const PRODUCTION_ROLE: Record<MqttWorkerKind, string> = {
+  lease: 'smarthome_mqtt_lease_prod_login',
+  confirmer: 'smarthome_mqtt_confirmer_prod_login',
 };
 
 export function parseMqttWorkerConnection(
@@ -72,6 +82,13 @@ export function parseMqttWorkerConnection(
         port !== 5432 || database !== 'smarthome_dev' ||
         role !== LOCAL_ROLE[kind] ||
         !/^[A-Za-z0-9_-]{43}$/.test(url.password)) {
+      throw new Error('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
+    }
+  } else if (mode === 'production') {
+    if (environment !== 'production' ||
+        role !== PRODUCTION_ROLE[kind] ||
+        !/^[A-Za-z0-9_-]{43}$/.test(url.password) ||
+        !isProductionMqttDatabaseTarget(url.hostname, database, environment)) {
       throw new Error('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
     }
   } else if (mode === 'remote-tls') {
