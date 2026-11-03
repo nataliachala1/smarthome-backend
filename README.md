@@ -1,114 +1,71 @@
-HU10: [configuración MQTT con TLS y namespace, compatibilidad y pruebas](docs/HU10_MQTT_TLS_NAMESPACE.md). Primer incremento local; broker cloud, ACL y alta con identidad individual pendientes.
+# SmartHome Backend
 
-Alcance vigente y validaciones: [backend del 8 de septiembre de 2026](ALCANCE_2026_09_08.md). Aplicar la migración de base de datos correspondiente antes de iniciar esta versión.
+API del proyecto SmartHome: autenticación y sesiones, hogares y roles, dispositivos, consumo, energía, notificaciones y eventos en tiempo real. Rama de integración: `dev`.
 
-HU16: [resumen GUEST aprobado, permisos de consumo e históricos con RLS](docs/HU16_CONSUMPTION_ACCESS.md). El pairing Shelly LAN-first/AP y sus bloqueos están en [sesiones Shelly](docs/HU16_PAIRING_AP_SESSIONS.md); la finalización MQTT individual espera un proveedor validado en BD `16-dev`.
+**Estado:** en desarrollo. La telemetría y el control en DEV están probados para un dispositivo Shelly conocido. El pairing LAN/AP de un Shelly desde cero **aún está pendiente**.
 
-Roles y permisos: [OWNER, MEMBER y GUEST con permisos de hogar y excepciones por dispositivo](docs/ROLES_Y_PERMISOS.md). `16-dev` incluye valores iniciales por rol y gestión de excepciones por `OWNER`.
+## Documentación oficial
 
-Implementación por HU: [baseline coordinado y validación de configuración de HU 09-dev](docs/IMPLEMENTACION_HU09.md). Consultar los límites y verificaciones pendientes antes de aplicar cambios a una instalación existente.
+La documentación central del proyecto está en el repositorio [smart-home-doc](https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc):
 
-Segundo incremento HU09: [límites HTTP, contrato 429 y configuración de proxies](docs/HU09_RATE_LIMITING.md).
+- Índice general: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/README.md>
+- Arquitectura del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/10-arquitectura/backend.md>
+- Contrato MQTT: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/20-contratos/mqtt/contrato-mqtt.md>
+- Informes históricos del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/99-archivo/backend/README.md>
 
-Tercer incremento HU09: [sesiones Socket.IO, revocación y permisos de eventos](docs/HU09_REALTIME_SECURITY.md).
+Los detalles de implementación (seguridad HU09, MQTT con TLS, consumo, pairing Shelly, roles y permisos) se mantienen en la carpeta [`docs/`](docs) de este repositorio.
 
-Cuarto incremento HU09: [logout individual, familias de sesión y pruebas PostgreSQL](docs/HU09_SESSION_FAMILIES.md). Los access tokens requieren `sid`; revisar la compatibilidad con clientes antes de integrar.
+## Stack
 
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+- NestJS, TypeScript y Node.js
+- Prisma y PostgreSQL
+- MQTT
+- Socket.IO
+- Integración opcional con flespi en DEV. No es el camino general aprobado.
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Requisitos
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- Node.js 22 (la versión que usa el CI) y npm
+- PostgreSQL
+- Variables de entorno: ver [`.env.example`](.env.example). No subir valores reales al repositorio.
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Instalación y ejecución local
 
 ```bash
-$ npm install
+npm ci
+npm run start:dev
 ```
 
-## Compile and run the project
+`npm ci` ejecuta también `prisma generate`. El servicio no funcionará correctamente sin una base de datos PostgreSQL y credenciales provisionadas en las variables de entorno.
 
-```bash
-# development
-$ npm run start
+## Scripts
 
-# watch mode
-$ npm run start:dev
+| Script | Uso |
+|---|---|
+| `npm run lint` | ESLint |
+| `npm test` | Pruebas unitarias (Jest) |
+| `npm run test:e2e` | Pruebas e2e (`test/jest-e2e.json`); algunas requieren PostgreSQL |
+| `npm run build` | Compilación |
+| `npm run start:prod` | Ejecuta la compilación (`dist/src/main.js`) |
+| `npm run simulate:device` | Simulador de dispositivo MQTT (`scripts/simulate-device.js`) |
 
-# production mode
-$ npm run start:prod
-```
+## API
 
-## Run tests
+Las rutas HTTP usan el prefijo `api/v1`. Swagger se publica en `/api/docs` cuando está habilitado: por defecto fuera de producción, o con `SWAGGER_ENABLED=true`. No asumir que está disponible públicamente en producción.
 
-```bash
-# unit tests
-$ npm run test
+## Despliegue
 
-# e2e tests
-$ npm run test:e2e
+- El CI (`CI and deploy dev`, en cada push a `dev`) valida el código y publica la imagen en GHCR.
+- Dokploy se despliega manualmente mientras no se configure el webhook.
+- Un workflow en verde **no prueba** que el despliegue se haya realizado.
 
-# test coverage
-$ npm run test:cov
-```
+## Advertencia sobre el control de dispositivos
 
-## Deployment
+`COMMAND_PUBLISHED` significa que la orden se publicó. **No** significa que se verificó físicamente el relé.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Contribución
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+1. Crear la rama desde `dev`.
+2. Abrir un PR hacia `dev`.
+3. Antes del PR, pasar `npm run lint`, `npm test` y `npm run build`.
+4. No incluir secretos, credenciales ni archivos `.env` reales.
