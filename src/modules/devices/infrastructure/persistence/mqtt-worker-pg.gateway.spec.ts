@@ -17,7 +17,7 @@ function row(kind: 'lease' | 'confirmer'): MqttWorkerPrivilegeRow {
     database: 'smarthome',
     lease_member: kind === 'lease', confirmer_member: kind === 'confirmer',
     reserver_member: false, registrar_member: false, revoke_member: false,
-    can_claim: kind === 'lease', can_report: kind === 'lease', can_quarantine: kind === 'lease',
+    can_claim: kind === 'lease', can_report: kind === 'lease', can_quarantine: false,
     can_confirm: kind === 'confirmer', can_reserve: false, can_register: false,
     can_read_operation: false, can_insert_operation: false,
     can_update_operation: false, can_delete_operation: false, can_read_identity: false,
@@ -59,6 +59,7 @@ describe('MQTT worker PG / no privilege crossover', () => {
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, can_reserve: true }, p, kind)).toBe(false);
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, can_read_operation: true }, p, kind)).toBe(false);
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, registrar_member: true }, p, kind)).toBe(false);
+    expect(isMinimalMqttWorkerPrivilegeRow({ ...p, can_quarantine: true }, p, kind)).toBe(false);
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, is_superuser: true }, p, kind)).toBe(false);
   });
 

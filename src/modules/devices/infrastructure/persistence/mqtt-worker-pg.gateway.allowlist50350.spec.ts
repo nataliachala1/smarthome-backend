@@ -23,7 +23,7 @@ function privileges(kind: MqttWorkerKind): PrivRow {
     lease_member: kind === 'lease', confirmer_member: kind === 'confirmer',
     reserver_member: false, registrar_member: false, revoke_member: false,
     can_claim: kind === 'lease', can_report: kind === 'lease',
-    can_quarantine: kind === 'lease', can_confirm: kind === 'confirmer',
+    can_quarantine: false, can_confirm: kind === 'confirmer',
     can_reserve: false, can_register: false,
     can_read_operation: false, can_insert_operation: false,
     can_update_operation: false, can_delete_operation: false,

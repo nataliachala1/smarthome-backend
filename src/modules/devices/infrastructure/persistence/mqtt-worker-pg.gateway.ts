@@ -256,7 +256,9 @@ export function isMinimalMqttWorkerPrivilegeRow(
     r.revoke_member === false &&
     r.can_claim === (kind === 'lease') &&
     r.can_report === (kind === 'lease') &&
-    r.can_quarantine === (kind === 'lease') &&
+    // SQL025 exposed quarantine before this worker had a reviewed adapter.
+    // Keep readiness closed if the worker gains that privilege accidentally.
+    r.can_quarantine === false &&
     r.can_confirm === (kind === 'confirmer') &&
     r.can_reserve === false && r.can_register === false &&
     r.can_read_operation === false && r.can_insert_operation === false &&
