@@ -3,6 +3,7 @@ import {
   allowedMqttSecretQuery,
   minimalMqttSecretPrivileges,
   parseMqttSecretDevConnection,
+  type MqttSecretPgPool,
 } from './mqtt-secret-pg.gateway';
 
 const role = 'smarthome_mqtt_secret_dev_login';
@@ -12,7 +13,7 @@ const privilegeRow = {
   createrole: false, createdb: false, replication: false,
   secret_member: true, reserve_member: false, lease_member: false,
   confirm_member: false, membership_count: 1,
-  can_load: true, can_insert_secret: true, can_reserve: false,
+  can_load: true, can_insert_secret: true, can_bootstrap: true, can_reserve: false,
   can_claim: false, can_confirm: false, secret_dml: false,
   operation_dml: false, identity_dml: false,
 };
@@ -33,6 +34,7 @@ describe('MqttSecretPgGateway (SQL028, sin red)', () => {
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, reserve_member: true }, { role, database })).toBe(false);
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, secret_dml: true }, { role, database })).toBe(false);
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, membership_count: 2 }, { role, database })).toBe(false);
+    expect(minimalMqttSecretPrivileges({ ...privilegeRow, can_bootstrap: false }, { role, database })).toBe(false);
   });
 
   it('restringe las dos llamadas SQL028 y prohíbe SQL arbitrario', () => {
@@ -62,5 +64,31 @@ describe('MqttSecretPgGateway (SQL028, sin red)', () => {
     await gateway.onModuleDestroy();
     expect(pool.end).toHaveBeenCalledTimes(1);
     await expect(gateway.query('SELECT 1', [])).rejects.toThrow('MQTT_SECRET_NOT_READY');
+  });
+
+  it('rechaza readiness si falta EXECUTE de bootstrap autorizado', async () => {
+    let receivedPrivilegeSql: string | undefined;
+    let queryCount = 0;
+    const query: MqttSecretPgPool['query'] = (sql) => {
+      receivedPrivilegeSql = sql;
+      queryCount += 1;
+      return Promise.resolve({ rows: [{ ...privilegeRow, can_bootstrap: false }] });
+    };
+    const pool: MqttSecretPgPool = {
+      query,
+      end: jest.fn().mockResolvedValue(undefined),
+    };
+    const gateway = new MqttSecretPgGateway(pool, { role, database });
+
+    await expect(gateway.verifyPrivileges())
+      .rejects.toThrow('MQTT_SECRET_PRIVILEGES_UNVERIFIED');
+    await expect(gateway.query(
+      'SELECT * FROM devices.fn_get_authorized_mqtt_bootstrap($1::uuid,$2::uuid,$3::text)',
+      ['operation', 'session', 'token'],
+    )).rejects.toThrow('MQTT_SECRET_NOT_READY');
+    expect(queryCount).toBe(1);
+    expect(receivedPrivilegeSql).toContain(
+      "devices.fn_get_authorized_mqtt_bootstrap(uuid,uuid,text)",
+    );
   });
 });

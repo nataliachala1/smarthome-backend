@@ -15,7 +15,7 @@ function privilegeRow(kind: MqttWorkerKind): Record<string, unknown> {
     lease_member: kind === 'lease', confirmer_member: kind === 'confirmer',
     reserver_member: false, registrar_member: false, revoke_member: false,
     can_claim: kind === 'lease', can_report: kind === 'lease',
-    can_quarantine: kind === 'lease', can_confirm: kind === 'confirmer',
+    can_quarantine: false, can_confirm: kind === 'confirmer',
     can_reserve: false, can_register: false,
     can_read_operation: false, can_insert_operation: false,
     can_update_operation: false, can_delete_operation: false,
@@ -57,6 +57,7 @@ describe('MqttWorkerPgGateway LAB039 - fenced destinations', () => {
     for (const change of [
       { role: 'smarthome_owner' }, { database: 'smarthome_027_lab' },
       { can_reserve: true }, { can_read_operation: true },
+      { can_quarantine: true },
       { is_superuser: true }, { can_create_role: true },
       { lease_member: kind !== 'lease' },
       { confirmer_member: kind !== 'confirmer' },

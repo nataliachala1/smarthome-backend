@@ -113,6 +113,8 @@ SELECT current_user::text AS role, current_database()::text AS database,
   has_function_privilege(current_user,
     'devices.fn_insert_mqtt_preparation_secret_if_absent(uuid,uuid,smallint,text,text,text,text)','EXECUTE') AS can_insert_secret,
   has_function_privilege(current_user,
+    'devices.fn_get_authorized_mqtt_bootstrap(uuid,uuid,text)','EXECUTE') AS can_bootstrap,
+  has_function_privilege(current_user,
     'devices.fn_reserve_mqtt_pairing_operation(uuid,text,uuid,text)','EXECUTE') AS can_reserve,
   has_function_privilege(current_user,
     'devices.fn_claim_mqtt_pairing_preparation(uuid,integer)','EXECUTE') AS can_claim,
@@ -128,7 +130,8 @@ type Privileges = {
   bypassrls: boolean; createrole: boolean; createdb: boolean;
   replication: boolean; secret_member: boolean; reserve_member: boolean;
   lease_member: boolean; confirm_member: boolean; membership_count: number;
-  can_load: boolean; can_insert_secret: boolean; can_reserve: boolean;
+  can_load: boolean; can_insert_secret: boolean; can_bootstrap: boolean;
+  can_reserve: boolean;
   can_claim: boolean; can_confirm: boolean; secret_dml: boolean;
   operation_dml: boolean; identity_dml: boolean;
 };
@@ -146,7 +149,8 @@ export function minimalMqttSecretPrivileges(
     v.secret_member === true && v.reserve_member === false &&
     v.lease_member === false && v.confirm_member === false &&
     v.membership_count === 1 && v.can_load === true &&
-    v.can_insert_secret === true && v.can_reserve === false &&
+    v.can_insert_secret === true && v.can_bootstrap === true &&
+    v.can_reserve === false &&
     v.can_claim === false && v.can_confirm === false &&
     v.secret_dml === false && v.operation_dml === false &&
     v.identity_dml === false;
