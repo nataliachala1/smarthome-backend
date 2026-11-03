@@ -10,6 +10,11 @@ import { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-device-id
 import { ShellyPairingSessionService } from '../../application/services/shelly-pairing-session.service';
 import { requireShellyMqttDeploymentMode } from './shelly-mqtt-deployment-mode';
 
+function requireMqttAuthDatabaseMode(): 'local-dev' | 'vps-dev-tls' | 'production' {
+  const mode = requireShellyMqttDeploymentMode();
+  return mode === 'production-mosquitto' ? 'production' : mode;
+}
+
 export const MQTT_RPC_AUTH_GATEWAY = Symbol('MQTT_RPC_AUTH_GATEWAY');
 export const MQTT_CONFIRM_AUTH_GATEWAY = Symbol('MQTT_CONFIRM_AUTH_GATEWAY');
 
@@ -19,14 +24,14 @@ export const shellyMqttAuthPgDevProviders: Provider[] = [
     provide: MQTT_RPC_AUTH_GATEWAY,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttAuthPgGateway(
-      c.get<string>('MQTT_RPC_DATABASE_URL'), 'rpc', requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_RPC_DATABASE_URL'), 'rpc', requireMqttAuthDatabaseMode(),
     ),
   },
   {
     provide: MQTT_CONFIRM_AUTH_GATEWAY,
     inject: [ConfigService],
     useFactory: (c: ConfigService) => openMqttAuthPgGateway(
-      c.get<string>('MQTT_AUTH_DATABASE_URL'), 'confirm', requireShellyMqttDeploymentMode(),
+      c.get<string>('MQTT_AUTH_DATABASE_URL'), 'confirm', requireMqttAuthDatabaseMode(),
     ),
   },
   // El perfil DB-only termina aqui.
@@ -78,3 +83,7 @@ export const shellyMqttVpsAuthWorkerProviders: Provider[] = [
     ) => new ShellyMqttAuthenticationAction(sessions, worker),
   },
 ];
+
+/** Same isolated auth worker, selected only by the separate production profile. */
+export const shellyMqttProductionAuthWorkerProviders =
+  shellyMqttVpsAuthWorkerProviders;

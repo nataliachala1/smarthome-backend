@@ -42,7 +42,10 @@ export interface MqttAuthorizedBootstrapPort {
   ): Promise<MqttAuthorizedBootstrapEnvelope>;
 }
 
-export type ShellyMqttBootstrapProfile = 'local-dev' | 'vps-dev-tls';
+export type ShellyMqttBootstrapProfile =
+  | 'local-dev'
+  | 'vps-dev-tls'
+  | 'production-mosquitto';
 
 export interface ShellyMqttBootstrapSettings {
   readonly profile: ShellyMqttBootstrapProfile;
@@ -139,7 +142,10 @@ export class ShellyMqttBootstrapAction {
     private readonly keyId: string,
     private readonly settings: ShellyMqttBootstrapSettings,
   ) {
-    if (!SECRET.test(aesKeyB64) || keyId !== 'dev-mqtt-aes-v1') {
+    const expectedKeyId = settings.profile === 'production-mosquitto'
+      ? 'prod-mqtt-aes-v1'
+      : 'dev-mqtt-aes-v1';
+    if (!SECRET.test(aesKeyB64) || keyId !== expectedKeyId) {
       throw new Error('MQTT_BOOTSTRAP_KEY_NOT_READY');
     }
     const decoded = Buffer.from(aesKeyB64, 'base64url');
@@ -272,6 +278,20 @@ export class ShellyMqttBootstrapAction {
       return;
     }
 
+    if (this.settings.profile === 'production-mosquitto') {
+      if (process.env.NODE_ENV !== 'production' ||
+          process.env.APP_ENV !== 'production' ||
+          process.env.SHELLY_MQTT_PRODUCTION_PAIRING_ENABLED !== 'true' ||
+          process.env.SHELLY_MQTT_PRODUCTION_REVOCATION_WORKER_ENABLED !== 'true' ||
+          process.env.SHELLY_MQTT_PRODUCTION_AUTH_WORKER_ENABLED !== 'true' ||
+          process.env.MQTT_BROKER_PROVIDER !== 'mosquitto' ||
+          process.env.MQTT_ENABLED !== 'true' ||
+          process.env.MQTT_PREPARATION_AES_KEY_ID !== 'prod-mqtt-aes-v1') {
+        throw new Error('MQTT_BOOTSTRAP_PRODUCTION_PROFILE_NOT_ALLOWED');
+      }
+      return;
+    }
+
     if (process.env.NODE_ENV !== 'production' ||
         process.env.APP_ENV !== 'development' ||
         process.env.SHELLY_MQTT_DEV_DI_ENABLED !== 'true' ||
@@ -303,6 +323,33 @@ export class ShellyMqttBootstrapAction {
         hostname: url.hostname,
         port: Number(url.port || 8883),
         caPem: readCaPem(config.caFile, false),
+      };
+    }
+
+    if (this.settings.profile === 'production-mosquitto') {
+      if (!this.settings.publicBrokerUrl || !this.settings.publicCaFile ||
+          this.settings.publicCaFile === this.settings.localCaFile ||
+          this.settings.publicCaFile === this.settings.adminCaFile ||
+          this.settings.publicCaFile === process.env.SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE) {
+        throw new Error('MQTT_BOOTSTRAP_PRODUCTION_BROKER_NOT_ALLOWED');
+      }
+      let url: URL;
+      try {
+        url = new URL(this.settings.publicBrokerUrl);
+      } catch {
+        throw new Error('MQTT_BOOTSTRAP_PRODUCTION_BROKER_NOT_ALLOWED');
+      }
+      if (url.protocol !== 'mqtts:' || !url.hostname.includes('.') ||
+          /(?:^|[-.])(dev|development|test|testing|staging|stage)(?:[-.]|$)/i.test(url.hostname) ||
+          url.hostname === 'mqtt-dev.179-236-82-122.sslip.io' ||
+          url.username || url.password || (url.pathname !== '' && url.pathname !== '/') ||
+          url.search || url.hash) {
+        throw new Error('MQTT_BOOTSTRAP_PRODUCTION_BROKER_NOT_ALLOWED');
+      }
+      return {
+        hostname: url.hostname,
+        port: Number(url.port || 8883),
+        caPem: readCaPem(this.settings.publicCaFile, true),
       };
     }
 

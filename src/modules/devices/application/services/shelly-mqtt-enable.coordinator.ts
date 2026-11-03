@@ -2,6 +2,7 @@ import type { ShellyPairingSessionService } from './shelly-pairing-session.servi
 import type { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-device-identity-provider';
 import { buildShellyMqttAclPlan } from './shelly-mqtt-acl.policy';
 import type { MqttRuntimeService } from '../../infrastructure/messaging/mqtt-runtime.service';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export interface MqttEnableClaim {
@@ -23,7 +24,7 @@ export interface MqttEnableRequest {
   explicitlyTrustedLocalNetwork?:boolean;
 }
 
-export type MqttEnableProfile = 'local-dev' | 'vps-dev-tls';
+export type MqttEnableProfile = 'local-dev' | 'vps-dev-tls' | 'production-mosquitto';
 /**
  * Local exige readback y aprobación de laboratorio; VPS usa autorización
  * OWNER+token y lease SQL030. En ambos perfiles solo alcanza AWAITING_AUTH.
@@ -39,8 +40,11 @@ export class ShellyMqttEnableCoordinator {
   ) {}
 
   async enable(input:MqttEnableRequest):Promise<{phase:'AWAITING_MQTT_AUTH';mqttAuthenticated:false}> {
+    const productionProfileNotAllowed = this.profile === 'production-mosquitto' &&
+      !selectShellyMqttProviderPlan().productionAuthWorker;
     if (!UUID.test(input.operationId) || !UUID.test(input.sessionId) ||
         !/^[A-Za-z0-9_-]{43,128}$/.test(input.sessionToken) ||
+        productionProfileNotAllowed ||
         (this.profile==='local-dev' &&
           (!input.localConfigurationReadbackVerified || !input.explicitlyTrustedLocalNetwork))) {
       throw new Error('MQTT_ENABLE_REQUEST_INVALID');

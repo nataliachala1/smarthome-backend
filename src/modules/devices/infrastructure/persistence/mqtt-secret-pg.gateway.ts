@@ -1,6 +1,7 @@
 import type { OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolConfig } from 'pg';
 import type { MqttSecretSqlQueryPort } from '../secrets/pg-mqtt-preparation-secret.repository';
+import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
 /** SQL028: cuarta cuenta exclusiva, nunca la cuenta general Prisma. */
 const EXPECTED_ROLE = 'smarthome_mqtt_secret_dev_login';
@@ -9,7 +10,8 @@ const LOCAL_HOST = '127.0.0.1';
 const VPS_DEV_DB = 'smarthome_dev';
 const VPS_DEV_HOST = 'smart-home-smarthomepostgresdev-vrmtpz';
 const EXPECTED_PORT = '5432';
-export type MqttSecretConnectionMode = 'local-dev' | 'vps-dev-tls';
+const PRODUCTION_ROLE = 'smarthome_mqtt_secret_prod_login';
+export type MqttSecretConnectionMode = 'local-dev' | 'vps-dev-tls' | 'production';
 
 export interface SecretPgTarget {
   readonly role: string;
@@ -35,7 +37,7 @@ export function parseMqttSecretConnection(
     throw new Error('MQTT_SECRET_DATABASE_URL_INVALID');
   }
   if (parsed.protocol !== 'postgresql:' ||
-      role !== EXPECTED_ROLE || !parsed.hostname ||
+      role !== (mode === 'production' ? PRODUCTION_ROLE : EXPECTED_ROLE) || !parsed.hostname ||
       parsed.port !== EXPECTED_PORT ||
       !/^[A-Za-z0-9_-]{43}$/.test(parsed.password) ||
       parsed.search !== '' || parsed.hash !== '') {
@@ -45,7 +47,9 @@ export function parseMqttSecretConnection(
     parsed.hostname === LOCAL_HOST && database === LOCAL_DB;
   const vps = mode === 'vps-dev-tls' && environment === 'production' &&
     parsed.hostname === VPS_DEV_HOST && database === VPS_DEV_DB;
-  if (!local && !vps) {
+  const production = mode === 'production' &&
+    isProductionMqttDatabaseTarget(parsed.hostname, database, environment);
+  if (!local && !vps && !production) {
     throw new Error('MQTT_SECRET_DATABASE_TARGET_NOT_ALLOWED');
   }
   return {
@@ -53,7 +57,7 @@ export function parseMqttSecretConnection(
     database,
     options: {
       connectionString,
-      ssl: vps ? { rejectUnauthorized: true, minVersion: 'TLSv1.2' } : false,
+      ssl: local ? false : { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
       max: 2,
       connectionTimeoutMillis: 3000,
       idleTimeoutMillis: 10000,

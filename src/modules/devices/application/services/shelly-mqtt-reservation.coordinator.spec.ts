@@ -51,6 +51,42 @@ function harness(initial = session) {
 }
 
 describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
+  it('reserva en paralelo Shelly distintos con bindings y topics aislados', async () => {
+    const otherIdentityId = 'd49c6fde-3783-4a0b-bfe6-8aca63788e78';
+    const otherOperationId = '489d18c2-0872-49db-82db-d96943854687';
+    const otherPhysicalId = 'shelly1pmg4-112233aabbcc';
+    const otherSession = {
+      ...session,
+      sessionId: 'other-session',
+      identity: { ...session.identity, manufacturerDeviceId: otherPhysicalId },
+    };
+    const otherReserved = {
+      operationId: otherOperationId,
+      identityId: otherIdentityId,
+      username: `shd_${otherIdentityId.replace(/-/g, '')}`,
+      clientId: `shd-${otherIdentityId.replace(/-/g, '')}`,
+      roleName: `role_shd_${otherIdentityId.replace(/-/g, '')}`,
+      reservedTopicScope: otherPhysicalId,
+    };
+    const first = harness(session);
+    const second = harness(otherSession);
+    second.reserve.mockResolvedValue(otherReserved);
+
+    const [firstResult, secondResult] = await Promise.all([
+      first.coordinator.reserve(request),
+      second.coordinator.reserve({ ...request, sessionId: 'other-session' }),
+    ]);
+
+    expect(firstResult.username).not.toBe(secondResult.username);
+    expect(firstResult.clientId).not.toBe(secondResult.clientId);
+    expect(firstResult.roleName).not.toBe(secondResult.roleName);
+    expect(firstResult.plan.topicScope).not.toBe(secondResult.plan.topicScope);
+    const firstTopics = new Set(firstResult.plan.acls.map((acl) => acl.topic));
+    expect(secondResult.plan.acls.some((acl) => firstTopics.has(acl.topic))).toBe(false);
+    expect(first.reserve).toHaveBeenCalledTimes(1);
+    expect(second.reserve).toHaveBeenCalledTimes(1);
+  });
+
   it('reserva exclusivamente el scope derivado y revalida la sesion', async () => {
     const { coordinator, get, reserve } = harness();
     const result = await coordinator.reserve(request);

@@ -16,6 +16,8 @@ const REQUEST_TOPIC = '$CONTROL/dynamic-security/v1';
 const RESPONSE_TOPIC = '$CONTROL/dynamic-security/v1/response';
 const IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
 const TIMEOUT_MS = 8000;
+const DISCONNECT_POLL_ATTEMPTS = 10;
+const DISCONNECT_POLL_DELAY_MS = 150;
 
 type JsonObject = Record<string, unknown>;
 
@@ -42,12 +44,30 @@ function unavailable(code: string): ServiceUnavailableException {
   return new ServiceUnavailableException({ code });
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Mosquitto 2.1+ getClient.connections entries include an address. Treat a
+ * missing field or malformed entry as unsupported evidence, never as zero.
+ */
+function authenticatedConnectionCount(client: JsonObject): number | null {
+  if (!Array.isArray(client.connections)) return null;
+  const connections = client.connections;
+  if (!connections.every((entry) => {
+    const connection = object(entry);
+    return typeof connection?.address === 'string' && connection.address.length > 0;
+  })) return null;
+  return connections.length;
+}
+
 /**
  * Administra identidades MQTT mediante el API oficial de Dynamic Security.
  *
- * IMPORTANTE: no registrar este servicio en DevicesModule ni exponerlo por HTTP
- * hasta que el flujo transaccional de pairing/revocacion esté implementado.
- * Nunca comparte MQTT_USERNAME / MQTT_PASSWORD con dispositivos.
+ * Solo se registra dentro de perfiles con pairing, autenticación y revocación
+ * durables habilitados. Nunca comparte MQTT_USERNAME / MQTT_PASSWORD con
+ * dispositivos.
  */
 @Injectable()
 export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider {
@@ -190,6 +210,52 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     });
   }
 
+  /**
+   * Confirms broker-wide fail-closed defaults and that this broker exposes
+   * live authenticated connections through getClient. This method is
+   * intentionally read-only; it never changes shared broker policy.
+   */
+  async verifyBrokerPrerequisites(): Promise<void> {
+    const adminUsername = this.configService.get<string>(
+      'MQTT_DYNSEC_ADMIN_USERNAME',
+    );
+    if (!adminUsername || !IDENTIFIER.test(adminUsername)) {
+      throw unavailable('MQTT_DYNSEC_ADMIN_NOT_CONFIGURED');
+    }
+
+    const defaults = [
+      'publishClientSend',
+      'publishClientReceive',
+      'subscribe',
+      'unsubscribe',
+    ] as const;
+    const defaultAccess = await this.command('getDefaultACLAccess');
+    const acls = Array.isArray(defaultAccess.acls) ? defaultAccess.acls : [];
+    const observed = new Map<string, boolean>();
+    for (const item of acls) {
+      const acl = object(item);
+      if (!acl || typeof acl.acltype !== 'string' ||
+          typeof acl.allow !== 'boolean' || observed.has(acl.acltype)) {
+        throw unavailable('MQTT_DYNSEC_DEFAULT_DENY_NOT_CONFIRMED');
+      }
+      observed.set(acl.acltype, acl.allow);
+    }
+    if (observed.size !== defaults.length ||
+        defaults.some((acltype) => observed.get(acltype) !== false)) {
+      throw unavailable('MQTT_DYNSEC_DEFAULT_DENY_NOT_CONFIRMED');
+    }
+
+    const adminResult = await this.command('getClient', { username: adminUsername });
+    const client = object(adminResult.client);
+    const adminConnectionCount = client
+      ? authenticatedConnectionCount(client)
+      : null;
+    if (client?.username !== adminUsername ||
+        adminConnectionCount === null || adminConnectionCount === 0) {
+      throw unavailable('MQTT_DYNSEC_CONNECTION_OBSERVATION_UNSUPPORTED');
+    }
+  }
+
   private validateIdentifier(value: string): void {
     if (!IDENTIFIER.test(value)) {
       throw unavailable('MQTT_DYNSEC_INVALID_IDENTIFIER');
@@ -223,9 +289,7 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
       roleNames: roles
         .map((entry: unknown) => object(entry)?.rolename)
         .filter((name: unknown): name is string => typeof name === 'string'),
-      authenticatedConnectionCount: Array.isArray(client.connections)
-        ? client.connections.length
-        : null,
+      authenticatedConnectionCount: authenticatedConnectionCount(client),
     };
   }
 
@@ -300,9 +364,11 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     this.validateIdentifier(input.clientId);
     this.validateIdentifier(input.roleName);
     this.validateScopedAcls(input);
+    await this.verifyBrokerPrerequisites();
 
     const clientResponse = await this.command('getClient', { username: input.username });
     const client = object(clientResponse.client);
+    const observedConnections = client ? authenticatedConnectionCount(client) : null;
     const roles = Array.isArray(client?.roles) ? client.roles : null;
     const groups = client?.groups;
     if (
@@ -311,6 +377,7 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
       !roles || roles.length !== 1 ||
       object(roles[0])?.rolename !== input.roleName ||
       object(roles[0])?.priority !== 10 ||
+      observedConnections !== 0 ||
       (groups !== undefined && !Array.isArray(groups)) ||
       (Array.isArray(groups) && groups.length !== 0)
     ) {
@@ -355,6 +422,7 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
       throw unavailable('MQTT_DYNSEC_INVALID_PROVISION_REQUEST');
     }
     this.validateScopedAcls(input);
+    await this.verifyBrokerPrerequisites();
 
     // NOTA: la consulta inicial y el createClient no sustituyen una reserva
     // transaccional. El orquestador de pairing deberá evitar colisiones.
@@ -418,8 +486,11 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
 
   async enableIdentity(username: string): Promise<void> {
     this.validateIdentifier(username);
+    await this.verifyBrokerPrerequisites();
     const before = await this.inspectIdentity(username);
-    if (!before || !before.disabled || before.roleNames.length !== 1) {
+    if (!before || before.authenticatedConnectionCount === null ||
+        before.authenticatedConnectionCount !== 0 || !before.disabled ||
+        before.roleNames.length !== 1) {
       throw unavailable('MQTT_DYNSEC_ENABLE_PRECONDITION_FAILED');
     }
     await this.command('enableClient', { username });
@@ -436,9 +507,20 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     // timeout or malformed response still throws and remains uncertain.
     if (!before) return;
     if (!before.disabled) await this.command('disableClient', { username });
-    const after = await this.inspectIdentity(username);
-    if (!after?.disabled) {
-      throw unavailable('MQTT_DYNSEC_DISABLE_NOT_CONFIRMED');
+    for (let attempt = 0; attempt < DISCONNECT_POLL_ATTEMPTS; attempt++) {
+      const after = await this.inspectIdentity(username);
+      // An explicit absence is durable evidence that the identity cannot
+      // reconnect. A disabled flag alone does not prove that existing
+      // authenticated connections have been kicked.
+      if (!after) return;
+      if (after.authenticatedConnectionCount === null) {
+        throw unavailable('MQTT_DYNSEC_DISABLE_NOT_CONFIRMED');
+      }
+      if (after.disabled && after.authenticatedConnectionCount === 0) return;
+      if (attempt + 1 < DISCONNECT_POLL_ATTEMPTS) {
+        await delay(DISCONNECT_POLL_DELAY_MS);
+      }
     }
+    throw unavailable('MQTT_DYNSEC_DISABLE_NOT_CONFIRMED');
   }
 }

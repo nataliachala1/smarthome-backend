@@ -2,7 +2,11 @@ import { HttpException } from '@nestjs/common';
 jest.mock('../../../auth/presentation/http/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: class JwtAuthGuardMock {},
 }));
+jest.mock('../../infrastructure/messaging/shelly-mqtt-deployment-mode', () => ({
+  selectShellyMqttProviderPlan: jest.fn(),
+}));
 import { ShellyMqttAuthenticationController } from './shelly-mqtt-authentication.controller';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 const USER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const HOME = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
@@ -26,6 +30,10 @@ describe('ShellyMqttAuthenticationController', () => {
     process.env.MQTT_ENABLED = 'true';
     process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED = 'true';
     process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED = 'true';
+    (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
+      vpsAuthWorker: true,
+      productionAuthWorker: false,
+    });
   });
 
   afterAll(() => { process.env = originalEnv; });
@@ -79,6 +87,10 @@ describe('ShellyMqttAuthenticationController', () => {
 
   it('mantiene apagado el endpoint sin el opt-in específico del worker', async () => {
     process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED = 'false';
+    (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
+      vpsAuthWorker: false,
+      productionAuthWorker: false,
+    });
     await expect(controller.confirm(
       { userId: USER } as never, HOME, SESSION, TOKEN, { operationId: OP },
     )).rejects.toHaveProperty('status', 503);

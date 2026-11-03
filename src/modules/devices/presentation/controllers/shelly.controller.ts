@@ -8,6 +8,8 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Inject,
+  Optional,
   UseGuards,
 } from '@nestjs/common';
 
@@ -45,6 +47,8 @@ import { CreateShellyPairingSessionDto } from '../../application/dto/create-shel
 import { ReportShellyPairingIdentityDto } from '../../application/dto/report-shelly-pairing-identity.dto';
 import { CompleteShellyPairingSessionDto } from '../../application/dto/complete-shelly-pairing-session.dto';
 import { ShellyPairingSessionService } from '../../application/services/shelly-pairing-session.service';
+import { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-device-identity-provider';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 @Controller('api/v1/homes/:homeId/shelly')
 @ApiTags('shelly')
@@ -59,6 +63,10 @@ export class ShellyController {
     private readonly discoverShellyDevicesUseCase: DiscoverShellyDevicesUseCase,
 
     private readonly pairingSessionService: ShellyPairingSessionService,
+
+    @Optional()
+    @Inject(MqttDeviceIdentityProvider)
+    private readonly mqttIdentityProvider?: MqttDeviceIdentityProvider,
   ) {}
 
   @Get('setup-capabilities')
@@ -74,8 +82,23 @@ export class ShellyController {
     @Param('homeId', ParseUUIDPipe) homeId: string,
   ) {
     await this.pairingSessionService.assertCanManageHome(user.userId, homeId);
+    const plan = selectShellyMqttProviderPlan();
+    const pairingProfileEnabled =
+      (plan.vpsPairing && plan.vpsAuthWorker) || plan.productionPairing;
+    let brokerPrerequisitesVerified = false;
+    if (pairingProfileEnabled && this.mqttIdentityProvider) {
+      try {
+        await this.mqttIdentityProvider.verifyBrokerPrerequisites();
+        brokerPrerequisitesVerified = true;
+      } catch {
+        // Capabilities are a read-only, fail-closed view. Do not expose broker
+        // administration errors or imply readiness when the preflight failed.
+      }
+    }
+    const pairingReady = pairingProfileEnabled && brokerPrerequisitesVerified;
     return {
-      preferredMethod: 'LAN',
+      preferredMethod: pairingReady ? 'LAN' : null,
+      pairingAvailability: pairingReady ? 'READY' : 'BLOCKED',
       networkRequirements: {
         LAN: 'El teléfono Android debe compartir la red local del Shelly; el backend cloud no conecta a IPs privadas.',
         AP: 'El teléfono Android se conecta al AP del Shelly; la clave Wi-Fi del hogar se transmite solo localmente.',
@@ -89,13 +112,17 @@ export class ShellyController {
       ],
       methods: {
         AP: {
-          sessionCoordination: 'READY_FOR_SESSION_CREATION',
+          sessionCoordination: pairingReady
+            ? 'READY_FOR_SESSION_CREATION'
+            : 'BLOCKED_UNTIL_MQTT_PROFILE_AND_BROKER_ARE_VERIFIED',
           deviceConfiguration: 'MOBILE_TO_DEVICE_LOCAL_REQUIRED',
           physicalValidation: 'POC_PENDING',
           localRpcBaseUrl: 'http://192.168.33.1',
         },
         LAN: {
-          sessionCoordination: 'READY_FOR_SESSION_CREATION',
+          sessionCoordination: pairingReady
+            ? 'READY_FOR_SESSION_CREATION'
+            : 'BLOCKED_UNTIL_MQTT_PROFILE_AND_BROKER_ARE_VERIFIED',
           deviceConfiguration: 'MOBILE_TO_DEVICE_LOCAL_REQUIRED',
           physicalValidation: 'POC_PENDING',
           localRpcBaseUrl: 'DEVICE_IP_DISCOVERED_BY_ANDROID',
@@ -106,12 +133,23 @@ export class ShellyController {
         },
       },
       brokerCredentialProvisioning: {
-        status: 'BLOCKED_UNTIL_INDIVIDUAL_AUTHENTICATION_VALIDATED',
-        reason:
-          'No se ha validado una API soportada de EMQX Serverless para crear credenciales y ACL individuales desde el backend.',
+        status: pairingReady
+          ? 'READY_FOR_INDIVIDUAL_MOSQUITTO_IDENTITIES'
+          : 'BLOCKED_UNTIL_MOSQUITTO_PREREQUISITES_ARE_VERIFIED',
+        profile: plan.mode,
+        authenticatedConnectionObservation: brokerPrerequisitesVerified
+          ? 'VERIFIED_BY_DYNSEC_GET_CLIENT'
+          : 'NOT_VERIFIED',
+        defaultDeny: brokerPrerequisitesVerified ? true : null,
+        reason: !pairingProfileEnabled
+          ? 'MQTT_PAIRING_PROFILE_DISABLED'
+          : brokerPrerequisitesVerified
+            ? null
+            : 'MOSQUITTO_BROKER_PREREQUISITES_NOT_VERIFIED',
       },
-      pairingCompletion:
-        'BLOCKED_UNTIL_DEVICE_SPECIFIC_AUTHENTICATED_CONNECTION',
+      pairingCompletion: pairingReady
+        ? 'REQUIRES_DEVICE_SPECIFIC_AUTHENTICATED_CONNECTION_AND_RPC_CHALLENGE'
+        : 'BLOCKED_UNTIL_DEVICE_SPECIFIC_AUTHENTICATED_CONNECTION',
       completionRequires:
         'BROKER_OBSERVED_DEVICE_SPECIFIC_AUTHENTICATED_MQTT_CONNECTION',
     };

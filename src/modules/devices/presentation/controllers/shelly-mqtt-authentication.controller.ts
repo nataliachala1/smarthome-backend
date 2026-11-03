@@ -8,6 +8,7 @@ import { CurrentUser } from '../../../auth/presentation/http/decorators/current-
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
 import { ShellyMqttAuthenticationAction } from '../../application/services/shelly-mqtt-authentication.action';
 import { ShellyMqttOperationRequestDto } from '../../application/dto/shelly-mqtt-operation-request.dto';
+import { selectShellyMqttProviderPlan } from '../../infrastructure/messaging/shelly-mqtt-deployment-mode';
 
 /** Authenticated HTTP trigger; only the worker can persist broker evidence. */
 @Controller('api/v1/homes/:homeId/shelly/setup-sessions/:sessionId/mqtt')
@@ -33,17 +34,8 @@ export class ShellyMqttAuthenticationController {
     @Headers('x-pairing-token') token: string,
     @Body() body: ShellyMqttOperationRequestDto,
   ) {
-    if (process.env.NODE_ENV !== 'production' ||
-        process.env.APP_ENV !== 'development' ||
-        process.env.SHELLY_MQTT_DEV_DI_ENABLED !== 'true' ||
-        process.env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED !== 'true' ||
-        process.env.SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED !== 'true' ||
-        process.env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED !== 'true' ||
-        process.env.MQTT_ENABLED !== 'true' ||
-        process.env.MQTT_TLS_REJECT_UNAUTHORIZED === 'false' ||
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' ||
-        process.env.SHELLY_MQTT_AUTH_DEV_DI_ENABLED !== 'true' ||
-        process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED !== 'true' ||
+    const providerPlan = selectShellyMqttProviderPlan();
+    if ((!providerPlan.vpsAuthWorker && !providerPlan.productionAuthWorker) ||
         !/^[A-Za-z0-9_-]{43,128}$/.test(token ?? '') ||
         typeof body?.operationId !== 'string') {
       throw new ServiceUnavailableException({

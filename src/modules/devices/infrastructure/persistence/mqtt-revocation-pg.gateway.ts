@@ -1,7 +1,8 @@
 import type { OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolConfig } from 'pg';
+import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
-export type MqttRevocationConnectionMode = 'local-dev' | 'vps-dev-tls';
+export type MqttRevocationConnectionMode = 'local-dev' | 'vps-dev-tls' | 'production';
 
 export interface MqttRevocationConnectionTarget {
   readonly role: string;
@@ -11,6 +12,7 @@ export interface MqttRevocationConnectionTarget {
 
 const VPS_DEV_HOST = 'smart-home-smarthomepostgresdev-vrmtpz';
 const REVOKE_LOGIN = 'smarthome_mqtt_revoke_dev_login';
+const PRODUCTION_REVOKE_LOGIN = 'smarthome_mqtt_revoke_prod_login';
 
 export function parseMqttRevocationConnection(
   connectionString: string | undefined,
@@ -27,10 +29,11 @@ export function parseMqttRevocationConnection(
 
   const role = decodeURIComponent(url.username);
   const database = decodeURIComponent(url.pathname.slice(1));
+  const expectedRole = mode === 'production' ? PRODUCTION_REVOKE_LOGIN : REVOKE_LOGIN;
   const portValid = /^\d{1,5}$/.test(url.port) &&
     Number(url.port) > 0 && Number(url.port) <= 65535;
   if (url.protocol !== 'postgresql:' || !url.hostname || !portValid ||
-      role !== REVOKE_LOGIN || !url.password ||
+      role !== expectedRole || !url.password ||
       !/^[A-Za-z][A-Za-z0-9_]{0,62}$/.test(database) ||
       url.search || url.hash) {
     throw new Error('MQTT_REVOCATION_DATABASE_URL_INVALID');
@@ -49,7 +52,13 @@ export function parseMqttRevocationConnection(
   )) {
     throw new Error('MQTT_REVOCATION_DATABASE_TARGET_NOT_ALLOWED');
   }
-  if (!['local-dev', 'vps-dev-tls'].includes(mode)) {
+  if (mode === 'production' && (
+    !/^[A-Za-z0-9_-]{43}$/.test(url.password) ||
+    !isProductionMqttDatabaseTarget(url.hostname, database, environment)
+  )) {
+    throw new Error('MQTT_REVOCATION_DATABASE_TARGET_NOT_ALLOWED');
+  }
+  if (!['local-dev', 'vps-dev-tls', 'production'].includes(mode)) {
     throw new Error('MQTT_REVOCATION_DATABASE_TARGET_NOT_ALLOWED');
   }
 

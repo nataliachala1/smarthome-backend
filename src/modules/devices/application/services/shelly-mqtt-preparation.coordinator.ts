@@ -3,10 +3,9 @@ import type { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-devi
 import type { ConfirmMqttPreparedInput } from '../../infrastructure/persistence/pg-mqtt-prepared-confirmation.port';
 
 /**
- * Contratos pendientes de implementar con dos conexiones SQL especializadas:
- * lease_worker (SQL 025) y prepare_confirmer (SQL 027).
- * NO registrar el coordinador en DevicesModule mientras no existan estas
- * implementaciones con privilegios verificados y reconciliacion persistente.
+ * Contratos SQL especializados: lease_worker (SQL 025) y prepare_confirmer
+ * (SQL 027). Solo se registra bajo perfiles cuya factory comprueba destino y
+ * privilegios de cada conexión.
  */
 export interface PreparationLeaseClaim {
   readonly operationId: string;
@@ -23,9 +22,8 @@ export interface MqttPreparedConfirmationPort {
 }
 
 /**
- * Un almacen de secretos seguro y durable debe gestionar la password MQTT.
- * No se incluye implementacion: su provisionamiento al Shelly requiere
- * un flujo autenticado y recuperable, aun no implementado.
+ * El secreto individual se conserva cifrado y durable por operationId; solo
+ * el endpoint de bootstrap autorizado lo revela brevemente al flujo local.
  */
 export interface MqttPreparationSecretPort {
   issueOrLoadForOperation(operationId: string, leaseToken: string): Promise<string>;
@@ -37,8 +35,8 @@ export interface PreparedOnlyResult {
 }
 
 /**
- * Orquestador SIN endpoints ni inyeccion automatica. Solamente invocable
- * desde un worker confiable sobre una reserva interna autenticada.
+ * Orquestador del perfil MQTT: usa una reserva autenticada, deja la cuenta
+ * deshabilitada y solo confirma PREPARED_DISABLED tras releer Mosquitto.
  * No habilita cuentas ni devuelve passwords.
  */
 export class ShellyMqttPreparationCoordinator {

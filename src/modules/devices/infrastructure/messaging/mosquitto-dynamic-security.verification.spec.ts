@@ -5,6 +5,7 @@ import { MosquittoDynamicSecurityProvider } from './mosquitto-dynamic-security.p
 import type { VerifyPreparedMqttIdentityInput } from '../../domain/services/mqtt-device-identity-provider';
 
 const scope = 'shelly1pmg4-testdevice001';
+const adminUsername = 'dynsec-admin';
 const expected: VerifyPreparedMqttIdentityInput = {
   username: 'shd_lab_test_001',
   clientId: 'shd-lab-test-001',
@@ -24,13 +25,16 @@ function harness(change?: {
   acl?: Record<string, unknown>;
   extraAcl?: Record<string, unknown>;
 }) {
-  const provider = new MosquittoDynamicSecurityProvider({ get: () => undefined } as never);
+  const provider = new MosquittoDynamicSecurityProvider({
+    get: (name: string) => name === 'MQTT_DYNSEC_ADMIN_USERNAME' ? adminUsername : undefined,
+  } as never);
   const client = {
     username: expected.username,
     clientid: expected.clientId,
     disabled: true,
     roles: [{ rolename: expected.roleName, priority: 10 }],
     groups: [],
+    connections: [],
     ...change?.client,
   };
   const acls = expected.acls.map((item) => ({
@@ -42,8 +46,20 @@ function harness(change?: {
   if (change?.acl) acls[0] = { ...acls[0], ...change.acl };
   if (change?.extraAcl) acls.push(change.extraAcl as typeof acls[number]);
   const command = jest.spyOn(provider as unknown as {
-    command: (name: string) => Promise<Record<string, unknown>>;
-  }, 'command').mockImplementation((name) => {
+    command: (name: string, parameters?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  }, 'command').mockImplementation((name, parameters) => {
+    if (name === 'getDefaultACLAccess') return Promise.resolve({ acls: [
+      { acltype: 'publishClientSend', allow: false },
+      { acltype: 'publishClientReceive', allow: false },
+      { acltype: 'subscribe', allow: false },
+      { acltype: 'unsubscribe', allow: false },
+    ] });
+    if (name === 'getClient' && parameters?.username === adminUsername) {
+      return Promise.resolve({ client: {
+        username: adminUsername,
+        connections: [{ address: '127.0.0.1' }],
+      } });
+    }
     if (name === 'getClient') return Promise.resolve({ client });
     if (name === 'getRole') return Promise.resolve({ role: { rolename: expected.roleName, acls } });
     return Promise.reject(new Error('UNEXPECTED_BROKER_COMMAND'));
@@ -55,12 +71,13 @@ describe('Mosquitto exact prepared identity verification / no network', () => {
   it('requires a disabled identity, no groups, only intended role and exactly 5 ACLs', async () => {
     const { provider, command } = harness();
     await expect(provider.verifyPreparedDisabled(expected)).resolves.toBeUndefined();
-    expect(command).toHaveBeenCalledTimes(2);
+    expect(command).toHaveBeenCalledTimes(4);
   });
 
   it.each([
     [{ disabled: false }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],
     [{ clientid: 'other-client' }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],
+    [{ connections: [{ address: '192.0.2.10:54321' }] }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],
     [{ groups: [{ groupname: 'other-group', priority: 1 }] }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],
     [{ roles: [{ rolename: 'other-role', priority: 10 }] }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],
     [{ roles: [{ rolename: expected.roleName, priority: 10 }, { rolename: 'another', priority: 5 }] }, 'MQTT_DYNSEC_PREPARE_NOT_CONFIRMED'],

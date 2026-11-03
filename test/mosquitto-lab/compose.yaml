@@ -1,0 +1,13 @@
+services:
+  broker:
+    image: eclipse-mosquitto:2.1.2-alpine
+    ports:
+      - "127.0.0.1:1885:1885"
+    environment:
+      MOSQUITTO_DYNSEC_PASSWORD: "${BE01_DYNSEC_ADMIN_PASSWORD:?set a synthetic BE01 lab password}"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - dynsec-data:/mosquitto/data
+
+volumes:
+  dynsec-data:

@@ -1,6 +1,7 @@
 /**
- * HU16 / LABORATORIO EXCLUSIVO MQTT 127.0.0.1:1885.
- * Verifica getClient.connections de Mosquitto 2.1+ usando una identidad
+ * BE-01 / LABORATORIO EXCLUSIVO MQTT 127.0.0.1:1885.
+ * Verifica getClient.connections y defaults ACL deny de Mosquitto 2.1+
+ * usando una identidad
  * sintetica. No usa Shelly real, PostgreSQL ni cambia AUTH_VERIFIED.
  */
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
@@ -58,9 +59,10 @@ run('HU16 / conexion MQTT autenticada observada en Mosquitto (LAB REAL)', () => 
       process.env.NODE_ENV === 'production' ||
       process.env.MQTT_DYNSEC_ADMIN_URL !== BROKER ||
       process.env.MQTT_DYNSEC_ADMIN_USERNAME !== 'admin' ||
-      !process.env.MQTT_DYNSEC_ADMIN_PASSWORD ||
+      !process.env.MQTT_DYNSEC_ADMIN_PASSWORD?.startsWith('be01-lab-') ||
+      process.env.MQTT_DYNSEC_ADMIN_PASSWORD.length < 32 ||
       process.env.MQTT_DYNSEC_RUN_LAB_TEST !== 'true'
-    ) throw new Error('MQTT_LAB_1885_ADMIN_REQUIRED');
+    ) throw new Error('MQTT_LAB_SYNTHETIC_LOOPBACK_ADMIN_REQUIRED');
 
     const provider = new MosquittoDynamicSecurityProvider({
       get: (name: string) => process.env[name],
