@@ -6,10 +6,14 @@ API del proyecto SmartHome: autenticación y sesiones, hogares y roles, disposit
 
 ## Documentación oficial
 
-La documentación técnica (seguridad, consumo, MQTT/Shelly e histórico) está en el repositorio documental:
+La documentación central del proyecto está en el repositorio [smart-home-doc](https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc):
 
-- Índice del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-docs/blob/main/backend/README.md>
-- Registro de QA: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-docs/blob/main/qa/backend/README.md>
+- Índice general: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/README.md>
+- Arquitectura del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/10-arquitectura/backend.md>
+- Contrato MQTT: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/20-contratos/mqtt/contrato-mqtt.md>
+- Informes históricos del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/99-archivo/backend/README.md>
+
+Los detalles de implementación (seguridad HU09, MQTT con TLS, consumo, pairing Shelly, roles y permisos) se mantienen en la carpeta [`docs/`](docs) de este repositorio.
 
 ## Stack
 
