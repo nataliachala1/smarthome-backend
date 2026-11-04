@@ -2,7 +2,7 @@ name: CI and deploy dev
 
 on:
   push:
-    branches: [dev]
+    branches: [qa]
 permissions:
   contents: read
   packages: write
