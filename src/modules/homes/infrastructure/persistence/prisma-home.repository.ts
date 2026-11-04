@@ -1,0 +1,271 @@
+import { Injectable } from '@nestjs/common';
+
+import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
+
+import { Home } from '../../domain/entities/home.entity';
+
+import {
+  CreateHomeData,
+  HomeRepository,
+  UpdateHomeData,
+} from '../../domain/repositories/home.repository';
+
+import { PrismaHomeMapper } from './prisma-home.mapper';
+
+import { isPostgresAccessDeniedError } from '../../../../infrastructure/database/prisma/prisma-error.util';
+import { HomeAccessDeniedError } from '../../domain/errors/home-access-denied.error';
+import { HomeHasDevicesError } from '../../domain/errors/home-has-devices.error';
+
+@Injectable()
+export class PrismaHomeRepository
+  implements HomeRepository
+{
+  constructor(
+    private readonly prismaRls: PrismaRlsService,
+  ) {}
+
+ async findAllByUser(
+  userId: string,
+  ): Promise<Home[]> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const memberships =
+          await tx.home_member.findMany({
+            where: {
+              id_user: userId,
+              status: 'ACTIVE',
+            },
+            select: {
+              id_home: true,
+            },
+          });
+
+        const homeIds = memberships.map(
+          (membership) => membership.id_home,
+        );
+
+        if (homeIds.length === 0) {
+          return [];
+        }
+
+        const rows = await tx.home.findMany({
+          where: {
+            id_home: {
+              in: homeIds,
+            },
+            status: 'ACTIVE',
+            deleted_at: null,
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        });
+
+        return rows.map((row) => PrismaHomeMapper.toDomain(row));
+      },
+    );
+  }
+
+  async findById(
+    userId: string,
+    homeId: string,
+  ): Promise<Home | null> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const raw = await tx.home.findFirst({
+          where: {
+            id_home: homeId,
+          },
+        });
+
+        return raw
+          ? PrismaHomeMapper.toDomain(raw)
+          : null;
+      },
+    );
+  }
+
+  async deactivate(
+    userId: string,
+    homeId: string,
+  ): Promise<Home> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const raw = await tx.home.update({
+          where: {
+            id_home: homeId,
+          },
+          data: {
+            status: 'DEACTIVATED',
+            deleted_at: new Date(),
+          },
+        });
+
+        return PrismaHomeMapper.toDomain(raw);
+      },
+    );
+  }
+
+  async reactivate(
+    userId: string,
+    homeId: string,
+  ): Promise<Home> {
+    return this.prismaRls.withUserContext(
+      userId,
+      async (tx) => {
+        const raw = await tx.home.update({
+          where: {
+            id_home: homeId,
+          },
+          data: {
+            status: 'ACTIVE',
+            deleted_at: null,
+          },
+        });
+
+        return PrismaHomeMapper.toDomain(raw);
+      },
+    );
+  }
+
+  async update(
+    data: UpdateHomeData,
+  ): Promise<Home> {
+    try {
+      return await this.prismaRls.withUserContext(
+        data.userId,
+        async (tx) => {
+          const raw = await tx.home.update({
+            where: {
+              id_home: data.homeId,
+            },
+            data: {
+              ...(data.name !== undefined && {
+                name: data.name,
+              }),
+            },
+          });
+
+          return PrismaHomeMapper.toDomain(raw);
+        },
+      );
+    } catch (error: unknown) {
+    if (isPostgresAccessDeniedError(error)) {
+      throw new HomeAccessDeniedError();
+    }
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2025'
+    ) {
+      throw new HomeAccessDeniedError();
+    }
+
+    throw error;
+  }
+  }
+
+  async create(
+    data: CreateHomeData,
+  ): Promise<Home> {
+    return this.prismaRls.withUserContext(
+      data.userId,
+      async (tx) => {
+        const home = await tx.home.create({
+          data: {
+            created_by: data.userId,
+            name: data.name,
+            status: 'ACTIVE',
+          },
+        });
+
+        await tx.home_member.create({
+          data: {
+            id_home: home.id_home,
+            id_user: data.userId,
+            role: 'OWNER',
+            status: 'ACTIVE',
+            accepted_at: new Date(),
+          },
+        });
+
+        return PrismaHomeMapper.toDomain(home);
+      },
+    );
+  }
+
+  async deleteIfNoDevices(
+    userId: string,
+    homeId: string,
+  ): Promise<void> {
+    try {
+      await this.prismaRls.withUserContext(
+        userId,
+        async (tx) => {
+          const ownerMembership = await tx.home_member.findFirst({
+            where: {
+              id_home: homeId,
+              id_user: userId,
+              role: 'OWNER',
+              status: 'ACTIVE',
+            },
+            select: {
+              id_home_member: true,
+            },
+          });
+
+          if (!ownerMembership) {
+            throw new HomeAccessDeniedError();
+          }
+
+          const devicesCount = await tx.device.count({
+            where: {
+              id_home: homeId,
+            },
+          });
+
+          if (devicesCount > 0) {
+            throw new HomeHasDevicesError();
+          }
+
+          await tx.home.update({
+            where: {
+              id_home: homeId,
+            },
+            data: {
+              deleted_at: new Date(),
+              status: 'DEACTIVATED',
+            },
+          });
+        },
+      );
+    } catch (error: unknown) {
+      if (
+        error instanceof HomeHasDevicesError ||
+        error instanceof HomeAccessDeniedError
+      ) {
+        throw error;
+      }
+
+      if (isPostgresAccessDeniedError(error)) {
+        throw new HomeAccessDeniedError();
+      }
+
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2025'
+      ) {
+        throw new HomeAccessDeniedError();
+      }
+
+      throw error;
+    }
+  }
+}
