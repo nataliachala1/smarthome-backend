@@ -1,61 +1,120 @@
-name: CI and deploy dev
+
+name: CI and deploy QA
 
 on:
   push:
     branches: [qa]
+
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: smarthome-dev-deploy
+  group: smarthome-qa-deploy
   cancel-in-progress: false
 
 jobs:
   validate-build-publish:
+    name: Validate and publish QA image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      MQTT_ENABLED: 'false'
+      SHELLY_MQTT_DEV_DI_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'false'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npx tsc --noEmit -p tsconfig.build.json
-      - run: npm test -- --runInBand
-      - run: npm run build
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit -p tsconfig.build.json
+
+      - name: Unit tests
+        run: npm test -- --runInBand
+
+      - name: Build NestJS
+        run: npm run build
+
+      - name: MQTT security tests
+        run: npm run test:e2e -- --runInBand --runTestsByPath test/mqtt-namespace-security.e2e-spec.ts
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+
+      - name: Build and publish QA image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/smarthome-backend:dev
+            ghcr.io/${{ github.repository_owner }}/smarthome-backend:qa
             ghcr.io/${{ github.repository_owner }}/smarthome-backend:${{ github.sha }}
 
   deploy:
+    name: Deploy to Dokploy QA
     needs: validate-build-publish
+    if: ${{ github.ref == 'refs/heads/qa' && vars.QA_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
+    environment: qa
+
     steps:
-      - name: Trigger Dokploy
+      - name: Trigger Dokploy QA
+        shell: bash
         env:
-          DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
-          DEPLOYMENT_HEALTH_URL: ${{ secrets.DEPLOYMENT_HEALTH_URL }}
+          DOKPLOY_QA_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_QA_DEPLOY_WEBHOOK }}
         run: |
-          if [[ -z "${DOKPLOY_DEPLOY_WEBHOOK:-}" || -z "${DEPLOYMENT_HEALTH_URL:-}" ]]; then
-            echo "::notice::Deployment skipped; configure DOKPLOY_DEPLOY_WEBHOOK and DEPLOYMENT_HEALTH_URL repository secrets."
-            exit 0
+          if [[ -z "${DOKPLOY_QA_DEPLOY_WEBHOOK:-}" ]]; then
+            echo "::error::Missing Dokploy QA webhook"
+            exit 1
           fi
-          curl --fail --silent --show-error --request POST "$DOKPLOY_DEPLOY_WEBHOOK" --output /dev/null
+
+          curl --fail --silent --show-error \
+            --request POST \
+            "$DOKPLOY_QA_DEPLOY_WEBHOOK" \
+            --output /dev/null
+
+      - name: Verify QA readiness
+        shell: bash
+        env:
+          QA_DEPLOYMENT_HEALTH_URL: ${{ secrets.QA_DEPLOYMENT_HEALTH_URL }}
+        run: |
+          if [[ -z "${QA_DEPLOYMENT_HEALTH_URL:-}" ]]; then
+            echo "::error::Missing QA health URL"
+            exit 1
+          fi
+
           for attempt in $(seq 1 36); do
-            if curl --fail --silent "$DEPLOYMENT_HEALTH_URL" --output /dev/null; then exit 0; fi
+            if curl --fail --silent --show-error \
+              "$QA_DEPLOYMENT_HEALTH_URL" \
+              --output /dev/null; then
+              echo "QA readiness check passed"
+              exit 0
+            fi
             sleep 10
           done
-          echo "Deployment health check did not pass within 6 minutes."
+
+          echo "::error::QA readiness check failed"
           exit 1
