@@ -1,5 +1,5 @@
 
-name: CI and deploy QA
+name: QA Backend - Validate and Deploy
 
 on:
   push:
@@ -7,15 +7,14 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: smarthome-qa-deploy
+  group: smarthome-backend-qa
   cancel-in-progress: false
 
 jobs:
-  validate-build-publish:
-    name: Validate and publish QA image
+  validate:
+    name: Validate QA backend
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -27,7 +26,7 @@ jobs:
       SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'false'
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -48,61 +47,68 @@ jobs:
       - name: Unit tests
         run: npm test -- --runInBand
 
-      - name: Build NestJS
+      - name: Build
         run: npm run build
 
       - name: MQTT security tests
         run: npm run test:e2e -- --runInBand --runTestsByPath test/mqtt-namespace-security.e2e-spec.ts
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and publish QA image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/smarthome-backend:qa
-            ghcr.io/${{ github.repository_owner }}/smarthome-backend:${{ github.sha }}
-
   deploy:
-    name: Deploy to Dokploy QA
-    needs: validate-build-publish
-    if: ${{ github.ref == 'refs/heads/qa' && vars.QA_DEPLOY_ENABLED == 'true' }}
+    name: Deploy approved QA to Dokploy
+    needs: validate
+    if: ${{ vars.QA_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: qa
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Trigger Dokploy QA
         shell: bash
         env:
-          DOKPLOY_QA_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_QA_DEPLOY_WEBHOOK }}
+          DOKPLOY_QA_API_BASE_URL: ${{ secrets.DOKPLOY_QA_API_BASE_URL }}
+          DOKPLOY_QA_API_TOKEN: ${{ secrets.DOKPLOY_QA_API_TOKEN }}
+          DOKPLOY_QA_APPLICATION_ID: ${{ secrets.DOKPLOY_QA_APPLICATION_ID }}
         run: |
-          if [[ -z "${DOKPLOY_QA_DEPLOY_WEBHOOK:-}" ]]; then
-            echo "::error::Missing Dokploy QA webhook"
+          set -euo pipefail
+
+          if [[ -z "$DOKPLOY_QA_API_BASE_URL" ||
+                -z "$DOKPLOY_QA_API_TOKEN" ||
+                -z "$DOKPLOY_QA_APPLICATION_ID" ]]; then
+            echo "::error::Missing Dokploy QA configuration"
             exit 1
+          fi
+
+          if [[ "$DOKPLOY_QA_API_BASE_URL" != https://* ]]; then
+            echo "::error::Dokploy API must use HTTPS"
+            exit 1
+          fi
+
+          REMOTE_SHA="$(git ls-remote origin refs/heads/qa | cut -f1)"
+
+          if [[ "$REMOTE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::notice::Skipping outdated QA commit"
+            exit 0
           fi
 
           curl --fail --silent --show-error \
             --request POST \
-            "$DOKPLOY_QA_DEPLOY_WEBHOOK" \
-            --output /dev/null
+            "${DOKPLOY_QA_API_BASE_URL%/}/api/application.deploy" \
+            --header "Content-Type: application/json" \
+            --header "x-api-key: $DOKPLOY_QA_API_TOKEN" \
+            --data "$(printf '{"applicationId":"%s"}' "$DOKPLOY_QA_APPLICATION_ID")"
 
       - name: Verify QA readiness
         shell: bash
         env:
           QA_DEPLOYMENT_HEALTH_URL: ${{ secrets.QA_DEPLOYMENT_HEALTH_URL }}
         run: |
-          if [[ -z "${QA_DEPLOYMENT_HEALTH_URL:-}" ]]; then
-            echo "::error::Missing QA health URL"
+          set -euo pipefail
+
+          if [[ "$QA_DEPLOYMENT_HEALTH_URL" != https://* ]]; then
+            echo "::error::QA health URL must use HTTPS"
             exit 1
           fi
 
@@ -110,7 +116,7 @@ jobs:
             if curl --fail --silent --show-error \
               "$QA_DEPLOYMENT_HEALTH_URL" \
               --output /dev/null; then
-              echo "QA readiness check passed"
+              echo "QA readiness endpoint is healthy"
               exit 0
             fi
             sleep 10
