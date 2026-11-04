@@ -1,0 +1,1056 @@
+import { randomUUID } from 'node:crypto';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { connect, MqttClient } from 'mqtt';
+import { MqttRuntimeService } from './mqtt-runtime.service';
+import { parseFlespiShellyTelemetry } from './flespi-shelly-telemetry.parser';
+import { identifyFlespiShellyEvent } from './flespi-shelly-event-key';
+
+import { PrismaIotService } from '../../../../infrastructure/database/prisma/prisma-iot.service';
+
+import { PrismaRlsService } from '../../../../infrastructure/database/prisma/prisma-rls.service';
+import { Prisma } from '../../../../../generated/prisma/client';
+import { RealtimeEventsService } from '../../../realtime/realtime-events.service';
+
+type DeviceConnectivityStatus = 'ONLINE' | 'OFFLINE';
+
+interface DeviceStatusMessage {
+  connectivityStatus?: DeviceConnectivityStatus;
+  isOn?: boolean;
+  currentPowerW?: number | null;
+  energyDeltaKwh?: number | null;
+  energyTotalKwh?: number | null;
+  voltageV?: number | null;
+  currentA?: number | null;
+  frequencyHz?: number | null;
+  temperatureC?: number | null;
+  readAt?: string;
+}
+
+interface CreatedNotification {
+  id_notification: string;
+  id_user: string;
+  id_alert: string | null;
+  id_home: string | null;
+  id_device: string | null;
+  type: string;
+  title: string;
+  message: string;
+  status: string;
+  priority: string;
+  channel: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+@Injectable()
+export class MqttDeviceStatusSubscriber
+  implements OnModuleInit, OnModuleDestroy
+{
+  private readonly logger = new Logger(MqttDeviceStatusSubscriber.name);
+  private client: MqttClient | null = null;
+
+  constructor(
+    private readonly mqtt: MqttRuntimeService,
+    private readonly prisma: PrismaIotService,
+    private readonly prismaRls: PrismaRlsService,
+    private readonly realtimeEventsService: RealtimeEventsService,
+  ) {}
+
+  onModuleInit(): void {
+    const brokerUrl = this.mqtt.config.brokerUrl;
+
+    if (!brokerUrl) {
+      this.logger.warn(
+        'MQTT_BROKER_URL no está configurado. No se iniciará el subscriber MQTT.',
+      );
+      return;
+    }
+
+    const client = connect(brokerUrl, this.mqtt.clientOptions('status'));
+    this.client = client;
+
+    client.on('connect', () => {
+      const topics = this.mqtt.topics.subscriptions();
+
+      client.subscribe(topics, { qos: 1 }, (error, granted) => {
+        // MQTT 3.1.1 may SUBACK with qos=128 for an unauthorized topic.
+        // Requiring every exact grant prevents a false 'subscribed' log.
+        const grants = granted ?? [];
+        const flespiGrantRejected = Boolean(this.mqtt.config.flespiDeviceId) &&
+          topics.some((topic) => !grants.some(
+            (grant) => grant.topic === topic && grant.qos !== 128,
+          ));
+        if (error || flespiGrantRejected) {
+          this.logger.error(
+            'MQTT_SUBSCRIBE_FAILED: no se pudo suscribir a los tópicos de estado.',
+          );
+          if (flespiGrantRejected) client.end(true);
+          return;
+        }
+
+        this.logger.log(
+          `Suscrito a tópicos MQTT de estado: ${topics.join(', ')}`,
+        );
+      });
+    });
+
+    client.on('message', (topic, payload, packet) => {
+      // A previously retained switch state must not overwrite live telemetry.
+      if (this.mqtt.config.flespiDeviceId && packet.retain) {
+        this.logger.warn('MQTT_FLESPI_RETAINED_STATUS_IGNORED');
+        return;
+      }
+      void this.handleStatusMessage(topic, payload).catch(() => {
+        this.logger.error(
+          'MQTT_STATUS_PROCESSING_FAILED: no se pudo procesar el mensaje de estado.',
+        );
+      });
+    });
+
+    client.on('error', () => {
+      this.logger.error('MQTT_CONNECTION_FAILED: error de conexión de estado.');
+    });
+
+    client.on('reconnect', () => {
+      this.logger.warn('Reconectando al broker MQTT...');
+    });
+
+    client.on('offline', () => {
+      this.logger.warn('Cliente MQTT sin conexión.');
+    });
+
+    client.on('close', () => {
+      this.logger.warn('Conexión MQTT cerrada.');
+    });
+  }
+
+  onModuleDestroy(): void {
+    if (this.client) {
+      this.client.end(true);
+      this.client = null;
+    }
+  }
+
+  private async handleStatusMessage(
+    topic: string,
+    payload: Buffer,
+  ): Promise<void> {
+    const manufacturerDeviceId = this.extractManufacturerDeviceId(topic);
+
+    if (!manufacturerDeviceId) {
+      this.logger.warn(
+        'MQTT_TOPIC_REJECTED: tópico fuera del contrato configurado.',
+      );
+      return;
+    }
+
+    const message = this.parsePayload(topic, payload);
+
+    if (!message) {
+      if (this.isShellyTopic(topic)) {
+        this.logger.debug(
+          `Mensaje MQTT Shelly ignorado porque no contiene datos de switch: ${topic}`,
+        );
+        return;
+      }
+
+      this.logger.warn(
+        `Payload MQTT de estado inválido para ${manufacturerDeviceId}`,
+      );
+      return;
+    }
+
+    const device = await this.prisma.device.findFirst({
+      where: {
+        manufacturer_device_id: manufacturerDeviceId,
+        status: 'ACTIVE',
+        deleted_at: null,
+      },
+      select: {
+        id_device: true,
+        id_home: true,
+        name: true,
+        manufacturer_device_id: true,
+      },
+    });
+
+    if (!device) {
+      this.logger.warn(
+        `No se encontró dispositivo activo para manufacturerDeviceId=${manufacturerDeviceId}`,
+      );
+      return;
+    }
+
+    const now = new Date();
+
+    const readAt = message.readAt ? new Date(message.readAt) : now;
+
+
+    const deviceData: {
+      connectivity_status?: DeviceConnectivityStatus;
+      is_on?: boolean;
+      current_power_w?: number | null;
+      last_seen_at?: Date;
+    } = {};
+
+    deviceData.last_seen_at = readAt ?? now;
+
+    if (message.connectivityStatus !== undefined) {
+      deviceData.connectivity_status = message.connectivityStatus;
+    }
+
+    if (message.isOn !== undefined) {
+      deviceData.is_on = message.isOn;
+    }
+
+    if (message.currentPowerW !== undefined) {
+      deviceData.current_power_w = message.currentPowerW;
+    }
+
+    const powerW = message.currentPowerW;
+    const isFlespi = Boolean(this.mqtt.config?.flespiDeviceId);
+    // Unordered flespi frames cannot safely replace newer state, even if
+    // they contain power. Ignore them rather than invent an origin timestamp.
+    const eventIdentity = isFlespi
+      ? identifyFlespiShellyEvent(topic, payload, this.mqtt.config.switchId)
+      : null;
+    // A future source timestamp would poison SQL036's durable watermark and
+    // suppress legitimate later device events. Require server/NTP sanity;
+    // use a narrow tolerance for short clock drift, never adjust the source.
+    if (isFlespi && eventIdentity &&
+        eventIdentity.deviceEventTs > Date.now() / 1000 + 300) {
+      this.logger.warn('MQTT_FLESPI_FUTURE_TIMESTAMP_IGNORED');
+      return;
+    }
+    if (isFlespi && !eventIdentity) {
+      this.logger.debug('MQTT_FLESPI_UNORDERED_FRAME_IGNORED');
+      return;
+    }
+    const shouldCreateConsumption = typeof powerW === 'number' &&
+      (!isFlespi || eventIdentity !== null);
+
+    // Mosquitto conserva la política histórica: estado independiente del consumo.
+    // flespi actualiza el estado DENTRO de la transacción de consumo.
+    const legacyUpdatedDevice = this.mqtt.config?.flespiDeviceId
+      ? null
+      : await this.prisma.device.update({
+          where: { id_device: device.id_device },
+          data: deviceData,
+          select: {
+            id_device: true,
+            id_home: true,
+            connectivity_status: true,
+            is_on: true,
+            current_power_w: true,
+            updated_at: true,
+          },
+        });
+
+    let recipients: { id_user: string }[] = [];
+
+    try {
+      recipients = await this.prisma.$transaction(async (tx) =>
+        this.findHomeRealtimeRecipients(
+          tx,
+          device.id_device,
+          device.id_home,
+        ),
+      );
+    } catch (error: unknown) {
+      const name = error instanceof Error ? error.name : 'unknown';
+      this.logger.error(`MQTT_REALTIME_RECIPIENTS_FAILED: ${name}`);
+    }
+
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
+      if (isFlespi && eventIdentity) {
+        // Lock the real device row, in this same transaction, before checking
+        // SQL036 or touching SQL035. Serializes events across app instances.
+        // RLS and the existing smarthome_ingest SELECT/UPDATE grants apply.
+        const locked = await tx.$queryRaw<Array<{ id_device: string }>>`
+          SELECT id_device FROM devices.device
+          WHERE id_device = ${device.id_device}::uuid
+            AND id_home = ${device.id_home}::uuid
+            AND status = 'ACTIVE' AND deleted_at IS NULL
+          FOR UPDATE
+        `;
+        if (locked.length !== 1) throw new Error('MQTT_FLESPI_DEVICE_LOCK_FAILED');
+
+        // Equality is also rejected: two different frames with equal source
+        // timestamp cannot be safely ordered. No state, ledger or energy write.
+        const newerOrEqual = await tx.$queryRaw<
+          Array<{ device_event_ts: Prisma.Decimal }>
+        >`
+          SELECT device_event_ts
+          FROM consumption.mqtt_ingest_dedup
+          WHERE id_device = ${device.id_device}::uuid
+            AND device_event_ts >= ${eventIdentity.deviceEventTs}::numeric
+          ORDER BY device_event_ts DESC LIMIT 1
+        `;
+        if (newerOrEqual.length > 0) return null;
+
+        // SQL035 ledger also records timestamped state-only RPC events:
+        // they advance the watermark but never invent consumption readings.
+        const inserted = await tx.$queryRaw<Array<{ id_device: string }>>`
+          INSERT INTO consumption.mqtt_ingest_dedup
+            (id_device, id_home, event_key, source_topic, device_event_ts)
+          VALUES
+            (${device.id_device}::uuid, ${device.id_home}::uuid,
+             ${eventIdentity.eventKey}, ${topic},
+             ${eventIdentity.deviceEventTs}::numeric)
+          ON CONFLICT (id_device, event_key) DO NOTHING
+          RETURNING id_device
+        `;
+        if (inserted.length === 0) return null;
+      }
+      const updatedDevice = this.mqtt.config?.flespiDeviceId
+        ? await tx.device.update({
+            where: { id_device: device.id_device },
+            data: deviceData,
+            select: {
+              id_device: true,
+              id_home: true,
+              connectivity_status: true,
+              is_on: true,
+              current_power_w: true,
+              updated_at: true,
+            },
+          })
+        : legacyUpdatedDevice!;
+      const notifications: CreatedNotification[] = [];
+
+      let consumptionEvent: {
+        id: string;
+        homeId: string;
+        deviceId: string;
+        deviceName: string;
+        manufacturerDeviceId: string | null;
+        powerW: number;
+        energyDeltaKwh: number;
+        energyTotalKwh: number | null;
+        voltageV: number | null;
+        currentA: number | null;
+        frequencyHz: number | null;
+        temperatureC: number | null;
+        readAt: Date;
+      } | null = null;
+
+      const consumptionRecipients: { id_user: string }[] = [];
+
+      if (shouldCreateConsumption && powerW !== undefined) {
+        // Device row is already locked above for flespi. read_at is used
+        // to find the last cumulative-energy baseline; a message received
+        // earlier can be committed later. Keep persisted read_at monotonic
+        // per device without changing the origin timestamp in SQL035.
+        let orderedReadAt = readAt;
+        const previousConsumption = isFlespi
+          ? ((await tx.$queryRaw<Array<{
+              energy_total_kwh: Prisma.Decimal | null;
+              latest_read_at: Date | null;
+            }>>`
+              SELECT
+                (SELECT energy_total_kwh
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                   AND energy_total_kwh IS NOT NULL
+                 ORDER BY read_at DESC LIMIT 1) AS energy_total_kwh,
+                (SELECT read_at
+                 FROM consumption.consumption
+                 WHERE id_device = ${device.id_device}::uuid
+                   AND id_home = ${device.id_home}::uuid
+                 ORDER BY read_at DESC LIMIT 1) AS latest_read_at
+            `)[0] ?? null)
+          : message.energyTotalKwh === undefined ||
+              message.energyTotalKwh === null
+            ? null
+            : await tx.consumption.findFirst({
+                where: {
+                  id_device: device.id_device,
+                  id_home: device.id_home,
+                  energy_total_kwh: { not: null },
+                },
+                orderBy: { read_at: 'desc' },
+                select: { energy_total_kwh: true },
+              });
+
+        if (isFlespi) {
+          const latest = (previousConsumption as {
+            latest_read_at?: Date | null;
+          } | null)?.latest_read_at;
+          const lastMillis = latest?.getTime() ?? 0;
+          // +1 ms resolves equal timestamp ties, including across workers.
+          // This is the effective persistence timestamp (not Shelly ts).
+          orderedReadAt = new Date(Math.max(
+            Date.now(), readAt.getTime(), lastMillis + 1,
+          ));
+        }
+
+        const energyDeltaKwh =
+          message.energyDeltaKwh ??
+          this.calculateEnergyDeltaKwh(
+            message.energyTotalKwh,
+            previousConsumption?.energy_total_kwh ?? null,
+          );
+
+        // La ingesta no necesita consultar columnas adicionales al insertar.
+        // El agregado estadistico pertenece a un worker independiente.
+        const consumptionId = randomUUID();
+
+        await tx.consumption.createMany({
+          data: [{
+            id_consumption: consumptionId,
+            id_device: device.id_device,
+            id_home: device.id_home,
+            power_w: powerW,
+            energy_delta_kwh: energyDeltaKwh,
+            energy_total_kwh: message.energyTotalKwh ?? null,
+            voltage_v: message.voltageV ?? null,
+            current_a: message.currentA ?? null,
+            frequency_hz: message.frequencyHz ?? null,
+            temperature_c: message.temperatureC ?? null,
+            read_at: orderedReadAt,
+          }],
+        });
+
+        consumptionEvent = {
+          id: consumptionId,
+          homeId: device.id_home,
+          deviceId: device.id_device,
+          deviceName: device.name,
+          manufacturerDeviceId: device.manufacturer_device_id,
+          powerW,
+          energyDeltaKwh,
+          energyTotalKwh: message.energyTotalKwh ?? null,
+          voltageV: message.voltageV ?? null,
+          currentA: message.currentA ?? null,
+          frequencyHz: message.frequencyHz ?? null,
+          temperatureC: message.temperatureC ?? null,
+          readAt: orderedReadAt,
+        };
+        // Estadisticas y alertas: pendientes de worker con permisos propios.
+      }
+
+      return {
+        updatedDevice,
+        recipients,
+        notifications,
+        consumptionEvent,
+        consumptionRecipients,
+      };
+    }).catch((error: unknown) => {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String(error.code)
+          : error instanceof Error
+            ? error.name
+            : 'unknown';
+
+      this.logger.error(`MQTT_CONSUMPTION_PERSISTENCE_FAILED: ${code}`);
+
+      // No emitir estado confirmado si el consumo del mismo mensaje falló.
+      // PostgreSQL revierte la actualización del dispositivo al fallar tx.
+      if (this.mqtt.config?.flespiDeviceId) throw error;
+
+      return {
+        updatedDevice: legacyUpdatedDevice!,
+        recipients,
+        notifications: [] as CreatedNotification[],
+        consumptionEvent: null,
+        consumptionRecipients: [] as { id_user: string }[],
+      };
+    });
+
+    if (transactionResult === null) {
+      this.logger.debug('MQTT_FLESPI_DUPLICATE_OR_STALE_EVENT_IGNORED');
+      return;
+    }
+
+    /*
+     * Los eventos se emiten DESPUÉS de que la transacción termina
+     * correctamente. Así evitamos enviar eventos de datos que luego
+     * podrían ser revertidos por un rollback.
+     */
+    if (transactionResult.consumptionEvent) {
+      for (const recipient of transactionResult.recipients) {
+        this.realtimeEventsService.emitToUser(
+          recipient.id_user,
+          'consumption.created',
+          transactionResult.consumptionEvent,
+        );
+      }
+    }
+
+    for (const recipient of transactionResult.recipients) {
+      this.realtimeEventsService.emitToUser(
+        recipient.id_user,
+        'device.status.updated',
+        {
+          id: transactionResult.updatedDevice.id_device,
+          homeId: transactionResult.updatedDevice.id_home,
+          connectivityStatus:
+            transactionResult.updatedDevice.connectivity_status,
+          isOn: transactionResult.updatedDevice.is_on,
+          currentPowerW:
+            transactionResult.updatedDevice.current_power_w === null
+              ? null
+              : Number(transactionResult.updatedDevice.current_power_w),
+          updatedAt: transactionResult.updatedDevice.updated_at,
+        },
+      );
+    }
+
+    for (const notification of transactionResult.notifications) {
+      this.realtimeEventsService.emitToUser(
+        notification.id_user,
+        'notification.created',
+        {
+          id: notification.id_notification,
+          userId: notification.id_user,
+          alertId: notification.id_alert,
+          homeId: notification.id_home,
+          deviceId: notification.id_device,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          status: notification.status,
+          priority: notification.priority,
+          channel: notification.channel,
+          createdAt: notification.created_at,
+          updatedAt: notification.updated_at,
+        },
+      );
+
+      const unreadCount = await this.prismaRls.withUserContext(
+        notification.id_user,
+        async (tx) =>
+          tx.notification.count({
+            where: {
+              id_user: notification.id_user,
+              status: 'UNREAD',
+            },
+          }),
+      );
+
+      this.realtimeEventsService.emitToUser(
+        notification.id_user,
+        'notification.unread_count.updated',
+        {
+          unreadCount,
+        },
+      );
+    }
+
+    this.logger.log(
+      `Estado MQTT actualizado para ${manufacturerDeviceId}. Consumo guardado=${transactionResult.consumptionEvent !== null}`,
+    );
+  }
+
+  private extractManufacturerDeviceId(topic: string): string | null {
+    return this.mqtt.topics.parseStatus(topic)?.manufacturerDeviceId ?? null;
+  }
+
+  private parsePayload(
+    topic: string,
+    payload: Buffer,
+  ): DeviceStatusMessage | null {
+    try {
+      const rawPayload = payload.toString('utf8');
+      const parsed = JSON.parse(rawPayload) as unknown;
+
+      if (!this.isObjectRecord(parsed)) {
+        return null;
+      }
+
+      if (this.mqtt.topics.parseStatus(topic)?.kind === 'internal') {
+        return this.parseSmartHomePayload(parsed);
+      }
+
+      // Separate, strict parser for the single-device flespi ACL.
+      // Legacy Mosquitto behavior stays unchanged.
+      if (this.mqtt.config.flespiDeviceId) {
+        const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+        if (kind !== 'shelly-switch' && kind !== 'shelly-events') return null;
+        return parseFlespiShellyTelemetry(kind, parsed, this.mqtt.config.switchId);
+      }
+
+      const shellySwitchStatus = this.extractShellySwitchStatus(topic, parsed);
+
+      if (!shellySwitchStatus) {
+        return null;
+      }
+
+      return this.parseShellySwitchStatus(shellySwitchStatus);
+    } catch {
+      return null;
+    }
+  }
+
+  private parseSmartHomePayload(
+    parsed: Record<string, unknown>,
+  ): DeviceStatusMessage | null {
+    const message = parsed as DeviceStatusMessage;
+
+    const hasAtLeastOneSupportedField =
+      message.connectivityStatus !== undefined ||
+      message.isOn !== undefined ||
+      message.currentPowerW !== undefined ||
+      message.energyDeltaKwh !== undefined ||
+      message.energyTotalKwh !== undefined ||
+      message.voltageV !== undefined ||
+      message.currentA !== undefined ||
+      message.frequencyHz !== undefined ||
+      message.temperatureC !== undefined;
+
+    if (!hasAtLeastOneSupportedField) {
+      return null;
+    }
+
+    if (
+      message.connectivityStatus !== undefined &&
+      !['ONLINE', 'OFFLINE'].includes(message.connectivityStatus)
+    ) {
+      return null;
+    }
+
+    if (message.isOn !== undefined && typeof message.isOn !== 'boolean') {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.currentPowerW)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.energyDeltaKwh)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.energyTotalKwh)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.voltageV)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.currentA)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.frequencyHz)) {
+      return null;
+    }
+
+    if (!this.isValidOptionalNumber(message.temperatureC)) {
+      return null;
+    }
+
+    if (message.readAt !== undefined) {
+      if (typeof message.readAt !== 'string') {
+        return null;
+      }
+
+      if (Number.isNaN(new Date(message.readAt).getTime())) {
+        return null;
+      }
+    }
+
+    return message;
+  }
+
+  private extractShellySwitchStatus(
+    topic: string,
+    parsed: Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+    if (kind === 'shelly-switch') {
+      return parsed;
+    }
+
+    if (kind === 'shelly-events') {
+      const method = parsed.method;
+      const params = parsed.params;
+
+      if (method !== 'NotifyStatus' && method !== 'NotifyFullStatus') {
+        return null;
+      }
+
+      if (!this.isObjectRecord(params)) {
+        return null;
+      }
+
+      const switchStatus = params[`switch:${this.mqtt.config.switchId}`];
+
+      if (!this.isObjectRecord(switchStatus)) {
+        return null;
+      }
+
+      return switchStatus;
+    }
+
+    return null;
+  }
+
+  private parseShellySwitchStatus(
+    switchStatus: Record<string, unknown>,
+  ): DeviceStatusMessage | null {
+    const aenergy = switchStatus.aenergy;
+    const temperature = switchStatus.temperature;
+
+    const energyTotalWh = this.isObjectRecord(aenergy)
+      ? aenergy.total
+      : undefined;
+
+    const temperatureC = this.isObjectRecord(temperature)
+      ? temperature.tC
+      : undefined;
+
+    const message: DeviceStatusMessage = {
+      connectivityStatus: 'ONLINE',
+      isOn:
+        typeof switchStatus.output === 'boolean'
+          ? switchStatus.output
+          : undefined,
+      currentPowerW: this.toOptionalNumber(switchStatus.apower),
+      energyTotalKwh:
+        typeof energyTotalWh === 'number' && Number.isFinite(energyTotalWh)
+          ? energyTotalWh / 1000
+          : undefined,
+      voltageV: this.toOptionalNumber(switchStatus.voltage),
+      currentA: this.toOptionalNumber(switchStatus.current),
+      frequencyHz: this.toOptionalNumber(switchStatus.freq),
+      temperatureC: this.toOptionalNumber(temperatureC),
+      readAt: new Date().toISOString(),
+    };
+
+    const hasShellyData =
+      message.isOn !== undefined ||
+      message.currentPowerW !== undefined ||
+      message.energyTotalKwh !== undefined ||
+      message.voltageV !== undefined ||
+      message.currentA !== undefined ||
+      message.frequencyHz !== undefined ||
+      message.temperatureC !== undefined;
+
+    if (!hasShellyData) {
+      return null;
+    }
+
+    return message;
+  }
+
+  private isShellyTopic(topic: string): boolean {
+    const kind = this.mqtt.topics.parseStatus(topic)?.kind;
+    return kind === 'shelly-switch' || kind === 'shelly-events';
+  }
+
+  private isObjectRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private toOptionalNumber(value: unknown): number | null | undefined {
+    if (value === null) {
+      return null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    return undefined;
+  }
+
+  private isValidOptionalNumber(value: unknown): boolean {
+    return (
+      value === undefined ||
+      value === null ||
+      (typeof value === 'number' && Number.isFinite(value))
+    );
+  }
+
+  private calculateEnergyDeltaKwh(
+    currentTotalKwh: number | null | undefined,
+    previousTotalKwh: Prisma.Decimal | number | null | undefined,
+  ): number {
+    if (
+      currentTotalKwh === null ||
+      currentTotalKwh === undefined ||
+      previousTotalKwh === null ||
+      previousTotalKwh === undefined
+    ) {
+      return 0;
+    }
+
+    const previous = Number(previousTotalKwh);
+    const delta = currentTotalKwh - previous;
+
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return 0;
+    }
+
+    return delta;
+  }
+
+  private getUtcDayStart(value: Date): Date {
+    return new Date(
+      Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+    );
+  }
+
+  private addDays(value: Date, days: number): Date {
+    const result = new Date(value);
+
+    result.setUTCDate(result.getUTCDate() + days);
+
+    return result;
+  }
+
+  private async refreshDailyDeviceMetric(
+    tx: Prisma.TransactionClient,
+    deviceId: string,
+    homeId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<void> {
+    const aggregate = await tx.consumption.aggregate({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        read_at: {
+          gte: startAt,
+          lt: endAt,
+        },
+      },
+      _sum: {
+        energy_delta_kwh: true,
+      },
+      _avg: {
+        power_w: true,
+      },
+      _max: {
+        power_w: true,
+      },
+      _min: {
+        power_w: true,
+      },
+    });
+
+    const metricValues = {
+      kwh_total: aggregate._sum.energy_delta_kwh ?? 0,
+      average_watts: aggregate._avg.power_w,
+      max_watts: aggregate._max.power_w,
+      min_watts: aggregate._min.power_w,
+    };
+
+    const existingMetric = await tx.consumption_metric.findFirst({
+      where: {
+        id_device: deviceId,
+        period: 'dia',
+        start_at: startAt,
+      },
+      select: {
+        id_consumption_metric: true,
+      },
+    });
+
+    if (existingMetric) {
+      await tx.consumption_metric.update({
+        where: {
+          id_consumption_metric: existingMetric.id_consumption_metric,
+        },
+        data: metricValues,
+      });
+
+      return;
+    }
+
+    await tx.consumption_metric.create({
+      data: {
+        id_device: deviceId,
+        id_home: homeId,
+        period: 'dia',
+        start_at: startAt,
+        end_at: endAt,
+        ...metricValues,
+      },
+    });
+  }
+
+  private async evaluateDailyConsumptionAnomaly(
+    tx: Prisma.TransactionClient,
+    deviceId: string,
+    homeId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<CreatedNotification[]> {
+    const metric = await tx.consumption_metric.findFirst({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        period: 'dia',
+        start_at: startAt,
+      },
+      select: {
+        kwh_total: true,
+      },
+    });
+
+    if (!metric) {
+      return [];
+    }
+
+    const currentDailyKwh = Number(metric.kwh_total);
+
+    if (currentDailyKwh <= 0) {
+      return [];
+    }
+
+    const historyStartAt = this.addDays(startAt, -7);
+
+    const historicalMetrics = await tx.consumption_metric.findMany({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        period: 'dia',
+        start_at: {
+          gte: historyStartAt,
+          lt: startAt,
+        },
+      },
+      select: {
+        kwh_total: true,
+        start_at: true,
+      },
+    });
+
+    if (historicalMetrics.length === 0) {
+      return [];
+    }
+
+    const historicalAverageKwh =
+      historicalMetrics.reduce(
+        (total, historicalMetric) => total + Number(historicalMetric.kwh_total),
+        0,
+      ) / historicalMetrics.length;
+
+    if (historicalAverageKwh <= 0) {
+      return [];
+    }
+
+    const expectedMaxKwh = historicalAverageKwh * 1.5;
+
+    if (currentDailyKwh <= expectedMaxKwh) {
+      return [];
+    }
+
+    const existingAlert = await tx.alert.findFirst({
+      where: {
+        id_device: deviceId,
+        id_home: homeId,
+        alert_type: 'ANOMALY',
+        created_at: {
+          gte: startAt,
+          lt: endAt,
+        },
+      },
+      select: {
+        id_alert: true,
+      },
+    });
+
+    if (existingAlert) {
+      return [];
+    }
+
+    const createdAlert = await tx.alert.create({
+      data: {
+        id_alert_rule: null,
+        id_device: deviceId,
+        id_home: homeId,
+        alert_type: 'ANOMALY',
+        detected_value: currentDailyKwh.toFixed(6),
+        limit_value: expectedMaxKwh.toFixed(6),
+        action_executed: 'alert',
+        metadata: {
+          reason: 'daily_consumption_anomaly',
+          period: 'dia',
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
+          currentDailyKwh,
+          historicalAverageKwh,
+          expectedMaxKwh,
+          historicalDays: historicalMetrics.length,
+          comparisonWindowDays: 7,
+        },
+      },
+      select: {
+        id_alert: true,
+      },
+    });
+
+    const recipients = await this.findHomeRealtimeRecipients(tx, deviceId, homeId);
+
+    if (recipients.length === 0) {
+      return [];
+    }
+
+    const notifications: CreatedNotification[] = [];
+
+    for (const recipient of recipients) {
+      const notification = await tx.notification.create({
+        data: {
+          id_user: recipient.id_user,
+          id_alert: createdAlert.id_alert,
+          id_home: homeId,
+          id_device: deviceId,
+          type: 'ALERT',
+          title: 'Consumo anómalo detectado',
+          message:
+            `El dispositivo está consumiendo más energía de lo habitual. ` +
+            `Consumo actual: ${currentDailyKwh.toFixed(6)} kWh. ` +
+            `Promedio histórico: ${historicalAverageKwh.toFixed(6)} kWh.`,
+          status: 'UNREAD',
+          priority: 'alta',
+          channel: 'IN_APP',
+        },
+        select: {
+          id_notification: true,
+          id_user: true,
+          id_alert: true,
+          id_home: true,
+          id_device: true,
+          type: true,
+          title: true,
+          message: true,
+          status: true,
+          priority: true,
+          channel: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
+
+      notifications.push(notification);
+    }
+
+    return notifications;
+  }
+
+  private async findHomeRealtimeRecipients(
+    tx: Prisma.TransactionClient,
+    deviceId: string,
+    homeId: string,
+  ): Promise<{ id_user: string }[]> {
+    return tx.$queryRaw<{ id_user: string }[]>`
+      SELECT id_user
+      FROM homes.fn_mqtt_realtime_recipients(
+        ${deviceId}::uuid,
+        ${homeId}::uuid
+      )
+    `;
+  }
+}
