@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Lint, TypeScript, Jest and Build
+  validate-main:
+    name: Backend MAIN - Lint TypeScript Jest Build
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
