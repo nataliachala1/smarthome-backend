@@ -1,0 +1,126 @@
+
+name: QA Backend - Validate and Deploy
+
+on:
+  push:
+    branches: [qa]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smarthome-backend-qa
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate QA backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      MQTT_ENABLED: 'false'
+      SHELLY_MQTT_DEV_DI_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit -p tsconfig.build.json
+
+      - name: Unit tests
+        run: npm test -- --runInBand
+
+      - name: Build
+        run: npm run build
+
+      - name: MQTT security tests
+        run: npm run test:e2e -- --runInBand --runTestsByPath test/mqtt-namespace-security.e2e-spec.ts
+
+  deploy:
+    name: Deploy approved QA to Dokploy
+    needs: validate
+    if: ${{ vars.QA_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: qa
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger Dokploy QA
+        shell: bash
+        env:
+          DOKPLOY_QA_API_BASE_URL: ${{ secrets.DOKPLOY_QA_API_BASE_URL }}
+          DOKPLOY_QA_API_TOKEN: ${{ secrets.DOKPLOY_QA_API_TOKEN }}
+          DOKPLOY_QA_APPLICATION_ID: ${{ secrets.DOKPLOY_QA_APPLICATION_ID }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$DOKPLOY_QA_API_BASE_URL" ||
+                -z "$DOKPLOY_QA_API_TOKEN" ||
+                -z "$DOKPLOY_QA_APPLICATION_ID" ]]; then
+            echo "::error::Missing Dokploy QA configuration"
+            exit 1
+          fi
+
+          if [[ "$DOKPLOY_QA_API_BASE_URL" != https://* ]]; then
+            echo "::error::Dokploy API must use HTTPS"
+            exit 1
+          fi
+
+          REMOTE_SHA="$(git ls-remote origin refs/heads/qa | cut -f1)"
+
+          if [[ "$REMOTE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::notice::Skipping outdated QA commit"
+            exit 0
+          fi
+
+          curl --fail --silent --show-error \
+            --request POST \
+            "${DOKPLOY_QA_API_BASE_URL%/}/api/application.deploy" \
+            --header "Content-Type: application/json" \
+            --header "x-api-key: $DOKPLOY_QA_API_TOKEN" \
+            --data "$(printf '{"applicationId":"%s"}' "$DOKPLOY_QA_APPLICATION_ID")"
+
+      - name: Verify QA readiness
+        shell: bash
+        env:
+          QA_DEPLOYMENT_HEALTH_URL: ${{ secrets.QA_DEPLOYMENT_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$QA_DEPLOYMENT_HEALTH_URL" != https://* ]]; then
+            echo "::error::QA health URL must use HTTPS"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error \
+              "$QA_DEPLOYMENT_HEALTH_URL" \
+              --output /dev/null; then
+              echo "QA readiness endpoint is healthy"
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "::error::QA readiness check failed"
+          exit 1
