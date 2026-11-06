@@ -28,7 +28,13 @@ export const MQTT_SETTINGS = [
   'MQTT_PREPARATION_AES_KEY_ID',
   'MQTT_ENABLED',
   'MQTT_BROKER_PROVIDER',
+  'FLESPI_MQTT_DEV_ENABLED',
+  'SHELLY_MQTT_DEV_DI_ENABLED',
+  'SHELLY_MQTT_PRODUCTION_PAIRING_ENABLED',
   'MQTT_FLESPI_DEVICE_ID',
+  'FLESPI_MQTT_PROD_TEMP_ENABLED',
+  'FLESPI_MQTT_PROD_CONTROL_ENABLED',
+  'FLESPI_MQTT_PROD_HANDOFF_ACK',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'MQTT_BROKER_URL',
   'MQTT_USERNAME',
@@ -61,6 +67,10 @@ export interface MqttConfiguration {
   namespace?: string;
   /** Scope explicitly authorized by the single-device flespi MQTT ACL token. */
   flespiDeviceId?: string;
+  /** Temporary Flespi production mode; NEVER infer it from APP_ENV alone. */
+  flespiProduction?: boolean;
+  /** Explicit cutover permission for remote relay control. */
+  flespiControlEnabled?: boolean;
   devicePrefix: string;
   rpcSource: string;
   switchId: number;
@@ -107,8 +117,48 @@ export function parseMqttConfig(
     throw new Error('MQTT_BROKER_PROVIDER_INVALID');
   }
   const flespi = brokerProvider === 'flespi';
-  if (flespi && (!vpsDev || enabledSetting !== 'true')) {
+  const prodFlag = read('FLESPI_MQTT_PROD_TEMP_ENABLED');
+  const controlFlag = read('FLESPI_MQTT_PROD_CONTROL_ENABLED');
+  const handoffFlag = read('FLESPI_MQTT_PROD_HANDOFF_ACK');
+  for (const flag of [prodFlag, controlFlag, handoffFlag]) {
+    if (flag !== undefined && flag !== 'true' && flag !== 'false') {
+      throw new Error('MQTT_FLESPI_PROD_FLAG_INVALID');
+    }
+  }
+  const prodFlespi = prodFlag === 'true' && production &&
+    read('APP_ENV') === 'production' && enabledSetting === 'true' && flespi;
+  if (prodFlag === 'true' && !prodFlespi) {
+    throw new Error('MQTT_FLESPI_PROD_MODE_NOT_ALLOWED');
+  }
+  if ((controlFlag === 'true' && (!prodFlespi || handoffFlag !== 'true')) ||
+      (handoffFlag === 'true' && !prodFlespi)) {
+    throw new Error('MQTT_FLESPI_PROD_CONTROL_HANDOFF_REQUIRED');
+  }
+  if (flespi && (!(vpsDev || prodFlespi) || enabledSetting !== 'true')) {
     throw new Error('MQTT_FLESPI_DEV_MODE_NOT_ALLOWED');
+  }
+  if (prodFlespi) {
+    const isProdDatabase = (raw: string | undefined): boolean => {
+      if (!raw) return false;
+      try {
+        const url = new URL(raw);
+        return ['postgres:', 'postgresql:'].includes(url.protocol) &&
+          url.hostname.length > 0 &&
+          !/dev|test|staging/i.test(url.hostname) &&
+          url.pathname === '/smarthome' &&
+          url.searchParams.get('sslmode') === 'verify-full' &&
+          Boolean(url.username) && Boolean(url.password);
+      } catch { return false; }
+    };
+    const appDb = read('DATABASE_URL');
+    const iotDb = read('DATABASE_IOT_URL');
+    if (!isProdDatabase(appDb) || !isProdDatabase(iotDb) ||
+        new URL(appDb!).hostname !== new URL(iotDb!).hostname ||
+        read('FLESPI_MQTT_DEV_ENABLED') === 'true' ||
+        read('SHELLY_MQTT_DEV_DI_ENABLED') === 'true' ||
+        read('SHELLY_MQTT_PRODUCTION_PAIRING_ENABLED') === 'true') {
+      throw new Error('MQTT_FLESPI_PROD_ISOLATION_INVALID');
+    }
   }
   // Fail closed: the ACL grants only exact topics for this single Shelly.
   const flespiDeviceId = read('MQTT_FLESPI_DEVICE_ID');
@@ -237,6 +287,8 @@ export function parseMqttConfig(
       !namespace?.startsWith('smarthome/dev/')) {
     throw new Error('MQTT_VPS_DEV_NAMESPACE_NOT_ALLOWED');
   }
+  // Temporary production cutover retains the physical Shelly's DEV topic layout.
+  // Do not enable relay control before stopping DEV's Flespi command path.
   if (flespi && namespace !== 'smarthome/dev/v1') {
     throw new Error('MQTT_FLESPI_NAMESPACE_NOT_ALLOWED');
   }
@@ -317,6 +369,10 @@ export function parseMqttConfig(
     caFile,
     namespace,
     flespiDeviceId: flespi ? flespiDeviceId : undefined,
+    ...(prodFlespi ? {
+      flespiProduction: true,
+      flespiControlEnabled: controlFlag === 'true',
+    } : {}),
     devicePrefix,
     rpcSource,
     switchId,

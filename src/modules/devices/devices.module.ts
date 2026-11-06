@@ -36,6 +36,7 @@ import { MqttDeviceStatusSubscriber } from './infrastructure/messaging/mqtt-devi
 import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.service';
 import { FlespiShellyStatusRpcClient } from './infrastructure/messaging/flespi-shelly-status-rpc.client';
 import { FlespiShellyStateReconciler } from './infrastructure/messaging/flespi-shelly-state.reconciler';
+import { FlespiShellyStateSyncWorker } from './infrastructure/messaging/flespi-shelly-state-sync.worker';
 import {
   FLESPI_MQTT_CONTROL,
   flespiMqttParallelProviders,
@@ -76,6 +77,21 @@ import { DeviceOfflineWatcherService } from './infrastructure/watchers/device-of
 // backed by the single-device flespi ACL. No HTTP input can enable it.
 const flespiStateSyncEnabled = process.env.SHELLY_FLESPI_STATE_SYNC_ENABLED === 'true';
 const flespiParallelEnabled = process.env.FLESPI_MQTT_DEV_ENABLED === 'true';
+const flespiProdEnabled = process.env.FLESPI_MQTT_PROD_TEMP_ENABLED === 'true';
+const flespiProdSyncEnabled = process.env.FLESPI_MQTT_PROD_STATE_SYNC_ENABLED === 'true';
+if (flespiProdEnabled && (
+  process.env.NODE_ENV !== 'production' ||
+  process.env.APP_ENV !== 'production' ||
+  flespiParallelEnabled || flespiStateSyncEnabled
+)) {
+  throw new Error('FLESPI_MQTT_PROD_PROFILE_INVALID');
+}
+if (flespiProdSyncEnabled && (
+  !flespiProdEnabled || process.env.MQTT_ENABLED !== 'true' ||
+  process.env.SHELLY_FLESPI_STATE_SYNC_SINGLE_REPLICA !== 'true'
+)) {
+  throw new Error('FLESPI_MQTT_PROD_STATE_SYNC_INVALID');
+}
 if (flespiParallelEnabled && (
   process.env.NODE_ENV !== 'production' ||
   process.env.APP_ENV !== 'development' ||
@@ -148,6 +164,7 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     MqttRuntimeService,
     FlespiShellyStatusRpcClient,
     FlespiShellyStateReconciler,
+    ...(flespiProdSyncEnabled ? [FlespiShellyStateSyncWorker] : []),
     // The legacy Mosquitto subscriber remains unchanged. Add an independent
     // strict-ACL flespi subscriber and optional read-only reconciler worker.
     ...(flespiParallelEnabled ? flespiMqttParallelProviders : []),
