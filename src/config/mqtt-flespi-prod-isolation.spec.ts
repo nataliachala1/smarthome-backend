@@ -24,6 +24,43 @@ describe('Temporary Flespi PROD database isolation and adoption gate', () => {
     expect(parseMqttConfig(base()).flespiProduction).toBe(true);
   });
 
+  it('accepts PROD URLs with sslrootcert', () => {
+    const env = base();
+    const rootCert =
+      '&sslrootcert=%2Frun%2Fsecrets%2Fpostgres-ca.crt';
+
+    expect(() =>
+      parseMqttConfig({
+        ...env,
+        DATABASE_URL: `${env.DATABASE_URL}${rootCert}`,
+        DATABASE_IOT_URL: `${env.DATABASE_IOT_URL}${rootCert}`,
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects an empty sslrootcert', () => {
+    const env = base();
+
+    expect(() =>
+      parseMqttConfig({
+        ...env,
+        DATABASE_URL: `${env.DATABASE_URL}&sslrootcert=`,
+      }),
+    ).toThrow('MQTT_FLESPI_PROD_ISOLATION_INVALID');
+  });
+
+  it('rejects duplicate sslrootcert parameters', () => {
+    const env = base();
+
+    expect(() =>
+      parseMqttConfig({
+        ...env,
+        DATABASE_URL:
+          `${env.DATABASE_URL}&sslrootcert=ca1&sslrootcert=ca2`,
+      }),
+    ).toThrow('MQTT_FLESPI_PROD_ISOLATION_INVALID');
+  });
+
   it.each([
     { name: 'unapproved hostname', data: { FLESPI_MQTT_PROD_DATABASE_HOST: 'arbitrary' } },
     { name: 'port mismatch', data: { DATABASE_IOT_URL: `postgresql://iot:synthetic@${host}:5433/smarthome?sslmode=verify-full` } },

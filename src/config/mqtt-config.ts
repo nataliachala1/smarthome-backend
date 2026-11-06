@@ -158,8 +158,14 @@ export function parseMqttConfig(
           url.hostname === expectedHost &&
           url.port === '5432' &&
           url.pathname === '/smarthome' &&
-          url.searchParams.size === 1 &&
+          url.searchParams.getAll('sslmode').length === 1 &&
           url.searchParams.get('sslmode') === 'verify-full' &&
+          url.searchParams.getAll('sslrootcert').length <= 1 &&
+          (!url.searchParams.has('sslrootcert') ||
+            Boolean(url.searchParams.get('sslrootcert')?.trim())) &&
+          [...url.searchParams.keys()].every(
+            (key) => key === 'sslmode' || key === 'sslrootcert',
+          ) &&
           !url.hash && Boolean(url.username) && Boolean(url.password);
       } catch { return false; }
     };
