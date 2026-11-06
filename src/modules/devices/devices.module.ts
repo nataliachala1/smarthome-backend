@@ -37,6 +37,8 @@ import { MqttRuntimeService } from './infrastructure/messaging/mqtt-runtime.serv
 import { FlespiShellyStatusRpcClient } from './infrastructure/messaging/flespi-shelly-status-rpc.client';
 import { FlespiShellyStateReconciler } from './infrastructure/messaging/flespi-shelly-state.reconciler';
 import { FlespiShellyStateSyncWorker } from './infrastructure/messaging/flespi-shelly-state-sync.worker';
+import { FlespiProdAdoptionService } from './application/services/flespi-prod-adoption.service';
+import { FlespiProdAdoptionController } from './presentation/controllers/flespi-prod-adoption.controller';
 import {
   FLESPI_MQTT_CONTROL,
   flespiMqttParallelProviders,
@@ -123,6 +125,7 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
   controllers: [
     DevicesController,
     ShellyController,
+    ...(flespiProdEnabled ? [FlespiProdAdoptionController] : []),
     ...(shellyMqttPlan.localWorkflow &&
     process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true'
       ? [ShellyMqttBootstrapController, ShellyMqttEnableController] : []),
@@ -151,6 +154,7 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ListInactiveDevicesUseCase,
 
     CreateDeviceUseCase,
+    ...(flespiProdEnabled ? [FlespiProdAdoptionService] : []),
     GetDeviceByIdUseCase,
     UpdateDeviceUseCase,
 

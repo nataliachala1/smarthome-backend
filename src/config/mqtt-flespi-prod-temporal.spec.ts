@@ -8,6 +8,8 @@ const base = () => ({
   FLESPI_MQTT_PROD_TEMP_ENABLED: 'true',
   FLESPI_MQTT_PROD_CONTROL_ENABLED: 'false',
   FLESPI_MQTT_PROD_HANDOFF_ACK: 'false',
+  FLESPI_MQTT_PROD_ADOPTION_ENABLED: 'false',
+  FLESPI_MQTT_PROD_DATABASE_HOST: 'smart-home-smarthomepostgres-l3s1t5',
   DATABASE_URL: 'postgresql://app:synthetic@smart-home-smarthomepostgres-l3s1t5:5432/smarthome?sslmode=verify-full',
   DATABASE_IOT_URL: 'postgresql://iot:synthetic@smart-home-smarthomepostgres-l3s1t5:5432/smarthome?sslmode=verify-full',
   MQTT_BROKER_URL: 'mqtts://mqtt.flespi.io:8883',
