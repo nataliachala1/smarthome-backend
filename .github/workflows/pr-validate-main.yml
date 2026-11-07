@@ -3,12 +3,14 @@ name: PR validation (MAIN) - no deploy
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: backend-main-pr-${{ github.event.pull_request.number }}
+  group: backend-main-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -44,7 +46,7 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.build.json
 
       - name: Unit tests
-        run: npm test -- --runInBand
+        run: npm run test:cov -- --runInBand
 
       - name: Build
         run: npm run build

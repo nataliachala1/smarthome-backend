@@ -45,7 +45,7 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.build.json
 
       - name: Unit tests
-        run: npm test -- --runInBand
+        run: npm run test:cov -- --runInBand
 
       - name: Build NestJS
         run: npm run build
