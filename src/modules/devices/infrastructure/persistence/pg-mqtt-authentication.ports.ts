@@ -6,9 +6,9 @@ import type {
 import type { ReservedBrokerBinding } from '../../application/services/shelly-mqtt-rpc-challenge.policy';
 
 /**
- * Cada cliente se inyecta con una CUENTA LOGIN distinta, verificada por su
- * propia fabrica. NUNCA usar DATABASE_URL, Prisma o la cuenta del broker.
- * Un factory sin comprobacion de roles no es apto para ejecutar estos ports.
+ * Each client is injected with a DIFFERENT LOGIN ACCOUNT, verified by its
+ * own factory. NEVER use DATABASE_URL, Prisma or the broker account.
+ * A factory without a role check is not fit to run these ports.
  */
 export interface IsolatedMqttAuthSqlClient {
   query(sql: string, params: readonly unknown[]): Promise<{ rows: unknown[] }>;

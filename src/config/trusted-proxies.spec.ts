@@ -41,7 +41,7 @@ describe('trusted proxy configuration', () => {
     (value) => {
       expect(() => getTrustedProxies(value)).toThrow(
         new Error(
-          'TRUSTED_PROXY_CIDRS debe contener IP o CIDR explícitos y válidos.',
+          'TRUSTED_PROXY_CIDRS must contain explicit and valid IPs or CIDRs.',
         ),
       );
     },

@@ -24,9 +24,9 @@ import {
 } from './prisma-home-energy-tariff.mapper';
 
 /**
- * Todas las operaciones corren dentro de withUserContext (RLS por transacción):
- * - lectura: consumption.fn_can_read_detail (OWNER o MEMBER con view_consumption)
- * - escritura: homes.fn_can_manage_home (OWNER activo de hogar activo)
+ * Every operation runs inside withUserContext (per-transaction RLS):
+ * - read: consumption.fn_can_read_detail (OWNER or MEMBER with view_consumption)
+ * - write: homes.fn_can_manage_home (active OWNER of an active home)
  */
 @Injectable()
 export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffRepository {
@@ -95,8 +95,8 @@ export class PrismaHomeEnergyTariffRepository implements HomeEnergyTariffReposit
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
-      // 42501 (privilegio o política RLS): se reporta según la operación,
-      // sin exponer detalles SQL.
+      // 42501 (privilege or RLS policy): reported according to the operation,
+      // without exposing SQL details.
       if (isPostgresAccessDeniedError(error)) {
         throw energyAccessDeniedError(access);
       }

@@ -1,11 +1,11 @@
 import type { MqttPrivilegedReservationPort } from '../../application/services/shelly-mqtt-reservation.coordinator';
 
 /**
- * Port de acceso SQL. Debe recibir un pool PostgreSQL EXCLUSIVO del rol
- * LOGIN especializado que hereda smarthome_mqtt_registrar.
- * No usar PrismaRlsService, DATABASE_URL ni las credenciales smarthome_app.
+ * SQL access port. It must receive a PostgreSQL pool EXCLUSIVE to the
+ * specialized LOGIN role that inherits smarthome_mqtt_registrar.
+ * Do not use PrismaRlsService, DATABASE_URL or the smarthome_app credentials.
  *
- * Compatible estructuralmente con pg.Pool.query, sin abrir conexiones aqui.
+ * Structurally compatible with pg.Pool.query, without opening connections here.
  */
 export interface MqttRegistrarQueryClient {
   query(sql: string, parameters: unknown[]): Promise<{ rows: unknown[] }>;
@@ -25,13 +25,13 @@ const UUID_V4 =
 const TOPIC_SCOPE = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
 
 /**
- * Ejecuta SOLO la funcion de reserva 022; no provisiona MQTT ni cambia
- * el estado de una sesion o de una identidad.
+ * Runs ONLY the 022 reservation function; it does not provision MQTT or change
+ * the state of a session or an identity.
  *
- * El llamador debe autorizar OWNER+token y derivar scope desde el contrato
- * backend. El SQL comprueba la vigencia, el estado y conflictos del ID fisico.
- * No registrar este adapter en DevicesModule hasta configurar un rol SQL
- * independiente y confirmar migraciones 022/023 en el entorno de destino.
+ * The caller must authorize OWNER+token and derive the scope from the backend
+ * contract. The SQL checks validity, state and physical ID conflicts.
+ * Do not register this adapter in DevicesModule until an independent SQL role
+ * is configured and migrations 022/023 are confirmed on the target environment.
  */
 export class PgMqttReservationPort implements MqttPrivilegedReservationPort {
   constructor(private readonly registrarPool: MqttRegistrarQueryClient) {}
@@ -53,9 +53,9 @@ export class PgMqttReservationPort implements MqttPrivilegedReservationPort {
       throw new Error('MQTT_REGISTRAR_AUTH_PROOF_INVALID');
     }
 
-    // Unica operacion con efectos: la funcion SECURITY DEFINER valida la
-    // sesion y bloquea el identificador fisico antes de insertar la reserva.
-    // No interpolar identificadores ni valores en la sentencia SQL.
+    // The only operation with side effects: the SECURITY DEFINER function validates the
+    // session and locks the physical identifier before inserting the reservation.
+    // Do not interpolate identifiers or values into the SQL statement.
     let rows: unknown[];
     try {
       const result = await this.registrarPool.query(
@@ -71,7 +71,7 @@ export class PgMqttReservationPort implements MqttPrivilegedReservationPort {
       );
       rows = result.rows;
     } catch {
-      // No exponer detalles SQL, roles, hosts ni mensajes de PostgreSQL.
+      // Do not expose SQL details, roles, hosts or PostgreSQL messages.
       throw new Error('MQTT_REGISTRAR_RESERVATION_FAILED');
     }
 

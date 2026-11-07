@@ -18,8 +18,8 @@ const privilegeRow = {
   operation_dml: false, identity_dml: false,
 };
 
-describe('MqttSecretPgGateway (SQL028, sin red)', () => {
-  it('acepta exclusivamente el destino local de desarrollo', () => {
+describe('MqttSecretPgGateway (SQL028, no network)', () => {
+  it('accepts only the local development target', () => {
     const pw = 'A'.repeat(43);
     const valid = `postgresql://${role}:${pw}@127.0.0.1:5432/smarthome`;
     expect(parseMqttSecretDevConnection(valid, 'development').role).toBe(role);
@@ -29,7 +29,7 @@ describe('MqttSecretPgGateway (SQL028, sin red)', () => {
     expect(() => parseMqttSecretDevConnection(valid + '?sslmode=disable', 'development')).toThrow();
   });
 
-  it('rechaza privilegios ajenos y membresías inesperadas', () => {
+  it('rejects foreign privileges and unexpected memberships', () => {
     expect(minimalMqttSecretPrivileges(privilegeRow, { role, database })).toBe(true);
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, reserve_member: true }, { role, database })).toBe(false);
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, secret_dml: true }, { role, database })).toBe(false);
@@ -37,7 +37,7 @@ describe('MqttSecretPgGateway (SQL028, sin red)', () => {
     expect(minimalMqttSecretPrivileges({ ...privilegeRow, can_bootstrap: false }, { role, database })).toBe(false);
   });
 
-  it('restringe las dos llamadas SQL028 y prohíbe SQL arbitrario', () => {
+  it('restricts the two SQL028 calls and forbids arbitrary SQL', () => {
     expect(allowedMqttSecretQuery(
       'SELECT operation_id, format_version, key_id, nonce, ciphertext, auth_tag FROM devices.fn_load_mqtt_preparation_secret($1::uuid, $2::uuid)',
       ['a', 'b'],
@@ -66,7 +66,7 @@ describe('MqttSecretPgGateway (SQL028, sin red)', () => {
     await expect(gateway.query('SELECT 1', [])).rejects.toThrow('MQTT_SECRET_NOT_READY');
   });
 
-  it('rechaza readiness si falta EXECUTE de bootstrap autorizado', async () => {
+  it('rejects readiness when the authorized bootstrap EXECUTE is missing', async () => {
     let receivedPrivilegeSql: string | undefined;
     let queryCount = 0;
     const query: MqttSecretPgPool['query'] = (sql) => {

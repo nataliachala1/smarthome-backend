@@ -10,16 +10,16 @@ import type { ShellyMqttAclPlan } from './shelly-mqtt-acl.policy';
 import type { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-device-identity-provider';
 
 export interface MqttRpcChallengeTransport {
-  /** Se suscribe a la respuesta ANTES de publicar la peticion. No hace reintentos. */
+  /** Subscribes to the response BEFORE publishing the request. Does not retry. */
   exchange(challenge: ShellyRpcChallenge): Promise<ShellyRpcMessage>;
 }
 
 /**
- * Prueba de observacion; NO autoriza HTTP, no cambia SQL ni sesiones.
- * El worker llamador debe verificar la reserva, el lease vigente y que las
- * ACL exclusivas del equipo impiden publicaciones de otros principals MQTT.
- * Para el estado CONNECTED se requiere una transicion SQL nueva, cercada
- * por un token, ligada a la identidad y a la sesion autorizada.
+ * Observation proof; it does NOT authorize HTTP or change SQL or sessions.
+ * The calling worker must verify the reservation, the current lease and that the
+ * device's exclusive ACLs prevent publications from other MQTT principals.
+ * The CONNECTED state requires a new SQL transition, fenced
+ * by a token and bound to the identity and the authorized session.
  */
 export class ShellyMqttBrokerProofCoordinator {
   constructor(
@@ -37,8 +37,8 @@ export class ShellyMqttBrokerProofCoordinator {
         !/^[A-Za-z0-9_-]{1,128}$/.test(binding.roleName)) {
       throw new Error('SHELLY_MQTT_PROOF_BINDING_INVALID');
     }
-    // getClient() debe confirmar cliente habilitado Y conectado. No basta
-    // con la existencia de una identidad preparada/deshabilitada.
+    // getClient() must confirm an enabled AND connected client. The existence
+    // of a prepared/disabled identity is not enough.
     const before = await this.identities.inspectIdentity(binding.username);
     if (!matchesBrokerIdentityConnection(before, binding)) {
       throw new Error('SHELLY_MQTT_PROOF_BROKER_NOT_AUTHENTICATED');
@@ -48,13 +48,13 @@ export class ShellyMqttBrokerProofCoordinator {
     if (!matchesShellyRpcChallenge(challenge, message) || Date.now() > challenge.expiresAtMs) {
       throw new Error('SHELLY_MQTT_PROOF_RPC_UNVERIFIED');
     }
-    // Observacion fresca DESPUES de la respuesta; tiempo y correlacion
-    // se verifican de nuevo, sin suponer autor MQTT por la sola respuesta.
+    // Fresh observation AFTER the response; time and correlation
+    // are verified again, without assuming the MQTT author from the response alone.
     const after = await this.identities.inspectIdentity(binding.username);
     if (!matchesBrokerIdentityConnection(after, binding) || Date.now() > challenge.expiresAtMs) {
       throw new Error('SHELLY_MQTT_PROOF_BROKER_UNCERTAIN');
     }
-    // Nunca retornar password, broker admin, el nonce/RPC ID o credenciales.
+    // Never return the password, broker admin, nonce/RPC ID or credentials.
     return { phase: 'MQTT_CHALLENGE_MATCHED_UNPERSISTED', mqttObserved: true };
   }
 }

@@ -8,7 +8,7 @@ function setting(environment: Environment, name: string): string | undefined {
   const value = environment[name];
   if (value === undefined) return undefined;
   if (typeof value !== 'string') {
-    throw new Error(`${name} debe ser una cadena de texto.`);
+    throw new Error(`${name} must be a string.`);
   }
   return value;
 }
@@ -22,7 +22,7 @@ function secureCookie(
   const normalized = value.trim().toLowerCase();
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  throw new Error('COOKIE_SECURE debe ser un valor booleano.');
+  throw new Error('COOKIE_SECURE must be a boolean value.');
 }
 
 export function getCorsOrigins(
@@ -43,7 +43,7 @@ export function getCorsOrigins(
       url = new URL(origin.trim());
     } catch {
       throw new Error(
-        'CORS_ALLOWED_ORIGINS debe contener orígenes HTTP válidos.',
+        'CORS_ALLOWED_ORIGINS must contain valid HTTP origins.',
       );
     }
     if (
@@ -56,11 +56,11 @@ export function getCorsOrigins(
       url.hash
     ) {
       throw new Error(
-        'CORS_ALLOWED_ORIGINS solo admite orígenes, sin credenciales, rutas ni parámetros.',
+        'CORS_ALLOWED_ORIGINS only accepts origins, without credentials, paths or parameters.',
       );
     }
     if (isProduction && url.protocol !== 'https:') {
-      throw new Error('CORS_ALLOWED_ORIGINS requiere HTTPS en producción.');
+      throw new Error('CORS_ALLOWED_ORIGINS requires HTTPS in production.');
     }
     return url.origin;
   });
@@ -73,7 +73,7 @@ function databaseUrl(environment: Environment, name: string): URL {
   try {
     url = new URL(setting(environment, name)?.trim() ?? '');
   } catch {
-    throw new Error(`${name} debe ser una URL PostgreSQL válida.`);
+    throw new Error(`${name} must be a valid PostgreSQL URL.`);
   }
   if (
     !['postgres:', 'postgresql:'].includes(url.protocol) ||
@@ -83,7 +83,7 @@ function databaseUrl(environment: Environment, name: string): URL {
     url.pathname === '/'
   ) {
     throw new Error(
-      `${name} debe incluir protocolo, usuario, host y nombre de base de datos.`,
+      `${name} must include protocol, user, host and database name.`,
     );
   }
   return url;
@@ -93,7 +93,7 @@ function databaseUrl(environment: Environment, name: string): URL {
 export function validateRuntimeConfig(environment: Environment): Environment {
   const nodeEnv = setting(environment, 'NODE_ENV') ?? 'development';
   if (!['development', 'test', 'production'].includes(nodeEnv)) {
-    throw new Error('NODE_ENV debe ser development, test o production.');
+    throw new Error('NODE_ENV must be development, test or production.');
   }
   const isProduction = nodeEnv === 'production';
   shellyLocalEnabled(environment.SHELLY_LOCAL_ENABLED, nodeEnv);
@@ -104,7 +104,7 @@ export function validateRuntimeConfig(environment: Environment): Environment {
   );
   if (missing.length) {
     throw new Error(
-      `Faltan variables de entorno requeridas: ${missing.join(', ')}`,
+      `Missing required environment variables: ${missing.join(', ')}`,
     );
   }
 
@@ -112,7 +112,7 @@ export function validateRuntimeConfig(environment: Environment): Environment {
   const ingest = databaseUrl(environment, 'DATABASE_IOT_URL');
   if (application.pathname !== ingest.pathname) {
     throw new Error(
-      'DATABASE_URL y DATABASE_IOT_URL deben usar el mismo nombre de base de datos PostgreSQL.',
+      'DATABASE_URL and DATABASE_IOT_URL must use the same PostgreSQL database name.',
     );
   }
 
@@ -121,7 +121,7 @@ export function validateRuntimeConfig(environment: Environment): Environment {
     Buffer.byteLength(setting(environment, 'JWT_SECRET')!.trim(), 'utf8') < 32
   ) {
     throw new Error(
-      'JWT_SECRET debe contener al menos 32 bytes en producción.',
+      'JWT_SECRET must contain at least 32 bytes in production.',
     );
   }
 
@@ -130,32 +130,32 @@ export function validateRuntimeConfig(environment: Environment): Environment {
     port !== undefined &&
     (!/^\d+$/.test(port) || +port < 1 || +port > 65535)
   ) {
-    throw new Error('PORT debe ser un entero entre 1 y 65535.');
+    throw new Error('PORT must be an integer between 1 and 65535.');
   }
 
   const swagger = setting(environment, 'SWAGGER_ENABLED')?.trim().toLowerCase();
   if (swagger !== undefined && !['true', 'false'].includes(swagger)) {
-    throw new Error('SWAGGER_ENABLED debe ser true o false.');
+    throw new Error('SWAGGER_ENABLED must be true or false.');
   }
   const sameSite = setting(environment, 'COOKIE_SAME_SITE')
     ?.trim()
     .toLowerCase();
   if (sameSite !== undefined && !['lax', 'strict', 'none'].includes(sameSite)) {
-    throw new Error('COOKIE_SAME_SITE debe ser lax, strict o none.');
+    throw new Error('COOKIE_SAME_SITE must be lax, strict or none.');
   }
   const secure = secureCookie(environment, isProduction);
   if (isProduction && !secure) {
-    throw new Error('COOKIE_SECURE debe ser true en producción.');
+    throw new Error('COOKIE_SECURE must be true in production.');
   }
   if (sameSite === 'none' && !secure) {
     throw new Error(
-      'COOKIE_SECURE debe ser true cuando COOKIE_SAME_SITE es none.',
+      'COOKIE_SECURE must be true when COOKIE_SAME_SITE is none.',
     );
   }
   const corsOrigins = getCorsOrigins(environment);
   if (isProduction && corsOrigins === false) {
     throw new Error(
-      'FRONTEND_URL o CORS_ALLOWED_ORIGINS es requerida en producción.',
+      'FRONTEND_URL or CORS_ALLOWED_ORIGINS is required in production.',
     );
   }
   parseMqttConfig(environment);

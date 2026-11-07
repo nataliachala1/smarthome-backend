@@ -51,7 +51,7 @@ function harness(initial = session) {
 }
 
 describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
-  it('reserva en paralelo Shelly distintos con bindings y topics aislados', async () => {
+  it('reserves different Shellys in parallel with isolated bindings and topics', async () => {
     const otherIdentityId = 'd49c6fde-3783-4a0b-bfe6-8aca63788e78';
     const otherOperationId = '489d18c2-0872-49db-82db-d96943854687';
     const otherPhysicalId = 'shelly1pmg4-112233aabbcc';
@@ -87,7 +87,7 @@ describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
     expect(second.reserve).toHaveBeenCalledTimes(1);
   });
 
-  it('reserva exclusivamente el scope derivado y revalida la sesion', async () => {
+  it('reserves only the derived scope and revalidates the session', async () => {
     const { coordinator, get, reserve } = harness();
     const result = await coordinator.reserve(request);
     expect(result).toMatchObject({ phase: 'RESERVED_ONLY', operationId, identityId });
@@ -107,13 +107,13 @@ describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
   });
 
   it.each(['PENDING', 'CONNECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED', 'FAILED'])(
-    'rechaza una sesion en estado %s antes de reservar', async (status) => {
+    'rejects a session in state %s before reserving', async (status) => {
     const { coordinator, reserve } = harness({ ...session, status });
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_SESSION_NOT_RESERVABLE');
     expect(reserve).not.toHaveBeenCalled();
   });
 
-  it('rechaza un modelo incompatible antes de reservar', async () => {
+  it('rejects an incompatible model before reserving', async () => {
     const { coordinator, reserve } = harness({
       ...session, identity: { ...session.identity, modelCode: 'INVALID' },
     });
@@ -121,7 +121,7 @@ describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
     expect(reserve).not.toHaveBeenCalled();
   });
 
-  it('rechaza una sesion caducada antes de reservar', async () => {
+  it('rejects an expired session before reserving', async () => {
     const { coordinator, reserve } = harness({
       ...session, expiresAt: new Date(Date.now() - 1000),
     });
@@ -129,13 +129,13 @@ describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
     expect(reserve).not.toHaveBeenCalled();
   });
 
-  it('rechaza cuando el hogar de la sesion no coincide', async () => {
+  it('rejects when the session home does not match', async () => {
     const { coordinator, reserve } = harness({ ...session, homeId: 'home-2' });
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_SESSION_NOT_RESERVABLE');
     expect(reserve).not.toHaveBeenCalled();
   });
 
-  it('no reserva si falla la validacion del token o la autorizacion OWNER', async () => {
+  it('does not reserve if the token validation or the OWNER authorization fails', async () => {
     const { coordinator, get, reserve } = harness();
     get.mockRejectedValueOnce(new Error('HOME_OWNER_REQUIRED'));
     await expect(coordinator.reserve(request)).rejects.toThrow('HOME_OWNER_REQUIRED');
@@ -148,31 +148,31 @@ describe('ShellyMqttReservationCoordinator / reserva solamente', () => {
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_RESERVATION_SCOPE_MISMATCH');
   });
 
-  it('rechaza nombres del broker que no coinciden con el id de identidad', async () => {
+  it('rejects broker names that do not match the identity id', async () => {
     const { coordinator, reserve } = harness();
     reserve.mockResolvedValueOnce({ ...reserved, username: 'shd_otro' });
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_RESERVATION_BINDING_INVALID');
   });
 
-  it('rechaza una identidad UUID mal formada', async () => {
+  it('rejects a malformed UUID identity', async () => {
     const { coordinator, reserve } = harness();
     reserve.mockResolvedValueOnce({ ...reserved, identityId: 'otra-identidad' });
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_RESERVATION_BINDING_INVALID');
   });
 
-  it('vuelve a comprobar la autorizacion despues de escribir la reserva', async () => {
+  it('checks the authorization again after writing the reservation', async () => {
     const { coordinator, get } = harness();
     get.mockResolvedValueOnce(session).mockRejectedValueOnce(new Error('HOME_OWNER_REQUIRED'));
     await expect(coordinator.reserve(request)).rejects.toThrow('HOME_OWNER_REQUIRED');
   });
 
-  it('falla cerrado si la sesion cambia despues de la reserva', async () => {
+  it('fails closed if the session changes after the reservation', async () => {
     const { coordinator, get } = harness();
     get.mockResolvedValueOnce(session).mockResolvedValueOnce({ ...session, status: 'CANCELLED' });
     await expect(coordinator.reserve(request)).rejects.toThrow('SHELLY_MQTT_SESSION_NOT_RESERVABLE');
   });
 
-  it('rechaza el id fisico de otro equipo despues de reservar', async () => {
+  it('rejects another device\'s physical id after reserving', async () => {
     const { coordinator, get } = harness();
     get.mockResolvedValueOnce(session).mockResolvedValueOnce({
       ...session,

@@ -1,5 +1,5 @@
-// Regresiones sin red basadas en la estructura JSON real de DynSec.
-// No utilizar ni requerir credenciales del broker.
+// Network-free regressions based on the real DynSec JSON structure.
+// Do not use or require broker credentials.
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 import { MosquittoDynamicSecurityProvider } from './mosquitto-dynamic-security.provider';
@@ -34,7 +34,7 @@ function prepare(overrides: Overrides = {}) {
   }));
   if (overrides.dropAcl) acls.pop();
   if (overrides.extraAcl) acls.push({
-    acltype: 'publishClientSend', topic: 'otro-dispositivo/#', priority: 10, allow: true,
+    acltype: 'publishClientSend', topic: 'other-device/#', priority: 10, allow: true,
   });
   const role: Record<string, unknown> = { acls };
   if (overrides.roleName !== undefined && overrides.roleName !== null) {
@@ -69,28 +69,28 @@ function prepare(overrides: Overrides = {}) {
 }
 
 describe('DynSec getRole omite rolename: regresion observada en broker real', () => {
-  it('acepta rol sin rolename solo cuando tiene exactamente las cinco ACL correctas', async () => {
+  it('accepts a role without rolename only when it has exactly the five correct ACLs', async () => {
     const { provider, command } = prepare();
     await expect(provider.verifyPreparedDisabled(expected)).resolves.toBeUndefined();
     expect(command).toHaveBeenCalledTimes(4);
     expect(command).toHaveBeenCalledWith('getRole', { rolename: expected.roleName });
   });
 
-  it('rechaza nombre distinto cuando el broker si proporciona rolename', async () => {
+  it('rejects a different name when the broker does provide rolename', async () => {
     const { provider } = prepare({ roleName: 'otro_rol' });
     await expect(provider.verifyPreparedDisabled(expected)).rejects.toMatchObject({
       response: { code: 'MQTT_DYNSEC_ACLS_NOT_CONFIRMED' },
     });
   });
 
-  it('rechaza rol sin rolename si le falta una ACL', async () => {
+  it('rejects a role without rolename if it is missing an ACL', async () => {
     const { provider } = prepare({ dropAcl: true });
     await expect(provider.verifyPreparedDisabled(expected)).rejects.toMatchObject({
       response: { code: 'MQTT_DYNSEC_ACLS_NOT_CONFIRMED' },
     });
   });
 
-  it('rechaza ACL adicional para otros dispositivos aun sin rolename', async () => {
+  it('rejects an additional ACL for other devices even without rolename', async () => {
     const { provider } = prepare({ extraAcl: true });
     await expect(provider.verifyPreparedDisabled(expected)).rejects.toMatchObject({
       response: { code: 'MQTT_DYNSEC_ACLS_NOT_CONFIRMED' },

@@ -42,7 +42,7 @@ import { ListHomeEnergyTariffsUseCase } from '../../application/use-cases/list-h
 @ApiTags('energy')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+@ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
 @ApiUnauthorizedResponse({ description: 'JWT ausente, vencido o revocado' })
 export class HomeEnergyTariffsController {
   constructor(
@@ -54,13 +54,13 @@ export class HomeEnergyTariffsController {
   @Get()
   @ApiOperation({
     summary:
-      'Historial de tarifas COP/kWh del hogar (OWNER o MEMBER autorizado)',
+      'COP/kWh tariff history of the home (OWNER or authorized MEMBER)',
   })
   @ApiOkResponse({ type: HomeEnergyTariffListResponse })
-  @ApiBadRequestResponse({ description: 'UUID inválido' })
+  @ApiBadRequestResponse({ description: 'Invalid UUID' })
   @ApiForbiddenResponse({
     description:
-      'Sin permiso de detalle de consumo (GUEST, sin membresía o sin view_consumption)',
+      'No consumption detail permission (GUEST, no membership or no view_consumption)',
   })
   async list(
     @CurrentUser() user: AuthenticatedUser,
@@ -74,14 +74,14 @@ export class HomeEnergyTariffsController {
 
   @Get('current')
   @ApiOperation({
-    summary: 'Tarifa vigente para una fecha local (OWNER o MEMBER autorizado)',
+    summary: 'Tariff effective on a local date (OWNER or authorized MEMBER)',
   })
   @ApiOkResponse({
     type: CurrentHomeEnergyTariffResponse,
-    description: 'tariff es null si no hay tarifa vigente para la fecha',
+    description: 'tariff is null when no tariff is effective on the date',
   })
-  @ApiBadRequestResponse({ description: 'UUID o fecha inválidos' })
-  @ApiForbiddenResponse({ description: 'Sin permiso de detalle de consumo' })
+  @ApiBadRequestResponse({ description: 'Invalid UUID or date' })
+  @ApiForbiddenResponse({ description: 'No consumption detail permission' })
   async current(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -98,13 +98,13 @@ export class HomeEnergyTariffsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Registrar una nueva vigencia de tarifa (solo OWNER de hogar activo)',
+      'Record a new tariff effective period (active home OWNER only)',
   })
   @ApiCreatedResponse({ type: HomeEnergyTariffResponse })
-  @ApiBadRequestResponse({ description: 'UUID, precio o fecha inválidos' })
-  @ApiForbiddenResponse({ description: 'Solo el OWNER de un hogar activo' })
+  @ApiBadRequestResponse({ description: 'Invalid UUID, price or date' })
+  @ApiForbiddenResponse({ description: 'Only the OWNER of an active home' })
   @ApiConflictResponse({
-    description: 'Ya existe una tarifa con esa fecha de vigencia en el hogar',
+    description: 'A tariff with that effective date already exists in the home',
   })
   async create(
     @CurrentUser() user: AuthenticatedUser,

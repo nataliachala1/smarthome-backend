@@ -34,15 +34,15 @@ import { PrismaHomeEnergyGoalRepository } from '../src/modules/energy/infrastruc
 import { PrismaHomeEnergySummaryRepository } from '../src/modules/energy/infrastructure/persistence/prisma-home-energy-summary.repository';
 
 /**
- * SQL034 con PostgreSQL real, RLS activa y LOGIN no privilegiado.
- * Usa la base desechable y la fixture oficial de smarthome-database
- * (scripts/consumption-access-fixture.sql). Ejecutar con scripts/test-energy-access.ps1.
+ * SQL034 with real PostgreSQL, active RLS and an unprivileged LOGIN.
+ * Uses the disposable database and the official smarthome-database fixture
+ * (scripts/consumption-access-fixture.sql). Run it with scripts/test-energy-access.ps1.
  *
- * Fixture: hogar A (1) con OWNER=1, MEMBER=2, GUEST=3, MEMBER PENDING=5,
- * REVOKED=6, LEFT=7, MEMBER con cuenta inactiva=8, MEMBER=10; creador anterior=9.
- * Hogar B (2) con OWNER=4. Hogar C (3) DESACTIVADO con OWNER=1 y MEMBER=2.
- * Lecturas del hogar A en octubre de 2026 (UTC): 0.1 (10-oct 12:00), 0.2 (11-oct 12:00),
- * 0.4 (11-oct 13:00), 0.6 (12-oct 12:00) = 1.3 kWh.
+ * Fixture: home A (1) with OWNER=1, MEMBER=2, GUEST=3, PENDING MEMBER=5,
+ * REVOKED=6, LEFT=7, MEMBER with an inactive account=8, MEMBER=10; previous creator=9.
+ * Home B (2) with OWNER=4. Home C (3) DEACTIVATED with OWNER=1 and MEMBER=2.
+ * Home A readings in October 2026 (UTC): 0.1 (Oct 10 12:00), 0.2 (Oct 11 12:00),
+ * 0.4 (Oct 11 13:00), 0.6 (Oct 12 12:00) = 1.3 kWh.
  */
 const databaseUrl = process.env.ENERGY_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -64,7 +64,7 @@ const ECONOMIC_FIELDS =
   /unitPriceCopKwh|estimatedCostCop|partialCostCop|monthlyBudgetCop|targetKwh|budgetUsagePercent|tariffs|goal"/;
 
 describeDatabase(
-  'SQL034 energía: HTTP/JWT + RLS real con LOGIN no privilegiado',
+  'SQL034 energy: HTTP/JWT + real RLS with an unprivileged LOGIN',
   () => {
     let app: INestApplication<Server>;
     let prisma: PrismaClient;
@@ -79,10 +79,10 @@ describeDatabase(
         parsed.username !== 'consumption_app_test'
       ) {
         throw new Error(
-          'Solo se permite la base desechable de pruebas con el LOGIN no propietario',
+          'Only the disposable test database with the non-owner LOGIN is allowed',
         );
       }
-      // Una sola conexión física: el contexto RLS debe ser local a cada transacción.
+      // A single physical connection: the RLS context must be local to each transaction.
       prisma = new PrismaClient({
         adapter: new PrismaPg({ connectionString: databaseUrl, max: 1 }),
       });
@@ -172,7 +172,7 @@ describeDatabase(
       return membership!.id_home_member;
     };
 
-    it('usa un LOGIN real sin superusuario, BYPASSRLS ni pertenencia a roles elevados o dueños de tablas', async () => {
+    it('uses a real LOGIN without superuser, BYPASSRLS or membership in elevated or table-owner roles', async () => {
       const [role] = await prisma.$queryRaw<
         { session_user: string; unsafe: boolean }[]
       >`
@@ -192,7 +192,7 @@ describeDatabase(
       expect(owners.unsafe).toBe(false);
     });
 
-    it('T01/T09: OWNER registra tarifas; la misma fecha de vigencia responde 409 sin duplicar', async () => {
+    it('T01/T09: OWNER records tariffs; the same effective date returns 409 without duplicating', async () => {
       const first = await post(energy() + '/tariffs', 1, {
         unitPriceCopKwh: '1000',
         effectiveFrom: '2026-10-11',
@@ -227,7 +227,7 @@ describeDatabase(
       ]);
     });
 
-    it('tarifa vigente: la mayor vigencia <= fecha, nunca una futura; null antes de la primera', async () => {
+    it('current tariff: the greatest effective date <= date, never a future one; null before the first', async () => {
       const at11 = await get(
         energy() + '/tariffs/current?at=2026-10-11',
         1,
@@ -253,7 +253,7 @@ describeDatabase(
       });
     });
 
-    it('T16/T17/T24: costo por lectura con la tarifa de su fecha local; sin tarifa el costo no se presenta como total', async () => {
+    it('T16/T17/T24: cost per reading with the tariff of its local date; without a tariff the cost is not presented as the total', async () => {
       const incomplete = await get(
         energy() + '/summary?month=2026-10',
         1,
@@ -268,11 +268,11 @@ describeDatabase(
         totalKwh: '1.300000',
         costComplete: false,
         estimatedCostCop: null,
-        // 0.2×1000 + 0.4×1000 (11-oct) + 0.6×2000 (12-oct); la lectura del 10-oct no tiene tarifa
+        // 0.2×1000 + 0.4×1000 (Oct 11) + 0.6×2000 (Oct 12); the Oct 10 reading has no tariff
         partialCostCop: '1800.00',
       });
 
-      // Cambio de tarifa: nueva vigencia anterior (las tarifas no se editan, se agregan).
+      // Tariff change: a new earlier effective period (tariffs are not edited, they are added).
       await post(energy() + '/tariffs', 1, {
         unitPriceCopKwh: '500',
         effectiveFrom: '2026-10-01',
@@ -290,7 +290,7 @@ describeDatabase(
       });
     });
 
-    it('T11/T23: metas con presupuesto, solo kWh o ambos; PUT repetido es idempotente y no duplica filas', async () => {
+    it('T11/T23: goals with budget, kWh only or both; repeated PUT is idempotent and does not duplicate rows', async () => {
       const both = { monthlyBudgetCop: '2000.00', targetKwh: '1' };
       const first = await put(energy() + '/goals/2026-10', 1, both).expect(200);
       const second = await put(energy() + '/goals/2026-10', 1, both).expect(
@@ -325,7 +325,7 @@ describeDatabase(
       expect(rows).toBe(1);
     });
 
-    it('T12: presupuesto y meta ambos null responde 400 y no modifica la meta guardada', async () => {
+    it('T12: budget and target both null returns 400 and does not modify the stored goal', async () => {
       await put(energy() + '/goals/2026-10', 1, {
         monthlyBudgetCop: null,
         targetKwh: null,
@@ -336,11 +336,11 @@ describeDatabase(
       });
     });
 
-    it('T02/T03: MEMBER autorizado consulta todo pero no puede registrar tarifas ni metas', async () => {
+    it('T02/T03: an authorized MEMBER reads everything but cannot record tariffs or goals', async () => {
       for (const path of readPaths()) await get(path, 2).expect(200);
-      // RLS de consumo (release 018): el MEMBER solo ve lecturas de dispositivos
-      // ACTIVOS con permiso; no ve las del dispositivo desactivado (0.4) ni del
-      // eliminado (0.6). El resumen respeta esa visibilidad: 0.1×500 + 0.2×1000.
+      // Consumption RLS (release 018): the MEMBER only sees readings of ACTIVE
+      // devices with permission; it does not see those of the deactivated device (0.4) or the
+      // deleted one (0.6). The summary respects that visibility: 0.1×500 + 0.2×1000.
       const summary = await get(energy() + '/summary?month=2026-10', 2).expect(
         200,
       );
@@ -365,7 +365,7 @@ describeDatabase(
       expect(goal.body).toMatchObject({ goal: { monthlyBudgetCop: null } });
     });
 
-    it('T04/T22: GUEST no recibe datos económicos y conserva su resumen de consumo agregado', async () => {
+    it('T04/T22: a GUEST receives no economic data and keeps its aggregated consumption summary', async () => {
       for (const path of readPaths()) {
         const response = await get(path, 3).expect(403);
         expect(JSON.stringify(response.body)).not.toMatch(ECONOMIC_FIELDS);
@@ -388,7 +388,7 @@ describeDatabase(
     });
 
     it.each([4, 5, 6, 7, 9])(
-      'T07/T08: usuario %s (sin membresía, PENDING, REVOKED, LEFT o creador anterior) recibe 403 sin datos',
+      'T07/T08: user %s (no membership, PENDING, REVOKED, LEFT or previous creator) receives 403 without data',
       async (n) => {
         for (const path of readPaths()) {
           const response = await get(path, n).expect(403);
@@ -397,14 +397,14 @@ describeDatabase(
       },
     );
 
-    it('T20: cuenta inactiva o sin token responde 401', async () => {
+    it('T20: an inactive account or no token returns 401', async () => {
       for (const path of readPaths()) {
         await get(path, 8).expect(401);
         await http().get(path).expect(401);
       }
     });
 
-    it('T05/T06: quitar view_consumption al MEMBER corta el acceso económico y restaurarlo lo devuelve', async () => {
+    it('T05/T06: removing view_consumption from the MEMBER cuts economic access and restoring it gives it back', async () => {
       const member = await memberId(2);
       const [current] = await rls.withUserContext(
         user(1),
@@ -437,7 +437,7 @@ describeDatabase(
       for (const path of readPaths()) await get(path, 2).expect(200);
     });
 
-    it('T07: al revocar la membresía, el MEMBER pierde de inmediato el acceso económico', async () => {
+    it('T07: when the membership is revoked, the MEMBER immediately loses economic access', async () => {
       await get(energy() + '/summary?month=2026-10', 10).expect(200);
       const member = await memberId(10);
       await rls.withUserContext(user(1), (tx) =>
@@ -449,7 +449,7 @@ describeDatabase(
       for (const path of readPaths()) await get(path, 10).expect(403);
     });
 
-    it('T19: hogar desactivado: el OWNER consulta el historial pero no escribe; el MEMBER no consulta', async () => {
+    it('T19: deactivated home: the OWNER reads the history but cannot write; the MEMBER cannot read', async () => {
       await get(energy(3) + '/tariffs', 1).expect(200);
       await get(energy(3) + '/summary?month=2026-10', 1).expect(200);
       await post(energy(3) + '/tariffs', 1, {
@@ -463,7 +463,7 @@ describeDatabase(
       await get(energy(3) + '/tariffs', 2).expect(403);
     });
 
-    it('T15: dos hogares con la misma fecha de tarifa son independientes y no se cruzan', async () => {
+    it('T15: two homes with the same tariff date are independent and do not cross', async () => {
       await post(energy(2) + '/tariffs', 4, {
         unitPriceCopKwh: '700',
         effectiveFrom: '2026-10-11',
@@ -475,7 +475,7 @@ describeDatabase(
         energy(2) + '/summary?month=2026-10',
         4,
       ).expect(200);
-      // 9 kWh del 10-oct sin tarifa vigente (la de 700 rige desde el 11-oct)
+      // 9 kWh on Oct 10 without an effective tariff (the 700 one applies from Oct 11)
       expect(summaryB.body).toMatchObject({
         totalKwh: '9.000000',
         costComplete: false,
@@ -488,7 +488,7 @@ describeDatabase(
       expect((homeA.body as { tariffs: unknown[] }).tariffs).toHaveLength(3);
     });
 
-    it('T10: la BD rechaza editar o borrar tarifas, borrar metas o cambiar su mes, incluso al OWNER', async () => {
+    it('T10: the DB rejects editing or deleting tariffs, deleting goals or changing their month, even for the OWNER', async () => {
       await expect(
         rls.withUserContext(
           user(1),
@@ -522,7 +522,7 @@ describeDatabase(
       expect((history.body as { tariffs: unknown[] }).tariffs).toHaveLength(3);
     });
 
-    it('RLS es la última barrera: MEMBER y GUEST no insertan tarifas ni leen filas aunque salten la API', async () => {
+    it('RLS is the last barrier: MEMBER and GUEST cannot insert tariffs or read rows even when bypassing the API', async () => {
       for (const n of [2, 3]) {
         await expect(
           rls.withUserContext(
@@ -543,7 +543,7 @@ describeDatabase(
       expect(outsiderRows).toBe(0);
     });
 
-    it('T21: la misma conexión no conserva el contexto de un usuario para el siguiente', async () => {
+    it('T21: the same connection does not keep one user\'s context for the next', async () => {
       await get(energy() + '/summary?month=2026-10', 1).expect(200);
       const [context] = await prisma.$queryRaw<{ value: string | null }[]>`
       SELECT NULLIF(current_setting('app.current_user_id', true), '') AS value

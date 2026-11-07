@@ -49,8 +49,8 @@ export class RefreshSessionUseCase {
     }
 
     /*
-     * Si intentan reutilizar un refresh token
-     * ya revocado, invalidamos toda su familia.
+     * If someone tries to reuse a refresh token
+     * that was already revoked, its whole family is invalidated.
      */
     if (storedToken.isRevoked) {
       await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
@@ -83,8 +83,8 @@ export class RefreshSessionUseCase {
     }
 
     /*
-     * Si session_version cambió, el refresh
-     * pertenece a una sesión revocada.
+     * If session_version changed, the refresh token
+     * belongs to a revoked session.
      */
     if (storedToken.sessionVersion !== user.sessionVersion) {
       await this.refreshTokenRepository.revokeFamily(storedToken.familyId);
@@ -106,7 +106,7 @@ export class RefreshSessionUseCase {
     );
 
     /*
-     * El nuevo refresh conserva el mismo
+     * The new refresh token keeps the same
      * familyId.
      */
     const rotated = await this.refreshTokenRepository.rotate(storedToken.id, {

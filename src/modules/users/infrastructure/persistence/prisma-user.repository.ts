@@ -130,7 +130,7 @@ export class PrismaUserRepository implements UserRepository {
 
     if (!raw) {
       throw new Error(
-        'No fue posible crear el usuario',
+        'The user could not be created',
       );
     }
 
@@ -298,8 +298,8 @@ export class PrismaUserRepository implements UserRepository {
           deactivated_at: deactivatedAt,
 
           /*
-          * Revoca todos los JWT emitidos
-          * anteriormente.
+          * Revokes every JWT issued
+          * earlier.
           */
           session_version: {
             increment: 1,

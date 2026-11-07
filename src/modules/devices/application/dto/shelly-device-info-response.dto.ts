@@ -36,7 +36,7 @@ export class ShellyDeviceInfoResponseDto {
     example: false,
     nullable: true,
     description:
-      'null cuando el estado MQTT no puede consultarse por autenticación u otra restricción',
+      'null when the MQTT status cannot be read because of authentication or another restriction',
   })
   mqttConnected!: boolean | null;
 
@@ -45,7 +45,7 @@ export class ShellyDeviceInfoResponseDto {
     nullable: true,
     example: null,
     description:
-      'Código estable del fallo de consulta MQTT; null cuando la consulta fue válida.',
+      'Stable code of the MQTT query failure; null when the query was valid.',
   })
   mqttStatusErrorCode!: string | null;
 

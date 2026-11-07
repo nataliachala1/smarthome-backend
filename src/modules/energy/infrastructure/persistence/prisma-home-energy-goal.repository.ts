@@ -24,10 +24,10 @@ import {
 } from './prisma-home-energy-goal.mapper';
 
 /**
- * Objetivos mensuales SQL034 bajo RLS (withUserContext):
- * - lectura: consumption.fn_can_read_detail
- * - escritura: homes.fn_can_manage_home; la app solo puede actualizar
- *   monthly_budget_cop y target_kwh (grants por columna). updated_at lo pone el trigger.
+ * SQL034 monthly goals under RLS (withUserContext):
+ * - read: consumption.fn_can_read_detail
+ * - write: homes.fn_can_manage_home; the app can only update
+ *   monthly_budget_cop and target_kwh (column grants). The trigger sets updated_at.
  */
 @Injectable()
 export class PrismaHomeEnergyGoalRepository implements HomeEnergyGoalRepository {
@@ -94,8 +94,8 @@ export class PrismaHomeEnergyGoalRepository implements HomeEnergyGoalRepository 
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
-      // 42501 (privilegio o política RLS): se reporta según la operación,
-      // sin exponer detalles SQL.
+      // 42501 (privilege or RLS policy): reported according to the operation,
+      // without exposing SQL details.
       if (isPostgresAccessDeniedError(error)) {
         throw energyAccessDeniedError(access);
       }

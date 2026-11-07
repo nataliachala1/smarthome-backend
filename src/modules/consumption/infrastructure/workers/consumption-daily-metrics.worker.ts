@@ -14,7 +14,7 @@ export class ConsumptionDailyMetricsWorker implements OnModuleInit, OnModuleDest
 
   async onModuleInit(): Promise<void> {
     if (process.env.CONSUMPTION_METRICS_WORKER_ENABLED !== 'true') {
-      this.logger.log('Worker de mÃ©tricas deshabilitado; los resÃºmenes consultan lecturas crudas.');
+      this.logger.log('Metrics worker disabled; summaries read raw readings.');
       return;
     }
 
@@ -48,7 +48,7 @@ export class ConsumptionDailyMetricsWorker implements OnModuleInit, OnModuleDest
           this.logger.error(`CONSUMPTION_METRICS_REFRESH_FAILED: ${code}`);
         });
       }, 60000);
-      this.logger.log('Worker de mÃ©tricas iniciado (rol aislado smarthome_worker).');
+      this.logger.log('Metrics worker started (isolated smarthome_worker role).');
     } catch (error) {
       this.pool = null;
       await pool.end();
@@ -96,7 +96,7 @@ export class ConsumptionDailyMetricsWorker implements OnModuleInit, OnModuleDest
                        min_watts = EXCLUDED.min_watts`,
         [daysBack],
       );
-      this.logger.debug(`MÃ©tricas diarias actualizadas: ${updated.rowCount ?? 0}`);
+      this.logger.debug(`Daily metrics updated: ${updated.rowCount ?? 0}`);
     } finally {
       this.running = false;
     }

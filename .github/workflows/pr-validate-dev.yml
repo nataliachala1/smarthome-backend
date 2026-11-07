@@ -1,9 +1,9 @@
 name: PR validation (dev) - no deploy
 
-# Validacion de TODO pull request hacia dev, sin importar el nombre de la rama.
-# Solo verifica el codigo: NO publica imagenes en GHCR, NO usa secretos ni
-# webhooks, NO despliega en Dokploy y NO se conecta a bases de datos del VPS.
-# El workflow pr-shelly-mqtt-dev.yml se conserva sin cambios para sus ramas.
+# Validation of EVERY pull request to dev, whatever the branch name.
+# It only checks the code: it does NOT publish GHCR images, use secrets,
+# webhooks, deploy to Dokploy or connect to VPS databases.
+# The pr-shelly-mqtt-dev.yml workflow is kept unchanged for its branches.
 
 on:
   pull_request:

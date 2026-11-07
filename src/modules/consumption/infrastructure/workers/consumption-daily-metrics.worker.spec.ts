@@ -10,7 +10,7 @@ describe('ConsumptionDailyMetricsWorker', () => {
     jest.clearAllMocks();
   });
 
-  it('no inicia una conexiÃ³n si el worker no estÃ¡ habilitado', async () => {
+  it('does not open a connection when the worker is not enabled', async () => {
     delete process.env.CONSUMPTION_METRICS_WORKER_ENABLED;
     const worker = new ConsumptionDailyMetricsWorker();
     await worker.onModuleInit();
@@ -18,7 +18,7 @@ describe('ConsumptionDailyMetricsWorker', () => {
     await worker.onModuleDestroy();
   });
 
-  it('falla cerrado sin credencial dedicada', async () => {
+  it('fails closed without a dedicated credential', async () => {
     process.env.CONSUMPTION_METRICS_WORKER_ENABLED = 'true';
     delete process.env.DATABASE_METRICS_URL;
     const worker = new ConsumptionDailyMetricsWorker();
@@ -26,7 +26,7 @@ describe('ConsumptionDailyMetricsWorker', () => {
     expect(Pool).not.toHaveBeenCalled();
   });
 
-  it('exige rol worker y calcula mÃ©tricas desde lecturas crudas', async () => {
+  it('requires the worker role and computes metrics from raw readings', async () => {
     process.env.CONSUMPTION_METRICS_WORKER_ENABLED = 'true';
     process.env.DATABASE_METRICS_URL = 'postgresql://metrics_worker:test@db:5432/smarthome';
     process.env.DATABASE_IOT_URL = 'postgresql://ingest:test@db:5432/smarthome';

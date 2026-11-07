@@ -3,7 +3,7 @@ import { Pool, type PoolConfig } from 'pg';
 import type { MqttSecretSqlQueryPort } from '../secrets/pg-mqtt-preparation-secret.repository';
 import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
-/** SQL028: cuarta cuenta exclusiva, nunca la cuenta general Prisma. */
+/** SQL028: fourth exclusive account, never the general Prisma account. */
 const EXPECTED_ROLE = 'smarthome_mqtt_secret_dev_login';
 const LOCAL_DB = 'smarthome';
 const LOCAL_HOST = '127.0.0.1';
@@ -19,7 +19,7 @@ export interface SecretPgTarget {
   readonly options: PoolConfig;
 }
 
-/** Seleccion explicita de destino: TLS obligatorio para la BD aislada VPS DEV. */
+/** Explicit target selection: TLS is mandatory for the isolated VPS DEV DB. */
 export function parseMqttSecretConnection(
   connectionString: string | undefined,
   mode: MqttSecretConnectionMode,
@@ -68,7 +68,7 @@ export function parseMqttSecretConnection(
   };
 }
 
-/** Compatibilidad: conserva intacto el contrato original local-dev. */
+/** Compatibility: keeps the original local-dev contract intact. */
 export function parseMqttSecretDevConnection(
   connectionString: string | undefined,
   environment: string | undefined = process.env.NODE_ENV,
@@ -156,7 +156,7 @@ export function minimalMqttSecretPrivileges(
     v.identity_dml === false;
 }
 
-/** Nunca permite consultas arbitrarias ni se reutiliza para otros roles. */
+/** Never allows arbitrary queries and is not reused for other roles. */
 export class MqttSecretPgGateway implements MqttSecretSqlQueryPort, OnModuleDestroy {
   private verified = false;
   constructor(
@@ -194,7 +194,7 @@ export class MqttSecretPgGateway implements MqttSecretSqlQueryPort, OnModuleDest
   }
 }
 
-/** El proveedor opt-in decide el modo; nunca se deriva de una peticion HTTP. */
+/** The opt-in provider decides the mode; it is never derived from an HTTP request. */
 export async function openMqttSecretPgGateway(
   connectionString: string | undefined,
   mode: MqttSecretConnectionMode,
@@ -211,7 +211,7 @@ export async function openMqttSecretPgGateway(
   }
 }
 
-/** Entrada local anterior: no permitir que pase implicitamente a VPS. */
+/** Previous local input: do not let it implicitly become VPS. */
 export async function openMqttSecretDevGateway(
   connectionString: string | undefined,
 ): Promise<MqttSecretPgGateway> {

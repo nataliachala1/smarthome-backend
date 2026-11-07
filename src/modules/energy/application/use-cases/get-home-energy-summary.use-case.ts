@@ -16,13 +16,13 @@ import {
 export interface GetHomeEnergySummaryInput {
   userId: string;
   homeId: string;
-  /** Mes YYYY-MM; si no llega se usa el mes actual en America/Bogota. */
+  /** Month YYYY-MM; when missing, the current month in America/Bogota is used. */
   month?: string;
 }
 
 /**
- * Resumen mensual: kWh del mes y costo estimado aplicando a cada lectura la
- * tarifa vigente en su fecha local (America/Bogota). Solo OWNER o MEMBER autorizado.
+ * Monthly summary: kWh of the month and estimated cost, applying to each reading the
+ * tariff effective on its local date (America/Bogota). Only an OWNER or an authorized MEMBER.
  */
 @Injectable()
 export class GetHomeEnergySummaryUseCase {

@@ -66,10 +66,10 @@ function setup(options: { enabled?: boolean; found?: boolean; initiallyOn?: bool
   };
 }
 
-describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
+describe('3D.6-B: safe reconciliation of the Shelly state', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('actualiza is_on y emite realtime solo después del commit, sin consumo', async () => {
+  it('updates is_on and emits realtime only after the commit, without consumption', async () => {
     const c = setup();
     expect(await c.reconciler.reconcile()).toBe('updated');
     expect(c.getSwitchStatus).toHaveBeenCalledTimes(1);
@@ -83,7 +83,7 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
       .not.toMatch(/INSERT INTO|consumption\.consumption/);
   });
 
-  it('omite un RPC atrasado cuando avanzó SQL036 durante el vuelo', async () => {
+  it('skips a late RPC when SQL036 advanced in flight', async () => {
     const c = setup();
     c.getSwitchStatus.mockImplementation(() => {
       c.setWatermark('1793388601.00');
@@ -94,7 +94,7 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('omite un RPC atrasado cuando otra transaccion cambió el estado', async () => {
+  it('skips a late RPC when another transaction changed the state', async () => {
     const c = setup();
     c.getSwitchStatus.mockImplementation(() => {
       c.setState({ updated_at: new Date('2026-10-30T22:00:00.500Z') });
@@ -104,20 +104,20 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
     expect(c.tx.device.update).not.toHaveBeenCalled();
   });
 
-  it('no escribe ni emite si el resultado coincide y el dispositivo está online', async () => {
+  it('does not write or emit if the result matches and the device is online', async () => {
     const c = setup({ initiallyOn: true });
     expect(await c.reconciler.reconcile()).toBe('unchanged');
     expect(c.tx.device.update).not.toHaveBeenCalled();
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('no usa la red si flespi no está configurado', async () => {
+  it('does not use the network if flespi is not configured', async () => {
     const c = setup({ enabled: false });
     expect(await c.reconciler.reconcile()).toBe('disabled');
     expect(c.getSwitchStatus).not.toHaveBeenCalled();
   });
 
-  it('no usa la red si no hay dispositivo activo', async () => {
+  it('does not use the network if there is no active device', async () => {
     const c = setup({ found: false });
     expect(await c.reconciler.reconcile()).toBe('not_found');
     expect(c.getSwitchStatus).not.toHaveBeenCalled();
@@ -131,7 +131,7 @@ describe('3D.6-B: reconciliacion segura de estado Shelly', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('agrupa llamadas simultaneas para no enviar varios RPC', async () => {
+  it('groups concurrent calls to avoid sending several RPCs', async () => {
     const c = setup();
     let release!: (value: { output: boolean; receivedAt: Date }) => void;
     c.getSwitchStatus.mockReturnValue(new Promise(resolve => { release = resolve; }));

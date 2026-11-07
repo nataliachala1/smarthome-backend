@@ -54,7 +54,7 @@ function fakeDatabase(allowed: boolean) {
 }
 
 describe('PrismaHomeEnergySummaryRepository', () => {
-  it('autoriza con fn_can_read_detail y luego calcula con la tarifa de la fecha local de cada lectura', async () => {
+  it('authorizes with fn_can_read_detail and then computes with the tariff of each reading\'s local date', async () => {
     const db = fakeDatabase(true);
 
     const facts = await new PrismaHomeEnergySummaryRepository(
@@ -74,7 +74,7 @@ describe('PrismaHomeEnergySummaryRepository', () => {
     expect(summarySql).toContain('tariff.effective_from <=');
     expect(summarySql).toContain('c.read_at >=');
     expect(summarySql).toContain('c.read_at <');
-    // Instantes con zona explícita: no dependen de la zona horaria del servidor.
+    // Instants with an explicit zone: they do not depend on the server time zone.
     expect(db.queries[1].values).toEqual([
       HOME_ID,
       '2026-11-01T05:00:00.000Z',
@@ -92,7 +92,7 @@ describe('PrismaHomeEnergySummaryRepository', () => {
     });
   });
 
-  it('sin permiso de lectura: 403 sin consultar consumos ni tarifas', async () => {
+  it('without read permission: 403 without querying consumption or tariffs', async () => {
     const db = fakeDatabase(false);
 
     await expect(
@@ -104,7 +104,7 @@ describe('PrismaHomeEnergySummaryRepository', () => {
     expect(db.queries).toHaveLength(1);
   });
 
-  it('42501 (privilegio o política RLS) se reporta como lectura denegada', async () => {
+  it('42501 (privilege or RLS policy) is reported as a denied read', async () => {
     const permissionDenied = Object.assign(new Error('permission denied'), {
       meta: { driverAdapterError: { cause: { originalCode: '42501' } } },
     });

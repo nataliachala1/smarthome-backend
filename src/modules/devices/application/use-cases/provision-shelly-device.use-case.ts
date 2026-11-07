@@ -50,8 +50,8 @@ export class ProvisionShellyDeviceUseCase {
       });
     }
     /*
-     * 1. Identificamos nuevamente el
-     * dispositivo antes de configurarlo.
+     * 1. The device is identified again
+     * before configuring it.
      */
     const shelly = await this.identifyShellyDeviceUseCase.execute(
       input.userId,
@@ -66,8 +66,8 @@ export class ProvisionShellyDeviceUseCase {
     }
 
     /*
-     * 3. Broker MQTT alcanzable por
-     * el dispositivo físico.
+     * 3. MQTT broker reachable by
+     * the physical device.
      */
     const brokerServer = this.configService.get<string>(
       'MQTT_DEVICE_BROKER_SERVER',
@@ -92,7 +92,7 @@ export class ProvisionShellyDeviceUseCase {
     }
 
     /*
-     * 4. Configuramos MQTT en el Shelly.
+     * 4. MQTT is configured on the Shelly.
      */
     const mqttConfiguration = await this.shellyRpcClient.configureMqtt(
       input.shellyIp,
@@ -108,16 +108,16 @@ export class ProvisionShellyDeviceUseCase {
     );
 
     /*
-     * 5. Reiniciamos cuando Shelly
-     * indique que es necesario.
+     * 5. Reboot when the Shelly
+     * says it is required.
      */
     if (mqttConfiguration.restartRequired) {
       await this.shellyRpcClient.reboot(input.shellyIp);
     }
 
     /*
-     * 6. Verificamos que MQTT quede
-     * realmente conectado.
+     * 6. Verify that MQTT ends up
+     * really connected.
      */
     const mqttConnected = await this.shellyRpcClient.waitForMqttConnection(
       input.shellyIp,
@@ -130,10 +130,10 @@ export class ProvisionShellyDeviceUseCase {
     }
 
     /*
-     * 7. Registramos el dispositivo
-     * en SmartHome.
+     * 7. The device is registered
+     * in SmartHome.
      *
-     * El frontend no necesita conocer:
+     * The frontend does not need to know:
      * - manufacturerDeviceId
      * - WIFI
      * - MQTT

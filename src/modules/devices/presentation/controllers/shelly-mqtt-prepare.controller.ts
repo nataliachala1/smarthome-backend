@@ -24,9 +24,9 @@ import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated
 import { ShellyMqttPrepareAction } from '../../application/services/shelly-mqtt-prepare.action';
 
 /**
- * Ruta opt-in para avanzar una operacion hasta PREPARED_DISABLED.
- * VPS DEV solo la registra con el perfil TLS+DEV validado; nunca entrega
- * passwords ni habilita la identidad del broker.
+ * Opt-in route to move an operation forward to PREPARED_DISABLED.
+ * VPS DEV registers it only with the validated TLS+DEV profile; it never returns
+ * passwords or enables the broker identity.
  */
 @Controller('api/v1/homes/:homeId/shelly/setup-sessions/:sessionId/mqtt')
 @ApiTags('shelly')
@@ -43,7 +43,7 @@ export class ShellyMqttPrepareController {
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   @ApiOperation({ summary: 'Preparar identidad MQTT DESHABILITADA (solo development opt-in)' })
   @ApiServiceUnavailableResponse({
-    description: 'Resultado incierto o pendiente de reconciliacion; no reintentar ciegamente.',
+    description: 'Uncertain result or pending reconciliation; do not retry blindly.',
   })
   async prepare(
     @CurrentUser() user: AuthenticatedUser,
@@ -52,7 +52,7 @@ export class ShellyMqttPrepareController {
     @Headers('x-pairing-token') pairingToken: string,
   ) {
     if (!pairingToken) {
-      // Mismo criterio de autenticacion del endpoint /identify y /complete.
+      // Same authentication criterion as the /identify and /complete endpoints.
       throw new ServiceUnavailableException({ code: 'PAIRING_TOKEN_REQUIRED' });
     }
     try {
@@ -63,9 +63,9 @@ export class ShellyMqttPrepareController {
         sessionToken: pairingToken,
       });
     } catch (error) {
-      // El servicio de sesiones conserva los errores de autorizacion HTTP.
+      // The session service keeps the HTTP authorization errors.
       if (error instanceof HttpException) throw error;
-      // No filtrar respuestas SQL ni errores administrativos del broker al movil.
+      // Do not leak SQL responses or broker administrative errors to the mobile app.
       throw new ServiceUnavailableException({
         code: 'MQTT_PREPARATION_OUTCOME_REQUIRES_RECONCILIATION',
       });

@@ -4,7 +4,7 @@ import {
 } from '../../../../config/mqtt-config';
 import { isIP } from 'node:net';
 
-/** Seleccion de conexiones MQTT de pruebas. Nunca determina el destino desde HTTP. */
+/** Selection of test MQTT connections. Never decides the target from HTTP. */
 export type ShellyMqttDeploymentMode =
   | 'off'
   | 'local-dev'
@@ -294,9 +294,9 @@ function hasPreparedProductionPairingConfiguration(env: Environment): boolean {
 }
 
 /**
- * VPS DEV ejecuta Node optimizado (NODE_ENV=production), pero NO es el
- * entorno funcional de produccion ni puede acceder a la BD smarthome.
- * El modo VPS se exige por opt-ins de despliegue y DBs generales DEV.
+ * VPS DEV runs optimized Node (NODE_ENV=production), but it is NOT the
+ * functional production environment and cannot access the smarthome DB.
+ * VPS mode is required through deployment opt-ins and general DEV DBs.
  */
 export function selectShellyMqttDeploymentMode(
   env: Environment = process.env,
@@ -317,8 +317,8 @@ export function selectShellyMqttDeploymentMode(
   if (env.NODE_ENV === 'production' &&
       env.APP_ENV === 'development' &&
       env.SHELLY_MQTT_VPS_DEV_TLS_ENABLED === 'true' &&
-      // La DI PostgreSQL continua separada: transporte opt-in NO registra
-      // controladores, coordinadores ni workers en el perfil VPS DEV.
+      // PostgreSQL DI stays separate: the opt-in transport does NOT register
+      // controllers, coordinators or workers in the VPS DEV profile.
       (env.MQTT_ENABLED === 'false' ||
         (env.MQTT_ENABLED === 'true' &&
          env.SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED === 'true')) &&
@@ -329,7 +329,7 @@ export function selectShellyMqttDeploymentMode(
   throw new Error('MQTT_DEV_DI_MODE_NOT_ALLOWED');
 }
 
-/** Defensa por duplicado: el gateway vuelve a validar rol, host, BD y TLS. */
+/** Defense in depth: the gateway validates role, host, DB and TLS again. */
 export function requireShellyMqttDeploymentMode(
   env: Environment = process.env,
 ): Exclude<ShellyMqttDeploymentMode, 'off'> {
@@ -339,7 +339,7 @@ export function requireShellyMqttDeploymentMode(
 }
 
 /**
- * Decide grupos de providers en un solo punto; NO habilita MQTT por sí mismo.
+ * Decides provider groups in a single place; it does NOT enable MQTT by itself.
  */
 export interface ShellyMqttProviderPlan {
   readonly mode: ShellyMqttDeploymentMode;

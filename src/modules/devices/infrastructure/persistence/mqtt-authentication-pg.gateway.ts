@@ -38,7 +38,7 @@ export interface MqttAuthPgTarget {
   readonly options: PoolConfig;
 }
 
-/** Separación explícita de entornos; no admite decidir el modo desde HTTP. */
+/** Explicit environment separation; the mode cannot be decided from HTTP. */
 export function parseMqttAuthPgConnection(
   raw: string | undefined,
   kind: MqttAuthKind,
@@ -92,7 +92,7 @@ export function parseMqttAuthPgConnection(
   };
 }
 
-/** Compatibilidad del contrato local previo. */
+/** Compatibility with the previous local contract. */
 export function parseMqttAuthPgUrl(raw: string | undefined, kind: MqttAuthKind): {
   role: string;
   connectionString: string;
@@ -120,7 +120,7 @@ export function isMinimalMqttAuthPgPrivileges(
     v.privileged === false;
 }
 
-// SQL de introspección, sin tablas del usuario ni secretos.
+// Introspection SQL, without user tables or secrets.
 const CHECK_SQL = `SELECT current_user::text AS login, current_database()::text AS db,
   pg_has_role(current_user,'smarthome_mqtt_rpc_worker','MEMBER') AS member_rpc,
   pg_has_role(current_user,'smarthome_mqtt_auth_confirmer','MEMBER') AS member_confirm,

@@ -14,7 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const NAME = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_CHALLENGE_MS = 15_000;
 
-/** Respuesta SQL026, obtenida SOLO con el login MQTT RPC dedicado. */
+/** SQL026 response, obtained ONLY with the dedicated MQTT RPC login. */
 export interface SqlIssuedMqttChallenge {
   rpcId: string;
   manufacturerDeviceId: string;
@@ -33,7 +33,7 @@ export interface SqlMqttRpcChallengePort {
   consume(operationId: string, rpcId: string): Promise<void>;
 }
 
-/** SQL029: usa OTRO login sin privilegios de SQL026 o SQL027. */
+/** SQL029: uses ANOTHER login without SQL026 or SQL027 privileges. */
 export interface SqlMqttAuthenticatedConfirmationPort {
   confirm(operationId: string, rpcId: string, binding: ReservedBrokerBinding): Promise<void>;
 }
@@ -43,10 +43,10 @@ export interface AuthMqttChallengeTransport {
 }
 
 /**
- * NUNCA registrar directamente como endpoint HTTP. Solo puede ejecutar
- * un coordinador que autorizó OWNER+sesión+token y solicitó la activación.
- * La BD no observa el broker; el worker
- * demuestra el challenge y persistente SQL026/SQL029.
+ * NEVER register it directly as an HTTP endpoint. It can only be run by
+ * a coordinator that authorized OWNER+session+token and requested enabling.
+ * The DB does not observe the broker; the worker
+ * proves the challenge and persists SQL026/SQL029.
  */
 export class ShellyMqttAuthenticationWorker {
   constructor(
@@ -74,8 +74,8 @@ export class ShellyMqttAuthenticationWorker {
     // authenticated-connection evidence or default-deny guarantees.
     await this.broker.verifyBrokerPrerequisites();
 
-    // SQL026 valida OWNER, vigencia, estado AWAITING_AUTH, no-revocacion,
-    // historial de reintentos y emite un RPC id no elegido por HTTP.
+    // SQL026 validates OWNER, validity, AWAITING_AUTH state, non-revocation,
+    // retry history and issues an RPC id not chosen by HTTP.
     const issued = await this.challenges.issue(operationId);
     if (!UUID.test(issued.rpcId) ||
       !NAME.test(issued.brokerUsername) ||
@@ -106,8 +106,8 @@ export class ShellyMqttAuthenticationWorker {
       throw new Error('MQTT_AUTH_SQL026_SCOPE_OR_WINDOW_INVALID');
     }
 
-    // Mantener el MISMO rpc_id que entrego SQL026. 50414 usaba un UUID
-    // aleatorio separado y por eso NO podia confirmar SQL026 de forma real.
+    // Keep the SAME rpc_id that SQL026 returned. 50414 used a separate random
+    // UUID and therefore could NOT really confirm SQL026.
     const template = createShellyRpcChallenge(plan, issuedAtMs);
     const challenge: ShellyRpcChallenge = {
       ...template,
@@ -121,7 +121,7 @@ export class ShellyMqttAuthenticationWorker {
     if (!matchesBrokerIdentityConnection(before, binding)) {
       throw new Error('MQTT_AUTH_BROKER_NOT_AUTHENTICATED');
     }
-    // No reintentos automáticos: un timeout puede significar respuesta tardía.
+    // No automatic retries: a timeout may mean a late response.
     const response = await this.mqttTransport.exchange(challenge);
     if (!matchesShellyRpcChallenge(challenge, response) || Date.now() > expiresAtMs) {
       throw new Error('MQTT_AUTH_RPC_NOT_VERIFIED');
@@ -131,9 +131,9 @@ export class ShellyMqttAuthenticationWorker {
       throw new Error('MQTT_AUTH_BROKER_UNCERTAIN');
     }
 
-    // DOS transacciones SQL separadas por credenciales de mínimo privilegio.
-    // Un timeout al consumir o confirmar NO implica fallo seguro: no repetir
-    // sin un worker de reconciliacion que lea estado durable.
+    // TWO SQL transactions separated by least-privilege credentials.
+    // A timeout while consuming or confirming does NOT imply a safe failure: do not
+    // repeat without a reconciliation worker that reads the durable state.
     await this.challenges.consume(operationId, issued.rpcId);
     await this.auth.confirm(operationId, issued.rpcId, binding);
     return { phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED' };

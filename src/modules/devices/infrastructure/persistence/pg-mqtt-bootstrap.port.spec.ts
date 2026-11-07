@@ -23,8 +23,8 @@ const envelope = () => ({
   expiresAt: new Date(Date.now() + 60_000),
 });
 
-describe('PgMqttBootstrapPort (SQL031, sin secretos plaintext)', () => {
-  it('pasa solo operacion, actor y hash del token a la funcion autorizada', async () => {
+describe('PgMqttBootstrapPort (SQL031, no plaintext secrets)', () => {
+  it('passes only the operation, actor and token hash to the authorized function', async () => {
     const db = { query: jest.fn().mockResolvedValue({ rows: [envelope()] }) };
     const port = new PgMqttBootstrapPort(db);
 
@@ -38,7 +38,7 @@ describe('PgMqttBootstrapPort (SQL031, sin secretos plaintext)', () => {
     );
   });
 
-  it('rechaza argumentos inválidos sin consultar SQL', async () => {
+  it('rejects invalid arguments without querying SQL', async () => {
     const db = { query: jest.fn() };
     const port = new PgMqttBootstrapPort(db);
     await expect(port.load(OPERATION, ACTOR, 'raw-pairing-token'))

@@ -44,8 +44,8 @@ function repositoryMock() {
   return { repository, findAllByHome, findEffectiveAt, create };
 }
 
-describe('Casos de uso de tarifas de energía', () => {
-  it('lista el historial con decimales como texto', async () => {
+describe('Energy tariff use cases', () => {
+  it('lists the history with decimals as text', async () => {
     const { repository, findAllByHome } = repositoryMock();
     findAllByHome.mockResolvedValue([tariff]);
 
@@ -69,7 +69,7 @@ describe('Casos de uso de tarifas de energía', () => {
     });
   });
 
-  it('responde 403 sin datos cuando no hay permiso de lectura', async () => {
+  it('returns 403 without data when there is no read permission', async () => {
     const { repository, findAllByHome } = repositoryMock();
     findAllByHome.mockRejectedValue(new EnergyReadAccessDeniedError());
 
@@ -81,7 +81,7 @@ describe('Casos de uso de tarifas de energía', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('consulta la tarifa vigente para la fecha indicada y devuelve null si no hay', async () => {
+  it('reads the tariff effective on the given date and returns null when there is none', async () => {
     const { repository, findEffectiveAt } = repositoryMock();
     findEffectiveAt.mockResolvedValue(null);
 
@@ -101,7 +101,7 @@ describe('Casos de uso de tarifas de energía', () => {
     expect(result).toEqual({ homeId: HOME_ID, at: '2026-10-15', tariff: null });
   });
 
-  it('usa la fecha de hoy en Bogotá cuando no se envía at', async () => {
+  it('uses today\'s date in Bogota when at is not sent', async () => {
     const { repository, findEffectiveAt } = repositoryMock();
     findEffectiveAt.mockResolvedValue(tariff);
 
@@ -116,7 +116,7 @@ describe('Casos de uso de tarifas de energía', () => {
     expect(result.tariff?.unitPriceCopKwh).toBe('950.2500');
   });
 
-  it('registra una tarifa nueva', async () => {
+  it('records a new tariff', async () => {
     const { repository, create } = repositoryMock();
     create.mockResolvedValue(tariff);
 
@@ -135,7 +135,7 @@ describe('Casos de uso de tarifas de energía', () => {
     expect(result.id).toBe(tariff.id);
   });
 
-  it('responde 409 si ya existe una tarifa con esa vigencia', async () => {
+  it('returns 409 when a tariff with that effective date already exists', async () => {
     const { repository, create } = repositoryMock();
     create.mockRejectedValue(new HomeEnergyTariffAlreadyExistsError());
 
@@ -149,7 +149,7 @@ describe('Casos de uso de tarifas de energía', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('responde 403 si quien registra no es OWNER de un hogar activo', async () => {
+  it('returns 403 when the caller is not the OWNER of an active home', async () => {
     const { repository, create } = repositoryMock();
     create.mockRejectedValue(new EnergyManageAccessDeniedError());
 

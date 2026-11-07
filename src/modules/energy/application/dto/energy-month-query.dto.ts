@@ -9,7 +9,7 @@ import {
 export class EnergyMonthQueryDto {
   @ApiPropertyOptional({
     description:
-      'Mes YYYY-MM (año 2000–2099, mes 01..12). Por defecto, el mes actual en America/Bogota',
+      'Month YYYY-MM (year 2000–2099, month 01..12). Defaults to the current month in America/Bogota',
     example: '2026-11',
   })
   @IsOptional()

@@ -11,7 +11,7 @@ import { todayInBogota } from '../utils/bogota-date';
 export interface GetCurrentHomeEnergyTariffInput {
   userId: string;
   homeId: string;
-  /** Fecha local YYYY-MM-DD; si no llega se usa hoy en America/Bogota. */
+  /** Local date YYYY-MM-DD; when missing, today in America/Bogota is used. */
   at?: string;
 }
 

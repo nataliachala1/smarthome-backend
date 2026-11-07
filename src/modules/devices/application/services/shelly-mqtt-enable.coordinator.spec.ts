@@ -40,17 +40,17 @@ function fixture(profile: 'local-dev'|'vps-dev-tls'='local-dev') {
   return {coordinator,sessions,port,broker,session};
 }
 describe('Etapa 2: habilitacion cercada, nunca conexion autentica inferida',()=>{
-  test('rechaza permiso LAN o readback faltante antes de tocar SQL/broker',async()=>{
+  test('rejects a missing LAN permission or readback before touching SQL/broker',async()=>{
     const f=fixture();
     await expect(f.coordinator.enable({...request,localConfigurationReadbackVerified:false})).rejects.toThrow();
     expect(f.port.request).not.toHaveBeenCalled(); expect(f.broker.enableIdentity).not.toHaveBeenCalled();
   });
-  test('rechaza sesion expirada sin reclamar lease',async()=>{
+  test('rejects an expired session without claiming a lease',async()=>{
     const f=fixture(); f.session.expiresAt=new Date(Date.now()-2000).toISOString();
     await expect(f.coordinator.enable(request)).rejects.toThrow('MQTT_ENABLE_SESSION_NOT_AUTHORIZED');
     expect(f.port.claim).not.toHaveBeenCalled();
   });
-  test('habilita la cuenta exacta y termina solo en AWAITING_AUTH',async()=>{
+  test('enables the exact account and ends only in AWAITING_AUTH',async()=>{
     const f=fixture();
     await expect(f.coordinator.enable(request)).resolves.toEqual({
       phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false});
@@ -58,7 +58,7 @@ describe('Etapa 2: habilitacion cercada, nunca conexion autentica inferida',()=>
     expect(f.broker.enableIdentity).toHaveBeenCalledWith(claim.username);
     expect(f.port.confirm).toHaveBeenCalledTimes(1); expect(f.port.uncertain).not.toHaveBeenCalled();
   });
-  test('VPS DEV no exige confirmación local y vuelve a validar OWNER antes de SQL',async()=>{
+  test('VPS DEV does not require local confirmation and validates OWNER again before SQL',async()=>{
     const f=fixture('vps-dev-tls');
     const vpsRequest={userId:request.userId,homeId:request.homeId,
       sessionId:request.sessionId,sessionToken:request.sessionToken,
@@ -69,18 +69,18 @@ describe('Etapa 2: habilitacion cercada, nunca conexion autentica inferida',()=>
     expect(f.sessions.assertCanManageHome).toHaveBeenCalledTimes(2);
     expect(f.port.request).toHaveBeenCalledWith(OP,USER,request.sessionToken);
   });
-  test('un broker incierto manda lease a reconciliacion sin declarar exito',async()=>{
+  test('an uncertain broker sends the lease to reconciliation without declaring success',async()=>{
     const f=fixture();f.broker.enableIdentity.mockRejectedValueOnce(new Error('timeout'));
     await expect(f.coordinator.enable(request)).rejects.toThrow('RECONCILIATION');
     expect(f.broker.disableIdentity).toHaveBeenCalledWith(claim.username);
     expect(f.port.uncertain).toHaveBeenCalledTimes(1);expect(f.port.confirm).not.toHaveBeenCalled();
   });
-  test('un nombre de identidad distinto bloquea la activacion',async()=>{
+  test('a different identity name blocks enabling',async()=>{
     const f=fixture();f.port.claim.mockResolvedValueOnce({...claim,username:'wrong'});
     await expect(f.coordinator.enable(request)).rejects.toThrow('BINDING_MISMATCH');
     expect(f.broker.enableIdentity).not.toHaveBeenCalled();expect(f.port.uncertain).toHaveBeenCalledTimes(1);
   });
-  test('un confirm SQL incierto no repite enable y marca la operacion incierta',async()=>{
+  test('an uncertain SQL confirm does not repeat enable and marks the operation uncertain',async()=>{
     const f=fixture();f.port.confirm.mockRejectedValueOnce(new Error('SQL COMMIT timeout'));
     await expect(f.coordinator.enable(request)).rejects.toThrow('RECONCILIATION');
     expect(f.broker.enableIdentity).toHaveBeenCalledTimes(1); expect(f.port.uncertain).toHaveBeenCalledTimes(1);

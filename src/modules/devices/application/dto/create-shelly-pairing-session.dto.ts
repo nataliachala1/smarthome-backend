@@ -3,14 +3,14 @@ import { IsIn, IsString, IsUUID, Length, Matches } from 'class-validator';
 
 export class CreateShellyPairingSessionDto {
   @ApiProperty({
-    description: 'UUID estable para reintentar esta misma creación.',
+    description: 'Stable UUID to retry this same creation.',
   })
   @IsUUID()
   requestId!: string;
 
   @ApiProperty({
     description:
-      'Token aleatorio generado y conservado por el móvil; el servidor solo almacena su hash.',
+      'Random token generated and kept by the mobile app; the server only stores its hash.',
     minLength: 43,
     maxLength: 128,
   })
@@ -21,7 +21,7 @@ export class CreateShellyPairingSessionDto {
 
   @ApiProperty({
     description:
-      'LAN para Shelly ya conectado a la red local; AP para equipo nuevo. BLE no está habilitado.',
+      'LAN for a Shelly already connected to the local network; AP for a new device. BLE is not enabled.',
     enum: ['LAN', 'AP'],
     example: 'LAN',
   })

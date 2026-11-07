@@ -18,7 +18,7 @@ function harness(rows: unknown[] = [{ confirmed: true }]) {
 }
 
 describe('PgMqttPreparedConfirmationPort / exclusivamente SQL 027', () => {
-  it('invoca solo la funcion parametrizada y confirma true', async () => {
+  it('invokes only the parameterized function and confirms true', async () => {
     const { port, query } = harness();
     await expect(port.confirm(input)).resolves.toBeUndefined();
     expect(query).toHaveBeenCalledTimes(1);
@@ -30,7 +30,7 @@ describe('PgMqttPreparedConfirmationPort / exclusivamente SQL 027', () => {
   });
 
   it.each(['operationId', 'leaseToken', 'identityId'] as const)(
-    'rechaza %s invalido antes de consultar', async (field) => {
+    'rejects an invalid %s before querying', async (field) => {
       const { port, query } = harness();
       await expect(port.confirm({ ...input, [field]: 'malformed' }))
         .rejects.toThrow('MQTT_PREPARED_CONFIRM_INPUT_INVALID');
@@ -39,7 +39,7 @@ describe('PgMqttPreparedConfirmationPort / exclusivamente SQL 027', () => {
   );
 
   it.each(['username', 'clientId', 'roleName'] as const)(
-    'rechaza %s que no corresponda a la identidad', async (field) => {
+    'rejects a %s that does not match the identity', async (field) => {
       const { port, query } = harness();
       await expect(port.confirm({ ...input, [field]: 'other' }))
         .rejects.toThrow('MQTT_PREPARED_CONFIRM_BINDING_INVALID');
@@ -48,7 +48,7 @@ describe('PgMqttPreparedConfirmationPort / exclusivamente SQL 027', () => {
   );
 
   it.each([
-    { caseName: 'sin filas', rows: [] },
+    { caseName: 'no rows', rows: [] },
     { caseName: 'confirmacion falsa', rows: [{ confirmed: false }] },
     { caseName: 'multiples filas', rows: [{ confirmed: true }, { confirmed: true }] },
     { caseName: 'confirmacion no booleana', rows: [{ confirmed: 'true' }] },
@@ -58,7 +58,7 @@ describe('PgMqttPreparedConfirmationPort / exclusivamente SQL 027', () => {
       .rejects.toThrow('MQTT_PREPARED_CONFIRM_RESPONSE_INVALID');
   });
 
-  it('trata fallo SQL o timeout como estado incierto', async () => {
+  it('treats a SQL failure or timeout as an uncertain state', async () => {
     const { port, query } = harness();
     query.mockRejectedValueOnce(new Error('secret-database-message'));
     await expect(port.confirm(input)).rejects.toThrow('MQTT_PREPARED_CONFIRM_OUTCOME_UNKNOWN');

@@ -35,7 +35,7 @@ export class DeviceOfflineWatcherService
   onModuleInit(): void {
     if (this.timeoutSeconds <= 0 || this.intervalSeconds <= 0) {
       this.logger.warn(
-        'Device offline watcher deshabilitado por configuración inválida',
+        'Device offline watcher disabled because of an invalid configuration',
       );
       return;
     }
@@ -92,7 +92,7 @@ export class DeviceOfflineWatcherService
     }
 
     this.logger.warn(
-      `Dispositivos ONLINE vencidos detectados: ${devices.length}`,
+      `Expired ONLINE devices detected: ${devices.length}`,
     );
 
     for (const device of devices) {
@@ -116,7 +116,7 @@ export class DeviceOfflineWatcherService
       });
 
       this.logger.warn(
-        `Dispositivo marcado OFFLINE: ${device.manufacturer_device_id}`,
+        `Device marked OFFLINE: ${device.manufacturer_device_id}`,
       );
 
       const recipients = await this.findHomeRealtimeRecipients(

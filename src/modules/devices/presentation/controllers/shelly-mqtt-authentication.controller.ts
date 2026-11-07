@@ -25,7 +25,7 @@ export class ShellyMqttAuthenticationController {
   @Header('Vary', 'Authorization, X-Pairing-Token')
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   @ApiOperation({
-    summary: 'Solicitar desafío MQTT Shelly y confirmar únicamente evidencia persistida',
+    summary: 'Request a Shelly MQTT challenge and confirm only persisted evidence',
   })
   async confirm(
     @CurrentUser() user: AuthenticatedUser,

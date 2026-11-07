@@ -44,9 +44,9 @@ export class HomeConsumptionController {
   @Get('summary')
   @ApiOperation({
     summary:
-      'Consultar resumen del hogar: OWNER/MEMBER completo; GUEST solo energía y período',
+      'Get the home summary: full for OWNER/MEMBER; energy and period only for GUEST',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiQuery({
     name: 'from',
     required: false,
@@ -59,13 +59,13 @@ export class HomeConsumptionController {
   })
   @ApiOkResponse({
     description:
-      'OWNER/MEMBER reciben estadísticas. GUEST recibe homeId, from, to y totalEnergyDeltaKwh.',
+      'OWNER/MEMBER receive statistics. GUEST receives homeId, from, to and totalEnergyDeltaKwh.',
   })
   @ApiBadRequestResponse({
-    description: 'UUID o rango de fechas inválido',
+    description: 'Invalid UUID or date range',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   async summaryByHome(
     @CurrentUser() user: AuthenticatedUser,
@@ -82,9 +82,9 @@ export class HomeConsumptionController {
 
   @Get('daily')
   @ApiOperation({
-    summary: 'Consultar consumo diario del hogar para gráficas',
+    summary: 'Get the daily home consumption for charts',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiQuery({
     name: 'from',
     required: false,
@@ -96,13 +96,13 @@ export class HomeConsumptionController {
     description: 'Fecha final en formato ISO',
   })
   @ApiOkResponse({
-    description: 'Consumo del hogar agrupado por día',
+    description: 'Home consumption grouped by day',
   })
   @ApiBadRequestResponse({
-    description: 'UUID o rango de fechas inválido',
+    description: 'Invalid UUID or date range',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   async dailyByHome(
     @CurrentUser() user: AuthenticatedUser,
@@ -119,9 +119,9 @@ export class HomeConsumptionController {
 
   @Get()
   @ApiOperation({
-    summary: 'Consultar historial de consumo del hogar: OWNER o MEMBER',
+    summary: 'Get the home consumption history: OWNER or MEMBER',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiQuery({
     name: 'from',
     required: false,
@@ -135,16 +135,16 @@ export class HomeConsumptionController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Cantidad máxima de registros, entre 1 y 200',
+    description: 'Maximum number of records, between 1 and 200',
   })
   @ApiOkResponse({
-    description: 'Lecturas históricas de consumo del hogar',
+    description: 'Historical consumption readings of the home',
   })
   @ApiBadRequestResponse({
-    description: 'UUID, fechas o límite inválidos',
+    description: 'Invalid UUID, dates or limit',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   async listByHome(
     @CurrentUser() user: AuthenticatedUser,

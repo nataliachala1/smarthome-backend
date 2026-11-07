@@ -174,7 +174,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     return { action, sessions, secrets, broker, runtime, settings, input };
   }
 
-  it('entrega una identidad individual al OWNER sin depender de la aprobacion del laboratorio', async () => {
+  it('hands an individual identity to the OWNER without depending on lab approval', async () => {
     const f = fixture();
     const result = await f.action.authorize(f.input);
 
@@ -215,7 +215,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     )).toBe(true);
   });
 
-  it('requiere OWNER antes de leer el sobre SQL', async () => {
+  it('requires OWNER before reading the SQL envelope', async () => {
     const f = fixture();
     f.sessions.assertCanManageHome.mockRejectedValue(new Error('OWNER_REQUIRED'));
     await expect(f.action.authorize(f.input)).rejects.toThrow('OWNER_REQUIRED');
@@ -223,7 +223,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     expect(f.secrets.load).not.toHaveBeenCalled();
   });
 
-  it('rechaza sesiones expiradas antes de cargar secretos', async () => {
+  it('rejects expired sessions before loading secrets', async () => {
     const f = fixture({
       sessionBefore: {
         ...session,
@@ -235,7 +235,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     expect(f.secrets.load).not.toHaveBeenCalled();
   });
 
-  it('no admite respuesta del sobre expirada ni para otra operacion', async () => {
+  it('does not accept an expired envelope response or one for another operation', async () => {
     const expired = fixture({
       envelope: encryptedEnvelope({
         expiresAt: new Date(Date.now() - 1_000).toISOString(),
@@ -254,7 +254,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
       .rejects.toThrow('MQTT_BOOTSTRAP_BINDING_INVALID');
   });
 
-  it('aisla el endpoint publico de la CA interna y de la CA administrativa', async () => {
+  it('isolates the public endpoint from the internal CA and the administrative CA', async () => {
     for (const settings of [
       { publicBrokerUrl: 'mqtts://mosquitto-dev:8883' },
       { publicCaFile: '/run/secrets/mosquitto-dev-ca.pem' },
@@ -266,7 +266,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     }
   });
 
-  it('acepta solo una CA raiz incluida en el trust store publico de Node', async () => {
+  it('accepts only a root CA included in Node\'s public trust store', async () => {
     const f = fixture();
     writeFileSync(publicCaFile, 'NOT_A_CERTIFICATE', 'utf8');
     await expect(f.action.authorize(f.input))
@@ -275,7 +275,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     writeFileSync(publicCaFile, PUBLIC_CA, 'utf8');
   });
 
-  it('no lee secretos en Production funcional ni con pairing desactivado', async () => {
+  it('does not read secrets in functional Production or with pairing disabled', async () => {
     const f = fixture();
     process.env.APP_ENV = 'production';
     await expect(f.action.authorize(f.input))
@@ -289,7 +289,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     expect(f.secrets.load).not.toHaveBeenCalled();
   });
 
-  it('requiere la aprobacion de laboratorio solo en local-dev', async () => {
+  it('requires lab approval only in local-dev', async () => {
     process.env.NODE_ENV = 'development';
     process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP = 'true';
     const f = fixture({
@@ -314,7 +314,7 @@ describe('Bootstrap MQTT VPS DEV - authorization, TLS y secreto individual', () 
     expect(f.sessions.get).toHaveBeenCalledTimes(1);
   });
 
-  it('vuelve a autorizar hogar y sesion antes de descifrar y entregar', async () => {
+  it('authorizes home and session again before decrypting and handing out', async () => {
     const f = fixture({
       sessionAfter: { ...session, status: 'CANCELLED' },
     });

@@ -1,4 +1,4 @@
-// Jest ejecuta esta suite como CommonJS; no debe cargar @nestjs/config (ESM) en runtime.
+// Jest runs this suite as CommonJS; it must not load @nestjs/config (ESM) at runtime.
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -140,7 +140,7 @@ describe('MosquittoDynamicSecurityProvider safety', () => {
     expect(command).not.toHaveBeenCalledWith('disableClient', expect.anything());
   });
 
-  it('confirma el estado posterior antes de aceptar disableClient', async () => {
+  it('confirms the later state before accepting disableClient', async () => {
     const provider = make({});
     const command = jest.spyOn(provider as never, 'command')
       .mockResolvedValueOnce({ client: {
@@ -169,8 +169,8 @@ describe('MosquittoDynamicSecurityProvider safety', () => {
 });
 
 /**
- * Verifica el CONNACK, no solo el resultado de mosquitto_pub.
- * El password aleatorio no se imprime ni se guarda en disco.
+ * Verifies the CONNACK, not only the result of mosquitto_pub.
+ * The random password is neither printed nor written to disk.
  */
 async function canAuthenticateInLab(
   username: string,
@@ -211,7 +211,7 @@ async function canAuthenticateInLab(
   });
 }
 
-// Prueba con broker real opcional: correr UNICAMENTE con el laboratorio aislado.
+// Optional test with a real broker: run it ONLY with the isolated lab.
 const live = process.env.MQTT_DYNSEC_RUN_LAB_TEST === 'true' ? describe : describe.skip;
 live('MosquittoDynamicSecurityProvider lab integration', () => {
   it('reads the disabled lab identity through the broker control API', async () => {
@@ -227,8 +227,8 @@ live('MosquittoDynamicSecurityProvider lab integration', () => {
   });
 
   it('prepares, activates and revokes a unique lab identity', async () => {
-    // Este test ESCRIBE en el broker; bloquear cualquier destino diferente
-    // del laboratorio local, incluso si alguien lo ejecuta por accidente.
+    // This test WRITES to the broker; block any target other than
+    // the local lab, even if someone runs it by accident.
     if (
       process.env.MQTT_DYNSEC_ADMIN_URL !== 'mqtt://127.0.0.1:1885' ||
       process.env.NODE_ENV === 'production'
@@ -262,8 +262,8 @@ live('MosquittoDynamicSecurityProvider lab integration', () => {
       ],
     };
 
-    // Después de la creación, la identidad debe permanecer bloqueada.
-    // En caso de fallo, la limpieza vuelve a deshabilitarla.
+    // After creation, the identity must stay locked.
+    // On failure, the cleanup disables it again.
     try {
       await provider.prepareDisabled(request);
       await expect(provider.inspectIdentity(username)).resolves.toMatchObject({
@@ -290,9 +290,9 @@ live('MosquittoDynamicSecurityProvider lab integration', () => {
       });
       expect(await canAuthenticateInLab(username, clientId, password)).toBe(false);
     } finally {
-      // Se conserva la identidad deshabilitada como evidencia en laboratorio.
-      // Si no existe, no hay nada que revocar. Un fallo de broker NO equivale
-      // a ausencia confirmada y no debe ocultarse.
+      // The disabled identity is kept as lab evidence.
+      // If it does not exist, there is nothing to revoke. A broker failure is NOT
+      // a confirmed absence and must not be hidden.
       const snapshot = await provider.inspectIdentity(username);
       if (snapshot && !snapshot.disabled) {
         await provider.disableIdentity(username);

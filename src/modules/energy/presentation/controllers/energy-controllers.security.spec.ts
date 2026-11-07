@@ -9,12 +9,12 @@ import { HomeEnergyGoalsController } from './home-energy-goals.controller';
 import { HomeEnergySummaryController } from './home-energy-summary.controller';
 import { HomeEnergyTariffsController } from './home-energy-tariffs.controller';
 
-describe('Controladores de energía: autenticación obligatoria', () => {
+describe('Energy controllers: authentication is mandatory', () => {
   it.each([
     ['HomeEnergyTariffsController', HomeEnergyTariffsController],
     ['HomeEnergyGoalsController', HomeEnergyGoalsController],
     ['HomeEnergySummaryController', HomeEnergySummaryController],
-  ])('%s exige JwtAuthGuard en todas sus rutas', (_name, controller) => {
+  ])('%s requires JwtAuthGuard on every route', (_name, controller) => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, controller) as
       unknown[] | undefined;
 

@@ -11,7 +11,7 @@ const OPERATION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TOKEN = 'a'.repeat(43);
 
 describe('ShellyMqttBootstrapController', () => {
-  it('acepta el request VPS sin exigir el header exclusivo del laboratorio', async () => {
+  it('accepts the VPS request without requiring the lab-only header', async () => {
     const result = { phase: 'PROVISIONING_AUTHORIZED', mqttAuthenticated: false };
     const action = { authorize: jest.fn().mockResolvedValue(result) };
     const controller = new ShellyMqttBootstrapController(action as never);
@@ -35,7 +35,7 @@ describe('ShellyMqttBootstrapController', () => {
     });
   });
 
-  it('sanitiza errores internos sin propagar secretos ni mensajes SQL', async () => {
+  it('sanitizes internal errors without propagating secrets or SQL messages', async () => {
     const action = {
       authorize: jest.fn().mockRejectedValue(
         new Error('private broker password or SQL detail'),

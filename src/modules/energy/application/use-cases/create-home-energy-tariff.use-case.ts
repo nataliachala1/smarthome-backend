@@ -15,8 +15,8 @@ export interface CreateHomeEnergyTariffInput {
 }
 
 /**
- * Registra una nueva vigencia de tarifa. Las tarifas históricas no se editan:
- * un cambio de precio siempre es un INSERT con otra fecha de vigencia.
+ * Records a new tariff effective period. Historical tariffs are not edited:
+ * a price change is always an INSERT with another effective date.
  */
 @Injectable()
 export class CreateHomeEnergyTariffUseCase {

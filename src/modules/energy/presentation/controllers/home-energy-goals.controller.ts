@@ -38,7 +38,7 @@ import { ParseEnergyMonthPipe } from '../pipes/parse-energy-month.pipe';
 @ApiTags('energy')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+@ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
 @ApiUnauthorizedResponse({ description: 'JWT ausente, vencido o revocado' })
 export class HomeEnergyGoalsController {
   constructor(
@@ -49,13 +49,13 @@ export class HomeEnergyGoalsController {
   @Get()
   @ApiOperation({
     summary:
-      'Presupuesto y meta del mes (OWNER o MEMBER autorizado); goal null si no hay configuración',
+      'Budget and target of the month (OWNER or authorized MEMBER); goal is null when not configured',
   })
   @ApiOkResponse({ type: MonthHomeEnergyGoalResponse })
-  @ApiBadRequestResponse({ description: 'UUID o mes inválidos' })
+  @ApiBadRequestResponse({ description: 'Invalid UUID or month' })
   @ApiForbiddenResponse({
     description:
-      'Sin permiso de detalle de consumo (GUEST, sin membresía o sin view_consumption)',
+      'No consumption detail permission (GUEST, no membership or no view_consumption)',
   })
   async getByMonth(
     @CurrentUser() user: AuthenticatedUser,
@@ -72,17 +72,17 @@ export class HomeEnergyGoalsController {
   @Put(':month')
   @ApiOperation({
     summary:
-      'Crear o reemplazar presupuesto y meta del mes (solo OWNER de hogar activo). Idempotente',
+      'Create or replace the month budget and target (active home OWNER only). Idempotent',
   })
   @ApiParam({ name: 'month', description: 'Mes YYYY-MM', example: '2026-11' })
   @ApiOkResponse({ type: HomeEnergyGoalResponse })
   @ApiBadRequestResponse({
     description:
-      'Mes o decimales inválidos, campo omitido, o presupuesto y meta ambos null',
+      'Invalid month or decimals, missing field, or budget and target both null',
   })
-  @ApiForbiddenResponse({ description: 'Solo el OWNER de un hogar activo' })
+  @ApiForbiddenResponse({ description: 'Only the OWNER of an active home' })
   @ApiConflictResponse({
-    description: 'Escritura simultánea del mismo mes; reintentar',
+    description: 'Concurrent write of the same month; retry',
   })
   async upsert(
     @CurrentUser() user: AuthenticatedUser,

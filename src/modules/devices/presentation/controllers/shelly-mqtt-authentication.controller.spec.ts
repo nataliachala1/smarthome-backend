@@ -38,7 +38,7 @@ describe('ShellyMqttAuthenticationController', () => {
 
   afterAll(() => { process.env = originalEnv; });
 
-  it('el móvil solo dispara la prueba; el backend recibe la sesión/token/operación', async () => {
+  it('the mobile app only triggers the proof; the backend receives the session/token/operation', async () => {
     const result = {
       phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED',
       mqttAuthenticated: true,
@@ -60,7 +60,7 @@ describe('ShellyMqttAuthenticationController', () => {
     });
   });
 
-  it('ignora la información de dispositivo que un cliente pudiera falsear', async () => {
+  it('ignores device information that a client could forge', async () => {
     action.confirm.mockResolvedValueOnce({
       phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED',
       mqttAuthenticated: true,
@@ -85,7 +85,7 @@ describe('ShellyMqttAuthenticationController', () => {
     });
   });
 
-  it('mantiene apagado el endpoint sin el opt-in específico del worker', async () => {
+  it('keeps the endpoint off without the specific worker opt-in', async () => {
     process.env.SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED = 'false';
     (selectShellyMqttProviderPlan as jest.Mock).mockReturnValue({
       vpsAuthWorker: false,
@@ -97,7 +97,7 @@ describe('ShellyMqttAuthenticationController', () => {
     expect(action.confirm).not.toHaveBeenCalled();
   });
 
-  it('no expone detalles del broker o de SQL si el resultado es incierto', async () => {
+  it('does not expose broker or SQL details when the result is uncertain', async () => {
     action.confirm.mockRejectedValueOnce(new Error('private SQL password detail'));
     try {
       await controller.confirm(

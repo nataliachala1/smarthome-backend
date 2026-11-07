@@ -34,7 +34,7 @@ export class ResendActivationUseCase {
 
     const user = await this.userRepository.findByEmail(email);
 
-    // Respuesta deliberadamente genérica.
+    // Deliberately generic response.
     if (!user || user.status !== UserStatus.PENDING) {
       return { sent: true };
     }

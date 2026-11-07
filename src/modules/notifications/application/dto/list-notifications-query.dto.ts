@@ -7,7 +7,7 @@ export class ListNotificationsQueryDto {
   @IsIn(['UNREAD', 'READ', 'DISMISSED'])
   @ApiPropertyOptional({
     enum: ['UNREAD', 'READ', 'DISMISSED'],
-    description: 'Estado de la notificación',
+    description: 'Notification status',
     example: 'UNREAD',
   })
   status?: 'UNREAD' | 'READ' | 'DISMISSED';
@@ -18,7 +18,7 @@ export class ListNotificationsQueryDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Cantidad máxima de notificaciones a retornar',
+    description: 'Maximum number of notifications to return',
     minimum: 1,
     maximum: 100,
     default: 20,

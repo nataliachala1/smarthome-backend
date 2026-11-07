@@ -38,12 +38,12 @@ describe('MQTT revocation PostgreSQL gate', () => {
     vpsUrl().replace('/smarthome_dev', '/smarthome'),
     `${vpsUrl()}?sslmode=disable`,
     `postgresql://smarthome_mqtt_revoke_dev_login:short@smart-home-smarthomepostgresdev-vrmtpz:5432/smarthome_dev`,
-  ])('rechaza configuración VPS de revocación insegura', (url) => {
+  ])('rejects an insecure VPS revocation configuration', (url) => {
     expect(() => parseMqttRevocationConnection(url, 'vps-dev-tls', 'production'))
       .toThrow(/MQTT_REVOCATION_DATABASE_(URL_INVALID|TARGET_NOT_ALLOWED)/);
   });
 
-  it('mantiene modo local solo en loopback, development y sin TLS', () => {
+  it('keeps local mode only on loopback, development and without TLS', () => {
     const url = `postgresql://smarthome_mqtt_revoke_dev_login:${pass}@127.0.0.1:5432/smarthome`;
     expect(parseMqttRevocationConnection(url, 'local-dev', 'development').options.ssl)
       .toBe(false);
@@ -51,7 +51,7 @@ describe('MQTT revocation PostgreSQL gate', () => {
       .toThrow('MQTT_REVOCATION_DATABASE_TARGET_NOT_ALLOWED');
   });
 
-  it('solo permite las cuatro llamadas SQL de revocación', () => {
+  it('allows only the four revocation SQL calls', () => {
     expect(isAllowedMqttRevocationQuery(
       ' SELECT devices.fn_finish_mqtt_pairing_revocation(\n      $1::uuid,$2::uuid,$3::text,$4::text) AS finished ',
       ['a', 'b', 'c', 'd'],
@@ -65,7 +65,7 @@ describe('MQTT revocation PostgreSQL gate', () => {
     )).toBe(false);
   });
 
-  it('falla cerrado si los permisos son excesivos o incompletos', async () => {
+  it('fails closed if the permissions are excessive or incomplete', async () => {
     const pool = { query: jest.fn().mockResolvedValue({ rows: [privilegeRow] }), end: jest.fn() };
     const gateway = new MqttRevocationPgGateway(pool, {
       role: privilegeRow.role, database: privilegeRow.database,

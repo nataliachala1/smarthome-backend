@@ -13,7 +13,7 @@ export class ProvisionShellyDeviceDto {
   @ApiProperty({
     example: '10.3.234.97',
     description:
-      'Dirección IPv4 local del dispositivo Shelly',
+      'Local IPv4 address of the Shelly device',
   })
   @IsString()
   @IsNotEmpty()
@@ -23,7 +23,7 @@ export class ProvisionShellyDeviceDto {
   @ApiProperty({
     example: 'Lámpara sala',
     description:
-      'Nombre que el usuario desea asignar al dispositivo',
+      'Name the user wants to give the device',
     maxLength: 100,
   })
   @IsString()

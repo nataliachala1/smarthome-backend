@@ -52,14 +52,14 @@ export class ShellyDiscoveryService {
     this.logger.log(
       discoveryInterface
         ? `Buscando Shelly por mDNS usando interfaz ${discoveryInterface}`
-        : 'Buscando Shelly por mDNS usando interfaz automática',
+        : 'Searching for a Shelly through mDNS using the automatic interface',
     );
 
     /*
-     * bonjour-service utiliza multicast-dns.
+     * bonjour-service uses multicast-dns.
      *
-     * La librería soporta "interface" en ejecución,
-     * pero sus tipos TypeScript no la declaran.
+     * The library supports "interface" at runtime,
+     * but its TypeScript types do not declare it.
      */
     const bonjourOptions =
       (
@@ -145,11 +145,11 @@ export class ShellyDiscoveryService {
       );
 
     /*
-     * En algunas redes Wi-Fi la primera consulta
-     * multicast puede perderse.
+     * On some Wi-Fi networks the first multicast
+     * query can be lost.
      *
-     * Reintentamos mientras la ventana de
-     * descubrimiento permanece abierta.
+     * It is retried while the discovery
+     * window stays open.
      */
     const updateInterval =
       setInterval(
