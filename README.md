@@ -9,11 +9,11 @@ API del proyecto SmartHome: autenticación y sesiones, hogares y roles, disposit
 La documentación central del proyecto está en el repositorio [smart-home-doc](https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc):
 
 - Índice general: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/README.md>
-- Arquitectura del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/10-arquitectura/backend.md>
+- Arquitectura del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/10-arquitectura/backend/arquitectura.md>
 - Contrato MQTT: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/20-contratos/mqtt/contrato-mqtt.md>
 - Informes históricos del backend: <https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/blob/main/docs/99-archivo/backend/README.md>
 
-Los detalles de implementación (seguridad HU09, MQTT con TLS, consumo, pairing Shelly, roles y permisos) se mantienen en la carpeta [`docs/`](docs) de este repositorio.
+Los detalles de implementación (seguridad HU09, MQTT con TLS, consumo, pairing Shelly, roles y permisos) están en [smart-home-doc: backend](https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/tree/main/docs/10-arquitectura/backend).
 
 ## Stack
 
@@ -28,6 +28,10 @@ Los detalles de implementación (seguridad HU09, MQTT con TLS, consumo, pairing 
 - Node.js 22 (la versión que usa el CI) y npm
 - PostgreSQL
 - Variables de entorno: ver [`.env.example`](.env.example). No subir valores reales al repositorio.
+
+## Levantar el sistema completo
+
+El sistema completo (PostgreSQL con migraciones y usuarios de prueba, Mailpit, backend y web) se levanta con un solo comando desde [smart-home-doc/deploy](https://github.com/Kevin-Stiven-Lopez-Amaya404/smart-home-doc/tree/main/deploy). Usuarios de prueba (contraseña `SmartHome#2026`): `admin@example.com` (SYSTEM_ADMIN), `owner@example.com`, `member@example.com` y `guest@example.com`.
 
 ## Instalación y ejecución local
 
@@ -44,6 +48,7 @@ npm run start:dev
 |---|---|
 | `npm run lint` | ESLint |
 | `npm test` | Pruebas unitarias (Jest) |
+| `npm run test:cov` | Pruebas unitarias con cobertura; falla por debajo del 70 % de líneas y sentencias |
 | `npm run test:e2e` | Pruebas e2e (`test/jest-e2e.json`); algunas requieren PostgreSQL |
 | `npm run build` | Compilación |
 | `npm run start:prod` | Ejecuta la compilación (`dist/src/main.js`) |
@@ -51,7 +56,7 @@ npm run start:dev
 
 ## API
 
-Las rutas HTTP usan el prefijo `api/v1`. Swagger se publica en `/api/docs` cuando está habilitado: por defecto fuera de producción, o con `SWAGGER_ENABLED=true`. No asumir que está disponible públicamente en producción.
+Las rutas HTTP usan el prefijo `api/v1`. El rol global SYSTEM_ADMIN dispone de `GET /api/v1/admin/users` y `GET /api/v1/admin/audit-events`. Swagger se publica en `/api/docs` cuando está habilitado: por defecto fuera de producción, o con `SWAGGER_ENABLED=true`. No asumir que está disponible públicamente en producción.
 
 ## Despliegue
 
@@ -62,6 +67,10 @@ Las rutas HTTP usan el prefijo `api/v1`. Swagger se publica en `/api/docs` cuand
 ## Advertencia sobre el control de dispositivos
 
 `COMMAND_PUBLISHED` significa que la orden se publicó. **No** significa que se verificó físicamente el relé.
+
+## Uso de inteligencia artificial
+
+Ver [AI_USAGE.md](AI_USAGE.md).
 
 ## Contribución
 

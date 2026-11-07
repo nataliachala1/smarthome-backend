@@ -284,7 +284,7 @@ describeDatabase(
       expect(complete.body).toMatchObject({
         unpricedReadings: 0,
         costComplete: true,
-        // + 0.1×500 (10-oct)
+        // + 0.1×500 (Oct 10)
         estimatedCostCop: '1850.00',
         partialCostCop: '1850.00',
       });
