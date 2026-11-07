@@ -22,17 +22,17 @@ function setup(found: unknown = device(), canView = true) {
   return { useCase: new ControlDeviceUseCase(repository as never, publisher), repository, publisher };
 }
 
-const input = { userId: 'u1', homeId: 'h1', deviceId: 'dev1', command: 'ON' as const };
+const input = { userId: 'u1', homeId: 'h1', deviceId: 'dev1', command: 'TURN_ON' as const };
 
 describe('ControlDeviceUseCase', () => {
   it('publishes the command for an online MQTT device', async () => {
     const { useCase, publisher } = setup();
-    await expect(useCase.execute(input)).resolves.toEqual({ id: 'dev1', command: 'ON', status: 'COMMAND_PUBLISHED' });
+    await expect(useCase.execute(input)).resolves.toEqual({ id: 'dev1', command: 'TURN_ON', status: 'COMMAND_PUBLISHED' });
     expect(publisher.publishControlCommand).toHaveBeenCalledWith({
       homeId: 'h1',
       deviceId: 'dev1',
       manufacturerDeviceId: 'shelly1pmg4-abc',
-      action: 'ON',
+      action: 'TURN_ON',
     });
   });
 

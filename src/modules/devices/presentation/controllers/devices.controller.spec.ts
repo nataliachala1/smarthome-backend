@@ -54,12 +54,12 @@ describe('DevicesController', () => {
     const { controller, cases } = setup();
     await controller.activate(user, homeId, deviceId);
     await controller.deactivate(user, homeId, deviceId);
-    await controller.control(user, homeId, deviceId, { command: 'OFF' } as never);
+    await controller.control(user, homeId, deviceId, { command: 'TURN_OFF' } as never);
     await controller.delete(user, homeId, deviceId);
     const ids = { userId: 'u1', homeId, deviceId };
     expect(cases.activate.execute).toHaveBeenCalledWith(ids);
     expect(cases.deactivate.execute).toHaveBeenCalledWith(ids);
-    expect(cases.control.execute).toHaveBeenCalledWith({ ...ids, command: 'OFF' });
+    expect(cases.control.execute).toHaveBeenCalledWith({ ...ids, command: 'TURN_OFF' });
     expect(cases.remove.execute).toHaveBeenCalledWith(ids);
   });
 });
