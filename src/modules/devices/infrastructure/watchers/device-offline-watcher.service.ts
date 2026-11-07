@@ -41,7 +41,7 @@ export class DeviceOfflineWatcherService
     }
 
     this.logger.log(
-      `Device offline watcher activo. timeout=${this.timeoutSeconds}s interval=${this.intervalSeconds}s`,
+      `Device offline watcher active. timeout=${this.timeoutSeconds}s interval=${this.intervalSeconds}s`,
     );
 
     this.timer = setInterval(() => {
