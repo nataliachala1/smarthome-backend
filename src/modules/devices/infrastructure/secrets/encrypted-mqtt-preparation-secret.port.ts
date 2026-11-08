@@ -6,9 +6,9 @@ import {
 import type { MqttPreparationSecretPort } from '../../application/services/shelly-mqtt-preparation.coordinator';
 
 /**
- * Envelope persistido por una implementacion PostgreSQL/Vault posterior.
- * NO debe almacenarse junto con la clave ni enviarse a endpoints HTTP.
- * Todos los campos base64url estan codificados sin padding.
+ * Envelope persisted by a later PostgreSQL/Vault implementation.
+ * It must NOT be stored together with the key or sent to HTTP endpoints.
+ * Every base64url field is encoded without padding.
  */
 export interface EncryptedMqttPreparationSecretRecord {
   readonly operationId: string;
@@ -20,9 +20,9 @@ export interface EncryptedMqttPreparationSecretRecord {
 }
 
 /**
- * El repositorio concreto debe imponer UNIQUE(operationId), durabilidad y
- * permisos minimos. insertIfAbsent debe ser atomico y no sobrescribir.
- * Esta interfaz NO habilita su uso con almacenamiento volatil en produccion.
+ * The concrete repository must enforce UNIQUE(operationId), durability and
+ * minimum permissions. insertIfAbsent must be atomic and must not overwrite.
+ * This interface does NOT enable its use with volatile storage in production.
  */
 export interface MqttPreparationSecretRepository {
   load(operationId: string, leaseToken: string): Promise<EncryptedMqttPreparationSecretRecord | null>;
@@ -31,7 +31,7 @@ export interface MqttPreparationSecretRepository {
 
 export interface MqttSecretEncryptionKey {
   readonly id: string;
-  /** Clave AES-256 de 32 bytes, obtenida de KMS/Vault o gestor de secretos. */
+  /** 32-byte AES-256 key, obtained from KMS/Vault or a secrets manager. */
   readonly material: Buffer;
 }
 
@@ -57,8 +57,8 @@ function aad(operationId: string, keyId: string): Buffer {
 }
 
 /**
- * Motor criptografico: no crea tablas, no conecta a SQL y no activa pairing.
- * La durabilidad real depende de MqttPreparationSecretRepository.
+ * Cryptographic engine: creates no tables, does not connect to SQL and does not enable pairing.
+ * Real durability depends on MqttPreparationSecretRepository.
  */
 export class EncryptedMqttPreparationSecretPort implements MqttPreparationSecretPort {
   private readonly key: Buffer;
@@ -72,7 +72,7 @@ export class EncryptedMqttPreparationSecretPort implements MqttPreparationSecret
         !Buffer.isBuffer(encryptionKey.material) || encryptionKey.material.length !== 32) {
       throw new Error('MQTT_PREPARATION_SECRET_KEY_INVALID');
     }
-    // Copia privada: mutar el Buffer del llamador no cambia la clave activa.
+    // Private copy: mutating the caller's Buffer does not change the active key.
     this.key = Buffer.from(encryptionKey.material);
     this.keyId = encryptionKey.id;
   }
@@ -116,8 +116,8 @@ export class EncryptedMqttPreparationSecretPort implements MqttPreparationSecret
     if (typeof operationId !== 'string' || !UUID.test(operationId)) {
       throw new Error('MQTT_PREPARATION_SECRET_OPERATION_INVALID');
     }
-    // Impedir lecturas e inserciones sin un lease cercado de la operacion.
-    // La autoridad real se valida de nuevo en PostgreSQL bajo bloqueo de fila.
+    // Prevent reads and inserts without a fenced lease of the operation.
+    // The real authority is validated again in PostgreSQL under a row lock.
     if (typeof leaseToken !== 'string' || !UUID.test(leaseToken)) {
       throw new Error('MQTT_PREPARATION_SECRET_LEASE_INVALID');
     }
@@ -130,16 +130,16 @@ export class EncryptedMqttPreparationSecretPort implements MqttPreparationSecret
       const inserted = await this.repository.insertIfAbsent(candidate, leaseToken);
       if (typeof inserted !== 'boolean') throw new Error('BAD_REPOSITORY_REPLY');
 
-      // Lectura autoritativa incluso tras INSERT: detecta perdida de durabilidad.
+      // Authoritative read even after INSERT: detects a loss of durability.
       const stored = await this.repository.load(operationId, leaseToken);
       if (!stored) throw new Error('MISSING_AFTER_INSERT');
       const persistedPassword = this.decrypt(operationId, stored);
       if (inserted && persistedPassword !== generated) throw new Error('INSERT_MISMATCH');
       return persistedPassword;
     } catch {
-      // Nunca propagar SQL, ciphertext, keyIds o mensajes internos al llamador.
-      // Un INSERT cuyo resultado es incierto debe recuperarse mediante relectura
-      // posterior: no se asume ausencia y no se hace reintento ciego.
+      // Never propagate SQL, ciphertext, keyIds or internal messages to the caller.
+      // An INSERT with an uncertain result must be recovered through a later
+      // re-read: absence is not assumed and there is no blind retry.
       throw new Error('MQTT_PREPARATION_SECRET_UNAVAILABLE');
     }
   }

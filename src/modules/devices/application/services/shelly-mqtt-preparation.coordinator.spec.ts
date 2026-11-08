@@ -33,7 +33,7 @@ function harness() {
 }
 
 describe('ShellyMqttPreparationCoordinator / solo preparado deshabilitado', () => {
-  it('prepara -> verifica 5 ACL -> confirma SQL 027 sin habilitar ni exponer password', async () => {
+  it('prepares -> verifies 5 ACLs -> confirms SQL 027 without enabling or exposing the password', async () => {
     const h = harness();
     const order: string[] = [];
     h.claim.mockImplementation(() => { order.push('claim'); return Promise.resolve({ operationId, leaseToken: token }); });
@@ -59,7 +59,7 @@ describe('ShellyMqttPreparationCoordinator / solo preparado deshabilitado', () =
     expect(JSON.stringify({ phase: 'PREPARED_DISABLED_ONLY', operationId })).not.toContain('test-only-secret-password');
   });
 
-  it('no confirma si el almacen de secretos no proporciona una clave valida', async () => {
+  it('does not confirm if the secrets store does not provide a valid key', async () => {
     const h = harness();
     h.issueOrLoadForOperation.mockResolvedValueOnce('weak');
     await expect(h.coordinator.prepare(reservation))
@@ -68,7 +68,7 @@ describe('ShellyMqttPreparationCoordinator / solo preparado deshabilitado', () =
     expect(h.confirm).not.toHaveBeenCalled();
   });
 
-  it('nunca toca el broker si reclamar lease falla', async () => {
+  it('never touches the broker if claiming the lease fails', async () => {
     const h = harness();
     h.claim.mockRejectedValueOnce(new Error('lease expired'));
     await expect(h.coordinator.prepare(reservation)).rejects.toThrow('lease expired');
@@ -76,7 +76,7 @@ describe('ShellyMqttPreparationCoordinator / solo preparado deshabilitado', () =
     expect(h.confirm).not.toHaveBeenCalled();
   });
 
-  it('rechaza reserva invalida antes del claim', async () => {
+  it('rejects an invalid reservation before the claim', async () => {
     const h = harness();
     await expect(h.coordinator.prepare({ ...reservation, plan: {
       ...reservation.plan, acls: reservation.plan.acls.slice(0, 4),

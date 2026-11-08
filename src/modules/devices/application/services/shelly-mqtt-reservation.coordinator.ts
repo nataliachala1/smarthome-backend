@@ -8,11 +8,11 @@ import {
 } from './shelly-mqtt-acl.policy';
 
 /**
- * Implementar este puerto SOLO con una conexion/rol especializado.
- * La funcion SQL devices.fn_reserve_mqtt_pairing_operation(uuid,text,uuid,text)
- * NO es ejecutable con la credencial normal smarthome_app.
+ * Implement this port ONLY with a specialized connection/role.
+ * The SQL function devices.fn_reserve_mqtt_pairing_operation(uuid,text,uuid,text)
+ * is NOT executable with the regular smarthome_app credential.
  *
- * IMPORTANTE: esta interfaz NO concede permiso para habilitar el broker.
+ * IMPORTANT: this interface does NOT grant permission to enable the broker.
  */
 export interface MqttPrivilegedReservationPort {
   reserve(
@@ -36,13 +36,13 @@ export interface ShellyReservationRequest {
   readonly userId: string;
   readonly homeId: string;
   readonly sessionId: string;
-  /** Token opaco del propietario: nunca se registra ni se devuelve. */
+  /** Opaque owner token: never logged or returned. */
   readonly sessionToken: string;
 }
 
 /**
- * Resultado INTERNO, nunca DTO publico. No transporta credenciales.
- * El valor RESERVED_ONLY no representa autenticacion ni habilitacion.
+ * INTERNAL result, never a public DTO. Carries no credentials.
+ * The RESERVED_ONLY value does not represent authentication or enabling.
  */
 export interface ShellyInternalReservation {
   readonly phase: 'RESERVED_ONLY';
@@ -59,9 +59,9 @@ const UUID_V4 =
 const SUPPORTED_MODEL = 'S4SW-001P16EU';
 
 /**
- * La reserva SQL valida OWNER, sesión e identidad reportada; el scope llega
- * derivado del contrato backend. No llama Mosquitto, crea dispositivos ni
- * entrega passwords.
+ * The SQL reservation validates OWNER, session and the reported identity; the scope comes
+ * derived from the backend contract. Does not call Mosquitto, create devices or
+ * return passwords.
  */
 export class ShellyMqttReservationCoordinator {
   constructor(
@@ -79,8 +79,8 @@ export class ShellyMqttReservationCoordinator {
       this.runtime.topics, physicalId, this.runtime.config.switchId,
     );
 
-    // Solo envía sessionId y scope DERIVADO de la sesion autorizada.
-    // Nunca acepta manufacturerId, ACL o scope introducidos por HTTP.
+    // Only sends sessionId and the scope DERIVED from the authorized session.
+    // Never accepts a manufacturerId, ACL or scope supplied through HTTP.
     // Never pass the raw pairing token to the privileged database role.
     // The digest is an authentication proof and must not be logged.
     const tokenProofHash = createHash('sha256')
@@ -93,9 +93,9 @@ export class ShellyMqttReservationCoordinator {
     );
     this.assertBrokerBinding(reserved);
 
-    // La funcion privilegiada bloquea/valida su fila SQL. Adicionalmente
-    // repetimos la autorizacion OWNER+token, ya que el acceso puede cambiar
-    // entre dos conexiones o dos transacciones diferentes.
+    // The privileged function locks/validates its SQL row. In addition,
+    // the OWNER+token authorization is repeated, since access can change
+    // between two connections or two different transactions.
     const after = await this.sessions.get(
       input.userId, input.homeId, input.sessionId, input.sessionToken,
     );
@@ -137,8 +137,8 @@ export class ShellyMqttReservationCoordinator {
   }
 
   private assertBrokerBinding(reservation: Awaited<ReturnType<MqttPrivilegedReservationPort['reserve']>>): void {
-    // La SQL 022 genera los tres nombres a partir de id_mqtt_identity.
-    // Comprobamos esa correspondencia sin conceder acceso al broker.
+    // SQL 022 generates the three names from id_mqtt_identity.
+    // That correspondence is checked without granting broker access.
     if (!UUID_V4.test(reservation.operationId) || !UUID_V4.test(reservation.identityId)) {
       throw new Error('SHELLY_MQTT_RESERVATION_BINDING_INVALID');
     }

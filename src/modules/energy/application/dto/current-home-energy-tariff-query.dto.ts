@@ -9,7 +9,7 @@ import {
 export class CurrentHomeEnergyTariffQueryDto {
   @ApiPropertyOptional({
     description:
-      'Fecha local YYYY-MM-DD (año 2000–2099) para la que se busca la tarifa vigente. Por defecto, hoy en America/Bogota',
+      'Local date YYYY-MM-DD (year 2000–2099) to find the effective tariff. Defaults to today in America/Bogota',
     example: '2026-11-01',
     format: 'date',
   })

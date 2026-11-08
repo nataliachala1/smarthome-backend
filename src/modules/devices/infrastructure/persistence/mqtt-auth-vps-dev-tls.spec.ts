@@ -4,9 +4,9 @@ import {
   parseMqttAuthPgConnection,
 } from './mqtt-authentication-pg.gateway';
 
-describe('MQTT rpc/auth VPS DEV: aislamiento y TLS obligatorio', () => {
+describe('MQTT rpc/auth VPS DEV: isolation and mandatory TLS', () => {
   const host = 'smart-home-smarthomepostgresdev-vrmtpz';
-  const password = 'A'.repeat(43); // contraseña sintética, nunca real
+  const password = 'A'.repeat(43); // synthetic password, never a real one
   const make = (
     role: string,
     database = 'smarthome_dev',
@@ -17,14 +17,14 @@ describe('MQTT rpc/auth VPS DEV: aislamiento y TLS obligatorio', () => {
 
   it.each([
     ['rpc', rpc], ['confirm', confirm],
-  ] as const)('admite %s solo con rol propio y TLS verificado', (kind, role) => {
+  ] as const)('accepts %s only with its own role and verified TLS', (kind, role) => {
     const target = parseMqttAuthPgConnection(make(role), kind, 'vps-dev-tls', 'production');
     expect(target.role).toBe(role);
     expect(target.database).toBe('smarthome_dev');
     expect(target.options.ssl).toEqual({ rejectUnauthorized: true, minVersion: 'TLSv1.2' });
   });
 
-  it('rechaza intercambio de las cuentas rpc y confirmer', () => {
+  it('rejects swapping the rpc and confirmer accounts', () => {
     expect(() => parseMqttAuthPgConnection(make(confirm), 'rpc', 'vps-dev-tls', 'production'))
       .toThrow('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
     expect(() => parseMqttAuthPgConnection(make(rpc), 'confirm', 'vps-dev-tls', 'production'))
@@ -40,19 +40,19 @@ describe('MQTT rpc/auth VPS DEV: aislamiento y TLS obligatorio', () => {
       .toThrow('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
   });
 
-  it('rechaza parámetros de URL que podrían sobreescribir TLS', () => {
+  it('rejects URL parameters that could override TLS', () => {
     for (const extra of ['?sslmode=disable', '?sslrootcert=anything', '#fragment']) {
       expect(() => parseMqttAuthPgConnection(`${make(rpc)}${extra}`, 'rpc', 'vps-dev-tls', 'production'))
         .toThrow('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
     }
   });
 
-  it('rechaza VPS DEV bajo NODE_ENV distinto de production', () => {
+  it('rejects VPS DEV under a NODE_ENV other than production', () => {
     expect(() => parseMqttAuthPgConnection(make(rpc), 'rpc', 'vps-dev-tls', 'development'))
       .toThrow('MQTT_AUTH_PG_TARGET_NOT_ALLOWED');
   });
 
-  it('conserva local-dev exclusivamente en development, sin TLS', () => {
+  it('keeps local-dev exclusively in development, without TLS', () => {
     const local = make(rpc, 'smarthome', '127.0.0.1');
     expect(parseMqttAuthPgConnection(local, 'rpc', 'local-dev', 'development').options.ssl)
       .toBe(false);
@@ -60,7 +60,7 @@ describe('MQTT rpc/auth VPS DEV: aislamiento y TLS obligatorio', () => {
       .toThrow('MQTT_AUTH_PG_DEV_ONLY');
   });
 
-  it('valida que la base reportada en el chequeo de privilegios sea la correcta', async () => {
+  it('validates that the database reported in the privilege check is the right one', async () => {
     const result = {
       login: rpc, db: 'smarthome', member_rpc: true, member_confirm: false,
       usable_rpc: true, usable_confirm: false, memberships: 1,

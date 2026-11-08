@@ -36,10 +36,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
- * La respuesta Shelly a una llamada MQTT se publica en <src>/rpc.
- * Usamos <scope>/events como src para que la respuesta vuelva al tópico
- * <scope>/events/rpc, ya permitido por la ACL individual existente.
- * No aceptar topics/control/identificadores proporcionados por el móvil.
+ * The Shelly response to an MQTT call is published to <src>/rpc.
+ * <scope>/events is used as src so the response comes back on the topic
+ * <scope>/events/rpc, already allowed by the existing individual ACL.
+ * Do not accept topics/control/identifiers provided by the mobile app.
  */
 export function createShellyRpcChallenge(
   plan: ShellyMqttAclPlan,
@@ -83,11 +83,11 @@ export function createShellyRpcChallenge(
 }
 
 /**
- * Verificación puramente estructural de un candidato de respuesta RPC.
- * No demuestra, por sí sola, autoría criptográfica, posesión física ni
- * que el emisor MQTT fue la conexión observada en getClient.
- * El coordinador debe consumir el desafío una sola vez y correlacionar
- * un getClient fresco dentro del lease vigente, ANTES de cambiar estados.
+ * Purely structural verification of an RPC response candidate.
+ * On its own it does not prove cryptographic authorship, physical possession or
+ * that the MQTT sender was the connection observed in getClient.
+ * The coordinator must consume the challenge only once and correlate
+ * a fresh getClient within the current lease, BEFORE changing states.
  */
 export function matchesShellyRpcChallenge(
   challenge: ShellyRpcChallenge,
@@ -136,9 +136,9 @@ export function matchesShellyRpcChallenge(
 }
 
 /**
- * Comprobación SEPARADA de configuración y conexiones del broker.
- * En Mosquitto 2.1+ getClient informa connections. No prueba que una
- * respuesta RPC haya sido enviada por una conexión específica.
+ * SEPARATE check of the broker configuration and connections.
+ * In Mosquitto 2.1+ getClient reports connections. It does not prove that an
+ * RPC response was sent by a specific connection.
  */
 export function matchesBrokerIdentityConnection(
   snapshot: MqttBrokerIdentitySnapshot | null,

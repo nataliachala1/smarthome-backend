@@ -5,7 +5,7 @@ import {
   isEnergyMonth,
 } from '../../application/utils/energy-month';
 
-/** Valida un parámetro de ruta YYYY-MM (año 2000–2099, mes 01..12). */
+/** Validates a YYYY-MM route parameter (year 2000–2099, month 01..12). */
 @Injectable()
 export class ParseEnergyMonthPipe implements PipeTransform<unknown, string> {
   transform(value: unknown): string {

@@ -4,7 +4,7 @@ export function getTrustedProxies(value: unknown): string[] | false {
   if (value === undefined || value === '') return false;
   const error = () =>
     new Error(
-      'TRUSTED_PROXY_CIDRS debe contener IP o CIDR explícitos y válidos.',
+      'TRUSTED_PROXY_CIDRS must contain explicit and valid IPs or CIDRs.',
     );
   if (typeof value !== 'string') throw error();
 

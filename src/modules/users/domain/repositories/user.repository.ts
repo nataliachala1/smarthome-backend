@@ -1,12 +1,6 @@
 import { User } from '../entities/user.entity';
 import { UserStatus } from '../entities/user-status.enum';
 
-export interface CreateUserData {
-  name: string;
-  email: string;
-  passwordHash: string;
-}
-
 export interface UpdateUserProfileData {
   name?: string;
 }
@@ -16,7 +10,6 @@ export abstract class UserRepository {
 
   abstract findById(id: string): Promise<User | null>;
 
-  abstract create(data: CreateUserData): Promise<User>;
 
   abstract activate(id: string): Promise<void>;
 

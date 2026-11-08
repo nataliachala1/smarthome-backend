@@ -44,9 +44,9 @@ const goalRow = {
 };
 
 /**
- * Simula PrismaRlsService y la transacción. Registra en orden cada consulta
- * de autorización y cada acceso a tablas para verificar que la autorización
- * ocurre primero y dentro de la misma transacción.
+ * Simulates PrismaRlsService and the transaction. Records, in order, every
+ * authorization query and every table access to verify that authorization
+ * happens first and inside the same transaction.
  */
 function fakeDatabase(allowed: boolean) {
   const events: string[] = [];
@@ -109,8 +109,8 @@ const uniqueViolation = Object.assign(new Error('unique violation'), {
   code: 'P2002',
 });
 
-describe('Seguridad del repositorio de tarifas', () => {
-  it('lectura: usa el contexto RLS del usuario y valida fn_can_read_detail antes de consultar', async () => {
+describe('Tariff repository security', () => {
+  it('read: uses the user\'s RLS context and validates fn_can_read_detail before querying', async () => {
     const db = fakeDatabase(true);
     const repository = new PrismaHomeEnergyTariffRepository(db.rls);
 
@@ -129,7 +129,7 @@ describe('Seguridad del repositorio de tarifas', () => {
     expect(db.authorizationValues).toEqual([HOME_ID, HOME_ID]);
   });
 
-  it('lectura denegada (GUEST, sin membresía o sin view_consumption): 403 sin tocar la tabla', async () => {
+  it('denied read (GUEST, no membership or no view_consumption): 403 without touching the table', async () => {
     const db = fakeDatabase(false);
     const repository = new PrismaHomeEnergyTariffRepository(db.rls);
 
@@ -144,7 +144,7 @@ describe('Seguridad del repositorio de tarifas', () => {
     expect(db.tx.home_energy_tariff.findFirst).not.toHaveBeenCalled();
   });
 
-  it('escritura: valida fn_can_manage_home (solo OWNER) antes de insertar', async () => {
+  it('write: validates fn_can_manage_home (OWNER only) before inserting', async () => {
     const db = fakeDatabase(true);
     const repository = new PrismaHomeEnergyTariffRepository(db.rls);
 
@@ -161,7 +161,7 @@ describe('Seguridad del repositorio de tarifas', () => {
     ]);
   });
 
-  it('escritura denegada (MEMBER o GUEST): 403 sin insertar', async () => {
+  it('denied write (MEMBER or GUEST): 403 without inserting', async () => {
     const db = fakeDatabase(false);
     const repository = new PrismaHomeEnergyTariffRepository(db.rls);
 
@@ -175,7 +175,7 @@ describe('Seguridad del repositorio de tarifas', () => {
     expect(db.tx.home_energy_tariff.create).not.toHaveBeenCalled();
   });
 
-  it('42501 (privilegio o política RLS) en LECTURA se reporta como lectura denegada, no como escritura', async () => {
+  it('42501 (privilege or RLS policy) on READ is reported as a denied read, not as a write', async () => {
     const repository = new PrismaHomeEnergyTariffRepository(
       failingDatabase(postgresPermissionDenied),
     );
@@ -188,7 +188,7 @@ describe('Seguridad del repositorio de tarifas', () => {
     ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
   });
 
-  it('42501 en ESCRITURA se reporta como gestión denegada; P2002 como duplicado', async () => {
+  it('42501 on WRITE is reported as denied management; P2002 as a duplicate', async () => {
     await expect(
       new PrismaHomeEnergyTariffRepository(
         failingDatabase(postgresPermissionDenied),
@@ -212,7 +212,7 @@ describe('Seguridad del repositorio de tarifas', () => {
 });
 
 describe('Seguridad del repositorio de objetivos mensuales', () => {
-  it('lectura: valida fn_can_read_detail antes de consultar el mes', async () => {
+  it('read: validates fn_can_read_detail before querying the month', async () => {
     const db = fakeDatabase(true);
     const repository = new PrismaHomeEnergyGoalRepository(db.rls);
 
@@ -226,7 +226,7 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     ]);
   });
 
-  it('lectura denegada: 403 sin consultar la tabla', async () => {
+  it('denied read: 403 without querying the table', async () => {
     const db = fakeDatabase(false);
     const repository = new PrismaHomeEnergyGoalRepository(db.rls);
 
@@ -236,7 +236,7 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     expect(db.tx.home_energy_goal.findUnique).not.toHaveBeenCalled();
   });
 
-  it('escritura: valida fn_can_manage_home y solo actualiza presupuesto y meta', async () => {
+  it('write: validates fn_can_manage_home and only updates budget and target', async () => {
     const db = fakeDatabase(true);
     const repository = new PrismaHomeEnergyGoalRepository(db.rls);
 
@@ -259,7 +259,7 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     );
   });
 
-  it('escritura denegada (MEMBER o GUEST): 403 sin escribir', async () => {
+  it('denied write (MEMBER or GUEST): 403 without writing', async () => {
     const db = fakeDatabase(false);
     const repository = new PrismaHomeEnergyGoalRepository(db.rls);
 
@@ -274,7 +274,7 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     expect(db.tx.home_energy_goal.upsert).not.toHaveBeenCalled();
   });
 
-  it('42501 en LECTURA del mes se reporta como lectura denegada', async () => {
+  it('42501 on the month READ is reported as a denied read', async () => {
     await expect(
       new PrismaHomeEnergyGoalRepository(
         failingDatabase(postgresPermissionDenied),
@@ -282,7 +282,7 @@ describe('Seguridad del repositorio de objetivos mensuales', () => {
     ).rejects.toBeInstanceOf(EnergyReadAccessDeniedError);
   });
 
-  it('42501 en ESCRITURA se reporta como gestión denegada; P2002 como escritura simultánea', async () => {
+  it('42501 on WRITE is reported as denied management; P2002 as a concurrent write', async () => {
     await expect(
       new PrismaHomeEnergyGoalRepository(
         failingDatabase(postgresPermissionDenied),

@@ -12,7 +12,7 @@ import { CurrentUser } from '../../../auth/presentation/http/decorators/current-
 import type { AuthenticatedUser } from '../../../auth/domain/types/authenticated-user.type';
 import { ShellyMqttBootstrapAction } from '../../application/services/shelly-mqtt-bootstrap.action';
 import { ShellyMqttOperationRequestDto } from '../../application/dto/shelly-mqtt-operation-request.dto';
-/** VPS DEV bootstrap se habilita solo con vpsPairing; lab sigue local-only. */
+/** VPS DEV bootstrap is enabled only with vpsPairing; the lab stays local-only. */
 @Controller('api/v1/homes/:homeId/shelly/setup-sessions/:sessionId/mqtt')
 @UseGuards(JwtAuthGuard)
 @ApiTags('shelly')
@@ -28,14 +28,14 @@ export class ShellyMqttBootstrapController {
   @ApiHeader({
     name: 'X-SmartHome-Lab-Network-Approval',
     required: false,
-    description: 'Solo requerido por el perfil de laboratorio local; ignorado en VPS DEV.',
+    description: 'Required only by the local lab profile; ignored in VPS DEV.',
   })
   @ApiOperation({
-    summary: 'Entregar por tiempo breve la identidad individual ya preparada',
-    description: 'Requiere JWT, OWNER del hogar, token de pairing y operacion PREPARED_DISABLED. No confirma autenticacion MQTT.',
+    summary: 'Briefly hand out the already prepared individual identity',
+    description: 'Requires a JWT, the home OWNER, a pairing token and a PREPARED_DISABLED operation. Does not confirm MQTT authentication.',
   })
   @ApiServiceUnavailableResponse({
-    description: 'Autorizacion, TLS, broker o estado incierto; no reintentar ciegamente.',
+    description: 'Authorization, TLS, broker or uncertain state; do not retry blindly.',
   })
   async authorize(@CurrentUser() user:AuthenticatedUser,
     @Param('homeId',ParseUUIDPipe) homeId:string,

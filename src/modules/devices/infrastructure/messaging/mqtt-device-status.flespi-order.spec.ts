@@ -55,7 +55,7 @@ function setup(newer: boolean) {
 describe('flespi SQL036: orden temporal', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('evento atrasado se descarta antes de escribir estado o energia', async () => {
+  it('a late event is discarded before writing status or energy', async () => {
     const c = setup(true);
     await c.subscriber.handleStatusMessage(topic, frame(1793388600.5, 25));
     expect(c.tx.$queryRaw).toHaveBeenCalledTimes(2); // lock + watermark
@@ -64,7 +64,7 @@ describe('flespi SQL036: orden temporal', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('evento posterior se escribe tras bloquear y consultar SQL036', async () => {
+  it('a newer event is written after locking and querying SQL036', async () => {
     const c = setup(false);
     await c.subscriber.handleStatusMessage(topic, frame(1793388603.5, 25));
     expect(c.tx.$queryRaw).toHaveBeenCalledTimes(4);
@@ -73,7 +73,7 @@ describe('flespi SQL036: orden temporal', () => {
     expect(c.emitToUser).toHaveBeenCalledWith('user-1', 'device.status.updated', expect.anything());
   });
 
-  it('RPC con origen pero sin potencia registra watermark sin crear consumo', async () => {
+  it('an RPC with an origin but no power records the watermark without creating consumption', async () => {
     const c = setup(false);
     jest.spyOn(c.subscriber, 'parsePayload').mockReturnValue({
       connectivityStatus: 'ONLINE', isOn: true,

@@ -1,14 +1,14 @@
 import { percentage, roundDecimal } from '../services/decimal-math';
 
-/** Datos crudos del mes leídos de la BD (todos los decimales como texto exacto). */
+/** Raw month data read from the DB (every decimal as exact text). */
 export interface EnergyMonthFacts {
-  /** Lecturas del período visibles para el usuario. */
+  /** Readings of the period visible to the user. */
   readingsCount: number;
-  /** Lecturas con consumo distinto de 0 sin tarifa vigente en su fecha local. */
+  /** Readings with non-zero consumption and no tariff effective on their local date. */
   unpricedReadings: number;
-  /** SUM(energy_delta_kwh) de todas las lecturas del período. */
+  /** SUM(energy_delta_kwh) of every reading of the period. */
   totalKwh: string;
-  /** SUM(energy_delta_kwh * tarifa de su fecha) de las lecturas con tarifa. */
+  /** SUM(energy_delta_kwh * tariff of its date) of the readings with a tariff. */
   pricedCostCop: string;
   monthlyBudgetCop: string | null;
   targetKwh: string | null;
@@ -23,17 +23,17 @@ export interface HomeEnergySummary {
   readingsCount: number;
   unpricedReadings: number;
   totalKwh: string;
-  /** true si todas las lecturas con consumo tienen tarifa aplicable. */
+  /** true when every reading with consumption has an applicable tariff. */
   costComplete: boolean;
-  /** Costo estimado del mes; null si costComplete es false. */
+  /** Estimated cost of the month; null when costComplete is false. */
   estimatedCostCop: string | null;
-  /** Costo de las lecturas que sí tienen tarifa (igual al estimado si está completo). */
+  /** Cost of the readings that do have a tariff (equal to the estimate when complete). */
   partialCostCop: string;
   monthlyBudgetCop: string | null;
   targetKwh: string | null;
-  /** estimatedCostCop / monthlyBudgetCop * 100; null sin presupuesto o sin costo completo. */
+  /** estimatedCostCop / monthlyBudgetCop * 100; null without a budget or a complete cost. */
   budgetUsagePercent: string | null;
-  /** totalKwh / targetKwh * 100; null sin meta. Puede superar 100. */
+  /** totalKwh / targetKwh * 100; null without a target. May exceed 100. */
   targetUsagePercent: string | null;
   currency: 'COP';
 }
@@ -48,10 +48,10 @@ export interface BuildHomeEnergySummaryInput {
 }
 
 /**
- * Reglas de negocio del resumen (SQL034, sección 5 del requerimiento):
- * - no se presenta un costo parcial como total: si falta tarifa en alguna lectura
- *   con consumo, estimatedCostCop es null y se informa la cobertura;
- * - los porcentajes no se recortan a 100 %.
+ * Business rules of the summary (SQL034, section 5 of the requirement):
+ * - a partial cost is never presented as the total: if a reading with consumption
+ *   has no tariff, estimatedCostCop is null and the coverage is reported;
+ * - percentages are not capped at 100 %.
  */
 export function buildHomeEnergySummary(
   input: BuildHomeEnergySummaryInput,

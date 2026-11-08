@@ -309,8 +309,8 @@ export class PrismaDeviceRepository implements DeviceRepository {
                   'ACTIVE',
 
                 /*
-                * La conectividad real la
-                * actualizará MQTT.
+                * MQTT will update the real
+                * connectivity.
                 */
                 connectivity_status:
                   'OFFLINE',

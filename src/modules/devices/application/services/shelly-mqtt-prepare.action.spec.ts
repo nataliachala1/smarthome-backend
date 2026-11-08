@@ -17,8 +17,8 @@ const reserved = {
   plan: {manufacturerDeviceId:'shelly-id',topicScope:'scope',acls:[]},
 };
 
-describe('50410 accion de preparacion de MQTT, sin broker ni base de datos', () => {
-  it('solo expone estado e ID de operacion; jamas password ni identidad a Android', async () => {
+describe('50410 MQTT preparation action, without broker or database', () => {
+  it('only exposes the state and operation ID; never a password or identity to Android', async () => {
     const reserve = jest.fn().mockResolvedValue(reserved);
     const prepare = jest.fn().mockResolvedValue({
       phase: 'PREPARED_DISABLED_ONLY', operationId: 'operation-test',
@@ -49,7 +49,7 @@ describe('50410 accion de preparacion de MQTT, sin broker ni base de datos', () 
     );
   });
 
-  it('rechaza un identificador de operacion incoherente', async () => {
+  it('rejects an inconsistent operation identifier', async () => {
     const action = new ShellyMqttPrepareAction(
       { reserve: jest.fn().mockResolvedValue(reserved) },
       { prepare: jest.fn().mockResolvedValue({ phase:'PREPARED_DISABLED_ONLY', operationId:'otro' }) },

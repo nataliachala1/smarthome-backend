@@ -11,7 +11,7 @@ import { currentMonthInBogota } from '../utils/bogota-date';
 export interface GetHomeEnergyGoalInput {
   userId: string;
   homeId: string;
-  /** Mes YYYY-MM; si no llega se usa el mes actual en America/Bogota. */
+  /** Month YYYY-MM; when missing, the current month in America/Bogota is used. */
   month?: string;
 }
 

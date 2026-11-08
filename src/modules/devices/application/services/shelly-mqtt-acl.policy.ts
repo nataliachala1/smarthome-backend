@@ -2,11 +2,11 @@ import type { MqttIdentityAcl } from '../../domain/services/mqtt-device-identity
 import { MqttTopicContract } from '../../infrastructure/messaging/mqtt-topic-contract';
 
 /**
- * Plan MQTT construido exclusivamente con los datos normalizados y reservados
- * por el backend. No representa autorización de un usuario ni prueba física.
+ * MQTT plan built exclusively from the data normalized and reserved
+ * by the backend. It is not a user authorization or a physical proof.
  *
- * Antes de llamar al broker, el orquestador debe comparar topicScope con el
- * valor reservado en devices.mqtt_pairing_operation y verificar la sesión OWNER.
+ * Before calling the broker, the orchestrator must compare topicScope with the
+ * value reserved in devices.mqtt_pairing_operation and verify the OWNER session.
  */
 export interface ShellyMqttAclPlan {
   readonly manufacturerDeviceId: string;
@@ -33,7 +33,7 @@ export function buildShellyMqttAclPlan(
     throw new Error('SHELLY_MQTT_SWITCH_ID_UNSUPPORTED');
   }
 
-  // shellyPrefix es el contrato MQTT compartido con control y telemetría.
+  // shellyPrefix is the MQTT contract shared with control and telemetry.
   const topicScope = topics.shellyPrefix(manufacturerDeviceId);
   const rpcTopic = topics.control(manufacturerDeviceId);
   if (rpcTopic !== `${topicScope}/rpc`) {
@@ -72,8 +72,8 @@ export function buildShellyMqttAclPlan(
 }
 
 /**
- * Evita que una reserva de un Shelly termine asignada a los tópicos de otro.
- * La reserva proviene de la función SQL privilegiada, no del teléfono.
+ * Prevents a reservation of one Shelly from being assigned to another's topics.
+ * The reservation comes from the privileged SQL function, not from the phone.
  */
 export function assertShellyMqttReservationScope(
   plan: ShellyMqttAclPlan,

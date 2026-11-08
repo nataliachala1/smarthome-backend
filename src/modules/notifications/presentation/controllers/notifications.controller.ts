@@ -38,10 +38,10 @@ export class NotificationsController {
 
   @Get('unread-count')
 @ApiOperation({
-  summary: 'Consultar cantidad de notificaciones no leídas',
+  summary: 'Get the number of unread notifications',
 })
 @ApiOkResponse({
-  description: 'Cantidad de notificaciones no leídas del usuario autenticado',
+  description: 'Number of unread notifications of the authenticated user',
 })
 async unreadCount(@CurrentUser() user: AuthenticatedUser) {
   return this.getUnreadNotificationsCountUseCase.execute({
@@ -51,7 +51,7 @@ async unreadCount(@CurrentUser() user: AuthenticatedUser) {
 
   @Get()
   @ApiOperation({
-    summary: 'Listar notificaciones del usuario autenticado',
+    summary: 'List the notifications of the authenticated user',
   })
   @ApiQuery({
     name: 'status',
@@ -61,10 +61,10 @@ async unreadCount(@CurrentUser() user: AuthenticatedUser) {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Cantidad máxima de registros, entre 1 y 100',
+    description: 'Maximum number of records, between 1 and 100',
   })
   @ApiOkResponse({
-    description: 'Notificaciones del usuario autenticado',
+    description: 'Notifications of the authenticated user',
   })
   async list(
     @CurrentUser() user: AuthenticatedUser,
@@ -78,10 +78,10 @@ async unreadCount(@CurrentUser() user: AuthenticatedUser) {
   }
    @Patch('read-all')
 @ApiOperation({
-  summary: 'Marcar todas las notificaciones no leídas como leídas',
+  summary: 'Mark every unread notification as read',
 })
 @ApiOkResponse({
-  description: 'Cantidad de notificaciones actualizadas',
+  description: 'Number of updated notifications',
 })
 async markAllAsRead(@CurrentUser() user: AuthenticatedUser) {
   return this.markAllNotificationsAsReadUseCase.execute({
@@ -91,15 +91,15 @@ async markAllAsRead(@CurrentUser() user: AuthenticatedUser) {
 
   @Patch(':notificationId/read')
 @ApiOperation({
-  summary: 'Marcar una notificación como leída',
+  summary: 'Mark a notification as read',
 })
 @ApiParam({
   name: 'notificationId',
-  description: 'UUID de la notificación',
+  description: 'Notification UUID',
   format: 'uuid',
 })
 @ApiOkResponse({
-  description: 'Notificación marcada como leída',
+  description: 'Notification marked as read',
 })
 @ApiNotFoundResponse({
   description: 'Notificación no encontrada',
@@ -118,15 +118,15 @@ async markAsRead(
 
 @Patch(':notificationId/dismiss')
 @ApiOperation({
-  summary: 'Descartar una notificación',
+  summary: 'Dismiss a notification',
 })
 @ApiParam({
   name: 'notificationId',
-  description: 'UUID de la notificación',
+  description: 'Notification UUID',
   format: 'uuid',
 })
 @ApiOkResponse({
-  description: 'Notificación descartada',
+  description: 'Notification dismissed',
 })
 @ApiNotFoundResponse({
   description: 'Notificación no encontrada',

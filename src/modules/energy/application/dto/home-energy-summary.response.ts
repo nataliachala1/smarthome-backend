@@ -15,14 +15,14 @@ export class HomeEnergySummaryResponse {
   @ApiProperty({
     example: '2026-11-01T05:00:00.000Z',
     format: 'date-time',
-    description: 'Inicio del mes en Bogotá (incluido)',
+    description: 'Start of the month in Bogota (included)',
   })
   from: string;
 
   @ApiProperty({
     example: '2026-12-01T05:00:00.000Z',
     format: 'date-time',
-    description: 'Inicio del mes siguiente en Bogotá (excluido)',
+    description: 'Start of the next month in Bogota (excluded)',
   })
   to: string;
 
@@ -31,20 +31,20 @@ export class HomeEnergySummaryResponse {
 
   @ApiProperty({
     example: 0,
-    description: 'Lecturas con consumo sin tarifa vigente en su fecha local',
+    description: 'Readings with consumption and no tariff effective on their local date',
   })
   unpricedReadings: number;
 
   @ApiProperty({
     example: '82.400000',
-    description: 'kWh del mes (6 decimales)',
+    description: 'kWh of the month (6 decimals)',
   })
   totalKwh: string;
 
   @ApiProperty({
     example: true,
     description:
-      'true si todas las lecturas con consumo tienen tarifa aplicable',
+      'true when every reading with consumption has an applicable tariff',
   })
   costComplete: boolean;
 
@@ -59,7 +59,7 @@ export class HomeEnergySummaryResponse {
 
   @ApiProperty({
     example: '78300.60',
-    description: 'Costo de las lecturas que sí tienen tarifa',
+    description: 'Cost of the readings that do have a tariff',
   })
   partialCostCop: string;
 
@@ -73,7 +73,7 @@ export class HomeEnergySummaryResponse {
     type: String,
     nullable: true,
     example: '65.25',
-    description: 'Costo estimado / presupuesto * 100 (puede superar 100)',
+    description: 'Estimated cost / budget * 100 (may exceed 100)',
   })
   budgetUsagePercent: string | null;
 
@@ -81,7 +81,7 @@ export class HomeEnergySummaryResponse {
     type: String,
     nullable: true,
     example: '65.92',
-    description: 'kWh del mes / meta * 100 (puede superar 100)',
+    description: 'kWh of the month / target * 100 (may exceed 100)',
   })
   targetUsagePercent: string | null;
 

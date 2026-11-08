@@ -106,9 +106,9 @@ describeDatabase(
           });
 
         /*
-         * Ejecutamos Prisma con el rol funcional
-         * para que PostgreSQL RLS participe
-         * realmente en las pruebas.
+         * Prisma runs with the functional role
+         * so that PostgreSQL RLS really takes part
+         * in the tests.
          */
         url.searchParams.set(
           'options',
@@ -182,9 +182,9 @@ describeDatabase(
             )
             .useValue({
               /*
-               * La autenticación se aísla.
-               * La autorización real se valida
-               * mediante NestJS + PostgreSQL RLS.
+               * Authentication is isolated.
+               * Real authorization is validated
+               * through NestJS + PostgreSQL RLS.
                */
               canActivate(
                 context:
@@ -282,7 +282,7 @@ describeDatabase(
         });
 
         /*
-         * Campos retirados del modelo.
+         * Fields removed from the model.
          */
         expect(
           result.body,

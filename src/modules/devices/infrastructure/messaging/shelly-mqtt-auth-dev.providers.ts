@@ -18,7 +18,7 @@ function requireMqttAuthDatabaseMode(): 'local-dev' | 'vps-dev-tls' | 'productio
 export const MQTT_RPC_AUTH_GATEWAY = Symbol('MQTT_RPC_AUTH_GATEWAY');
 export const MQTT_CONFIRM_AUTH_GATEWAY = Symbol('MQTT_CONFIRM_AUTH_GATEWAY');
 
-/** Solo conexiones SQL RPC y confirmacion. No registra transportes o workers. */
+/** Only RPC and confirmation SQL connections. Registers no transports or workers. */
 export const shellyMqttAuthPgDevProviders: Provider[] = [
   {
     provide: MQTT_RPC_AUTH_GATEWAY,
@@ -34,10 +34,10 @@ export const shellyMqttAuthPgDevProviders: Provider[] = [
       c.get<string>('MQTT_AUTH_DATABASE_URL'), 'confirm', requireMqttAuthDatabaseMode(),
     ),
   },
-  // El perfil DB-only termina aqui.
+  // The DB-only profile ends here.
 ];
 
-/** Worker local original; permanece sin timer ni ejecución automática. */
+/** Original local worker; stays without a timer or automatic execution. */
 export const shellyMqttAuthDevProviders: Provider[] = [
   ...shellyMqttAuthPgDevProviders,
   {

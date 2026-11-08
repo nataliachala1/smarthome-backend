@@ -29,16 +29,6 @@ export abstract class HomeRepository {
     data: UpdateHomeData,
   ): Promise<Home>;
 
-  abstract deactivate(
-  userId: string,
-  homeId: string,
-  ): Promise<Home>;
-
-  abstract reactivate(
-  userId: string,
-  homeId: string,
-  ): Promise<Home>;
-
   abstract deleteIfNoDevices(
   userId: string,
   homeId: string,

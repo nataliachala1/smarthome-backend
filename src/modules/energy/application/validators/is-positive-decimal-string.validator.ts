@@ -1,8 +1,8 @@
 import { ValidationOptions, registerDecorator } from 'class-validator';
 
 /**
- * Valida un decimal positivo enviado como texto que cabe en NUMERIC(precision, scale).
- * Rechaza números JSON, notación científica, comas, signos, NaN y exceso de decimales.
+ * Validates a positive decimal sent as text that fits in NUMERIC(precision, scale).
+ * Rejects JSON numbers, scientific notation, commas, signs, NaN and extra decimals.
  */
 export function isPositiveDecimalString(
   value: unknown,

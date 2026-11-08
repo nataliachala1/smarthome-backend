@@ -19,7 +19,7 @@ describe('UpsertHomeEnergyGoalDto', () => {
     await expect(errorsFor(body)).resolves.toEqual([]);
   });
 
-  it('acepta ambos null en el DTO (la regla "al menos uno" es de dominio)', async () => {
+  it('accepts both null in the DTO (the "at least one" rule belongs to the domain)', async () => {
     await expect(
       errorsFor({ monthlyBudgetCop: null, targetKwh: null }),
     ).resolves.toEqual([]);
@@ -35,7 +35,7 @@ describe('UpsertHomeEnergyGoalDto', () => {
   });
 
   it.each([['0'], ['-1'], ['1.123'], ['1000000000000'], [120000], ['1e5']])(
-    'rechaza el presupuesto %p',
+    'rejects the budget %p',
     async (monthlyBudgetCop) => {
       await expect(
         errorsFor({ monthlyBudgetCop, targetKwh: null }),
@@ -44,7 +44,7 @@ describe('UpsertHomeEnergyGoalDto', () => {
   );
 
   it.each([['0.000000'], ['1.1234567'], ['100000000'], [125]])(
-    'rechaza la meta %p',
+    'rejects the target %p',
     async (targetKwh) => {
       await expect(
         errorsFor({ monthlyBudgetCop: null, targetKwh }),

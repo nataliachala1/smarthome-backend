@@ -19,15 +19,15 @@ const enabled = () => ({
   MQTT_TOPIC_NAMESPACE: 'smarthome/dev/v1',
 });
 
-describe('VPS DEV: transporte MQTT TLS aislado sin endpoints', () => {
-  it('permite unicamente configuracion DEV explicita con TLS y namespace', () => {
+describe('VPS DEV: isolated MQTT TLS transport without endpoints', () => {
+  it('allows only an explicit DEV configuration with TLS and namespace', () => {
     const parsed = parseMqttConfig(enabled());
     expect(parsed.brokerUrl).toBe('mqtts://mosquitto-dev.internal:8883');
     expect(parsed.tls).toBe(true);
     expect(parsed.devicePrefix).toBe('smarthome/dev/v1/devices');
   });
 
-  it('hace visibles todos los flags al ConfigService del runtime MQTT', () => {
+  it('makes every flag visible to the ConfigService of the MQTT runtime', () => {
     expect(MQTT_SETTINGS).toEqual(expect.arrayContaining([
       'APP_ENV', 'DATABASE_URL', 'DATABASE_IOT_URL',
       'SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED',
@@ -46,7 +46,7 @@ describe('VPS DEV: transporte MQTT TLS aislado sin endpoints', () => {
     { DATABASE_URL: db('smarthome') },
     { DATABASE_IOT_URL: db('smarthome') },
     { DATABASE_URL: db('smarthome_dev', 'other-postgres') },
-  ])('rechaza activacion con parametros incompatibles: %j', (override) => {
+  ])('rejects enabling with incompatible parameters: %j', (override) => {
     expect(() => parseMqttConfig({ ...enabled(), ...override })).toThrow();
   });
 
@@ -61,18 +61,18 @@ describe('VPS DEV: transporte MQTT TLS aislado sin endpoints', () => {
     expect(() => parseMqttConfig({ ...enabled(), ...override })).toThrow();
   });
 
-  it('preserva MQTT apagado y sin cliente en VPS DEV PG-only', () => {
+  it('keeps MQTT off and without a client in VPS DEV PG-only', () => {
     const values = { ...enabled(), MQTT_ENABLED: 'false',
       SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'false' };
     expect(parseMqttConfig(values).brokerUrl).toBeUndefined();
   });
 
-  it('rechaza MQTT implícito si no hay bandera definida en VPS DEV', () => {
+  it('rejects implicit MQTT when no flag is defined in VPS DEV', () => {
     expect(() => parseMqttConfig({ ...enabled(), MQTT_ENABLED: undefined }))
       .toThrow('MQTT_VPS_DEV_EXPLICIT_FLAG_REQUIRED');
   });
 
-  it('preserva la configuracion MQTT tradicional fuera de APP_ENV DEV', () => {
+  it('keeps the traditional MQTT configuration outside APP_ENV DEV', () => {
     const values = { ...enabled(), APP_ENV: 'production',
       SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'false' };
     expect(parseMqttConfig(values).tls).toBe(true);

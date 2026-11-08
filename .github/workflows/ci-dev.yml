@@ -1,0 +1,54 @@
+
+name: Backend DEV - Continuous Integration
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smarthome-backend-dev-ci
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate backend development
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      MQTT_ENABLED: 'false'
+      SHELLY_MQTT_DEV_DI_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'false'
+      SHELLY_MQTT_VPS_DEV_AUTH_WORKER_ENABLED: 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit -p tsconfig.build.json
+
+      - name: Unit tests
+        run: npm run test:cov -- --runInBand
+
+      - name: Build NestJS
+        run: npm run build
+
+      - name: MQTT security tests
+        run: npm run test:e2e -- --runInBand --runTestsByPath test/mqtt-namespace-security.e2e-spec.ts

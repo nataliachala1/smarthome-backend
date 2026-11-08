@@ -37,7 +37,7 @@ const validReply = (c: ShellyRpcChallenge) => ({
   }),
 });
 
-describe('50414 desafio RPC del dispositivo MQTT autenticado, sin SQL/red', () => {
+describe('50414 RPC challenge of the authenticated MQTT device, without SQL/network', () => {
   it('solo confirma observacion; nunca marca CONNECTED ni registra equipo', async () => {
     const inspectIdentity = jest.fn().mockResolvedValue(snapshot);
     const exchange = jest.fn().mockImplementation((c: ShellyRpcChallenge) => Promise.resolve(validReply(c)));
@@ -57,7 +57,7 @@ describe('50414 desafio RPC del dispositivo MQTT autenticado, sin SQL/red', () =
     await expect(sut.observe({ plan, binding })).rejects.toThrow('BROKER_NOT_AUTHENTICATED');
     expect(exchange).not.toHaveBeenCalled();
   });
-  it('rechaza respuesta retenida y tambien una identidad diferente', async () => {
+  it('rejects a retained response and also a different identity', async () => {
     const inspectIdentity = jest.fn().mockResolvedValue(snapshot);
     const sut = new ShellyMqttBrokerProofCoordinator(
       { inspectIdentity }, { exchange: (c: ShellyRpcChallenge) => Promise.resolve({ ...validReply(c), retain: true }) },
@@ -69,7 +69,7 @@ describe('50414 desafio RPC del dispositivo MQTT autenticado, sin SQL/red', () =
     );
     await expect(wrong.observe({ plan, binding })).rejects.toThrow('BROKER_NOT_AUTHENTICATED');
   });
-  it('requiere conexion autenticada fresca DESPUES del RPC', async () => {
+  it('requires a fresh authenticated connection AFTER the RPC', async () => {
     const inspectIdentity = jest.fn()
       .mockResolvedValueOnce(snapshot)
       .mockResolvedValueOnce({ ...snapshot, authenticatedConnectionCount: 0 });
@@ -78,7 +78,7 @@ describe('50414 desafio RPC del dispositivo MQTT autenticado, sin SQL/red', () =
     );
     await expect(sut.observe({ plan, binding })).rejects.toThrow('BROKER_UNCERTAIN');
   });
-  it('propaga indisponibilidad del broker, sin inferir exito', async () => {
+  it('propagates broker unavailability without inferring success', async () => {
     const sut = new ShellyMqttBrokerProofCoordinator(
       { inspectIdentity: jest.fn().mockResolvedValue(snapshot) },
       { exchange: () => Promise.reject(new Error('broker caido')) },

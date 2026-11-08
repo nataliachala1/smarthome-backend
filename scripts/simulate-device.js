@@ -21,7 +21,7 @@ const client = mqtt.connect(brokerUrl, {
 client.on('connect', () => {
   console.log(`[SIM] Conectado a ${brokerUrl}`);
   console.log(`[SIM] Escuchando control en ${controlTopic}`);
-  console.log(`[SIM] Publicando estado en ${statusTopic}`);
+  console.log(`[SIM] Publishing status to ${statusTopic}`);
 
   client.subscribe(controlTopic, { qos: 1 }, (error) => {
     if (error) {
@@ -90,7 +90,7 @@ function publishStatus() {
 
   client.publish(statusTopic, JSON.stringify(status), { qos: 1 }, (error) => {
     if (error) {
-      console.error('[SIM] Error publicando estado:', error.message);
+      console.error('[SIM] Error publishing status:', error.message);
       return;
     }
 

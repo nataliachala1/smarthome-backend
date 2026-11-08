@@ -88,26 +88,26 @@ const vpsPairing = () => ({
   MQTT_PREPARATION_AES_KEY_ID: 'dev-mqtt-aes-v1',
 });
 
-describe('MQTT: seleccion segura de perfiles DI', () => {
-  it('mantiene desactivada la DI sin opt-in', () => {
+describe('MQTT: safe selection of DI profiles', () => {
+  it('keeps DI disabled without opt-in', () => {
     expect(selectShellyMqttDeploymentMode({ NODE_ENV: 'production' })).toBe('off');
     expect(() => requireShellyMqttDeploymentMode({ NODE_ENV: 'production' }))
       .toThrow('MQTT_DEV_DI_DISABLED');
   });
 
-  it('conserva local-dev solo para NODE_ENV development', () => {
+  it('keeps local-dev only for NODE_ENV development', () => {
     expect(selectShellyMqttDeploymentMode({
       NODE_ENV: 'development', SHELLY_MQTT_DEV_DI_ENABLED: 'true',
     })).toBe('local-dev');
   });
 
-  it('acepta el opt-in VPS DEV PG-only con ambas DB en DEV', () => {
+  it('accepts the VPS DEV PG-only opt-in with both DBs in DEV', () => {
     expect(selectShellyMqttDeploymentMode(vps())).toBe('vps-dev-tls');
     expect(requireShellyMqttDeploymentMode(vps())).toBe('vps-dev-tls');
   });
 
   it.each(['DATABASE_URL', 'DATABASE_IOT_URL'] as const)(
-    'impide %s conectada a smarthome de produccion', (key) => {
+    'prevents %s connected to the production smarthome DB', (key) => {
       expect(() => selectShellyMqttDeploymentMode({
         ...vps(), [key]: db('smarthome'),
       })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
@@ -126,7 +126,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       .toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
 
-  it('permite VPS DEV MQTT transport solo con su opt-in propio', () => {
+  it('allows the VPS DEV MQTT transport only with its own opt-in', () => {
     const env = { ...vps(), MQTT_ENABLED: 'true',
       SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'true' };
     expect(selectShellyMqttProviderPlan(env)).toMatchObject({
@@ -138,13 +138,13 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('no admite MQTT=true en VPS DEV sin autorizacion especifica de transporte', () => {
+  it('does not accept MQTT=true in VPS DEV without a specific transport authorization', () => {
     expect(() => selectShellyMqttDeploymentMode({
       ...vps(), MQTT_ENABLED: 'true',
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
 
-  it('impide confundir local-dev con perfil VPS activado', () => {
+  it('prevents confusing local-dev with an enabled VPS profile', () => {
     expect(() => selectShellyMqttDeploymentMode({
       NODE_ENV: 'development',
       SHELLY_MQTT_DEV_DI_ENABLED: 'true',
@@ -152,7 +152,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
 
-  it('rechaza URL mal formada sin exponerla en el error', () => {
+  it('rejects a malformed URL without exposing it in the error', () => {
     expect(() => selectShellyMqttDeploymentMode({
       ...vps(), DATABASE_URL: 'not-a-url',
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
@@ -174,7 +174,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('permite SQL RPC/auth en VPS solo con el segundo opt-in', () => {
+  it('allows SQL RPC/auth on VPS only with the second opt-in', () => {
     const env = { ...vps(), SHELLY_MQTT_AUTH_DEV_DI_ENABLED: 'true' };
     expect(selectShellyMqttProviderPlan(env)).toMatchObject({
       vpsPgOnly: true,
@@ -190,7 +190,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('mantiene el flujo local y no selecciona pairing VPS', () => {
+  it('keeps the local flow and does not select VPS pairing', () => {
     const env = {
       NODE_ENV: 'development',
       SHELLY_MQTT_DEV_DI_ENABLED: 'true',
@@ -212,7 +212,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('no registra providers adicionales en Production sin opt-in', () => {
+  it('registers no additional providers in Production without opt-in', () => {
     expect(selectShellyMqttProviderPlan({
       NODE_ENV: 'production', APP_ENV: 'production',
       SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: 'true',
@@ -231,7 +231,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('activa vpsPairing solo si el worker de revocacion y la configuración están preparados', () => {
+  it('enables vpsPairing only if the revocation worker and the configuration are ready', () => {
     expect(selectShellyMqttProviderPlan(vpsPairing())).toEqual({
       mode: 'vps-dev-tls',
       localWorkflow: false,
@@ -248,7 +248,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
   });
 
   it.each(['DATABASE_URL', 'DATABASE_IOT_URL'] as const)(
-    'permite sslmode=require en la conexion general %s', (key) => {
+    'allows sslmode=require in the general connection %s', (key) => {
       const env = {
         ...vpsPairing(),
         [key]: `${vpsDevDatabase()}?sslmode=require`,
@@ -265,7 +265,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     '?application_name=backend',
     '?SSLMode=require',
     '?sslmode=require&',
-  ])('rechaza el parámetro no autorizado %s en ambas conexiones generales', (query) => {
+  ])('rejects the unauthorized parameter %s in both general connections', (query) => {
     for (const key of ['DATABASE_URL', 'DATABASE_IOT_URL'] as const) {
       const env = {
         ...vpsPairing(),
@@ -284,7 +284,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     ['MQTT_SECRET_DATABASE_URL', 'smarthome_mqtt_secret_dev_login'],
     ['MQTT_REVOCATION_DATABASE_URL', 'smarthome_mqtt_revoke_dev_login'],
   ] as const)(
-    'continúa rechazando parámetros en la conexión especializada %s', (key, username) => {
+    'keeps rejecting parameters in the specialized connection %s', (key, username) => {
       const env = {
         ...vpsPairing(),
         [key]: `${dedicatedDb(username)}?sslmode=require`,
@@ -294,7 +294,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     },
   );
 
-  it('registra el worker de autenticación VPS solo con ambos opt-ins', () => {
+  it('registers the VPS authentication worker only with both opt-ins', () => {
     const env = {
       ...vpsPairing(),
       SHELLY_MQTT_AUTH_DEV_DI_ENABLED: 'true',
@@ -310,7 +310,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('no activa el worker VPS si falla el pairing o falta su opt-in explícito', () => {
+  it('does not enable the VPS worker if pairing fails or its explicit opt-in is missing', () => {
     const env = {
       ...vpsPairing(),
       SHELLY_MQTT_AUTH_DEV_DI_ENABLED: 'true',
@@ -324,14 +324,14 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     }).vpsAuthWorker).toBe(false);
   });
 
-  it('no activa vpsPairing cuando falta el opt-in propio', () => {
+  it('does not enable vpsPairing when its own opt-in is missing', () => {
     const env = {
       ...vpsPairing(), SHELLY_MQTT_VPS_DEV_PAIRING_ENABLED: undefined,
     };
     expect(selectShellyMqttProviderPlan(env).vpsPairing).toBe(false);
   });
 
-  it('mantiene bootstrap y pairing apagados si el worker de revocación no está autorizado', () => {
+  it('keeps bootstrap and pairing off if the revocation worker is not authorized', () => {
     const env = {
       ...vpsPairing(), SHELLY_MQTT_VPS_DEV_REVOCATION_WORKER_ENABLED: 'false',
     };
@@ -344,7 +344,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     { DATABASE_URL: vpsDevDatabase('smarthome') },
     { DATABASE_IOT_URL: undefined },
     { SHELLY_MQTT_VPS_DEV_TLS_ENABLED: 'false' },
-  ])('rechaza el perfil VPS completo ante DB o TLS base no autorizados: %j', (override) => {
+  ])('rejects the full VPS profile on an unauthorized base DB or TLS: %j', (override) => {
     expect(() => selectShellyMqttProviderPlan({ ...vpsPairing(), ...override }))
       .toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
@@ -384,13 +384,13 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
       .vpsPairing).toBe(false);
   });
 
-  it('rechaza flags de transporte incompatibles antes de seleccionar pairing', () => {
+  it('rejects incompatible transport flags before selecting pairing', () => {
     expect(() => selectShellyMqttProviderPlan({
       ...vpsPairing(), SHELLY_MQTT_VPS_DEV_TRANSPORT_ENABLED: 'false',
     })).toThrow('MQTT_DEV_DI_MODE_NOT_ALLOWED');
   });
 
-  it('mantiene el perfil Mosquitto de producción apagado por defecto', () => {
+  it('keeps the production Mosquitto profile off by default', () => {
     expect(selectShellyMqttProviderPlan({
       NODE_ENV: 'production', APP_ENV: 'production',
     })).toMatchObject({
@@ -399,7 +399,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     });
   });
 
-  it('selecciona producción solo con Mosquitto TLS, logins productivos aislados, revocación, auth y clave propia', () => {
+  it('selects production only with Mosquitto TLS, isolated production logins, revocation, auth and its own key', () => {
     expect(selectShellyMqttProviderPlan(productionPairing())).toMatchObject({
       mode: 'production-mosquitto',
       productionPairing: true,
@@ -430,7 +430,7 @@ describe('MQTT: seleccion segura de perfiles DI', () => {
     { SHELLY_MQTT_PRODUCTION_DEVICE_BROKER_URL: 'mqtts://mqtt-dev.179-236-82-122.sslip.io:443' },
     { SHELLY_MQTT_PRODUCTION_DEVICE_CA_FILE: '/run/secrets/mosquitto-dev-device-ca.pem',
       SHELLY_MQTT_VPS_DEV_DEVICE_CA_FILE: '/run/secrets/mosquitto-dev-device-ca.pem' },
-  ])('rechaza perfil de producción incompleto o reutilizado: %j', (override) => {
+  ])('rejects an incomplete or reused production profile: %j', (override) => {
     expect(() => selectShellyMqttProviderPlan({ ...productionPairing(), ...override }))
       .toThrow('MQTT_PRODUCTION_PAIRING_NOT_ALLOWED');
   });

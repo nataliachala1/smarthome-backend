@@ -20,7 +20,7 @@ function translate(error: unknown): HttpException {
   } catch (translated) {
     return translated as HttpException;
   }
-  throw new Error('throwEnergyHttpError siempre debe lanzar');
+  throw new Error('throwEnergyHttpError must always throw');
 }
 
 describe('throwEnergyHttpError', () => {
@@ -56,7 +56,7 @@ describe('throwEnergyHttpError', () => {
       'ENERGY_GOAL_VALUE_REQUIRED',
     ],
   ])(
-    'traduce %p a HTTP con su code exacto',
+    'translates %p to HTTP with its exact code',
     (domainError, exceptionType, status, code) => {
       const translated = translate(domainError);
 
@@ -69,7 +69,7 @@ describe('throwEnergyHttpError', () => {
     },
   );
 
-  it('no transforma errores desconocidos (los maneja el filtro global como 500)', () => {
+  it('does not transform unknown errors (the global filter handles them as 500)', () => {
     const unknown = new Error('fallo inesperado');
 
     expect(translate(unknown)).toBe(unknown);

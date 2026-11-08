@@ -28,8 +28,8 @@ const base = {
   MQTT_DYNSEC_ADMIN_PASSWORD: 'una-contrasena-de-prueba',
 };
 
-describe('DynSec admin TLS con CA privada (sin red)', () => {
-  it('carga CA PEM confiable sin desactivar verificacion de servidor', () => {
+describe('DynSec admin TLS with a private CA (no network)', () => {
+  it('loads a trusted PEM CA without disabling server verification', () => {
     const dir = mkdtempSync(join(tmpdir(), 'smarthome-dynsec-ca-'));
     try {
       const caPath = join(dir, 'ca.crt');
@@ -44,7 +44,7 @@ describe('DynSec admin TLS con CA privada (sin red)', () => {
     }
   });
 
-  it('falla cerrado con CA inexistente o invalida', () => {
+  it('fails closed with a missing or invalid CA', () => {
     expect(() => provider({ ...base, MQTT_DYNSEC_ADMIN_CA_FILE: 'Z:/no-existe/ca.crt' }).settings())
       .toThrow();
     const dir = mkdtempSync(join(tmpdir(), 'smarthome-dynsec-invalid-'));
@@ -58,7 +58,7 @@ describe('DynSec admin TLS con CA privada (sin red)', () => {
     }
   });
 
-  it('rechaza CA personalizada con transporte sin TLS', () => {
+  it('rejects a custom CA with a non-TLS transport', () => {
     const config = provider({
       ...base,
       MQTT_DYNSEC_ADMIN_URL: 'mqtt://127.0.0.1:1883',
@@ -67,7 +67,7 @@ describe('DynSec admin TLS con CA privada (sin red)', () => {
     expect(() => config.settings()).toThrow();
   });
 
-  it('conserva TLS publico sin CA configurada', () => {
+  it('keeps public TLS without a configured CA', () => {
     const config = provider(base).settings();
     expect(config.options.rejectUnauthorized).toBe(true);
     expect(config.options.ca).toBeUndefined();

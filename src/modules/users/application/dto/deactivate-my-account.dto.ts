@@ -8,7 +8,7 @@ export class DeactivateMyAccountDto {
   @ApiProperty({
     example: true,
     description:
-      'Confirmación explícita de la desactivación temporal de la cuenta',
+      'Explicit confirmation of the temporary account deactivation',
   })
   @IsBoolean()
   @Equals(true, {

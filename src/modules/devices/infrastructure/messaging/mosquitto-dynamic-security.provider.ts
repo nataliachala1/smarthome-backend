@@ -63,11 +63,11 @@ function authenticatedConnectionCount(client: JsonObject): number | null {
 }
 
 /**
- * Administra identidades MQTT mediante el API oficial de Dynamic Security.
+ * Manages MQTT identities through the official Dynamic Security API.
  *
- * Solo se registra dentro de perfiles con pairing, autenticación y revocación
- * durables habilitados. Nunca comparte MQTT_USERNAME / MQTT_PASSWORD con
- * dispositivos.
+ * It is only registered in profiles with durable pairing, authentication and
+ * revocation enabled. It never shares MQTT_USERNAME / MQTT_PASSWORD with
+ * devices.
  */
 @Injectable()
 export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider {
@@ -104,9 +104,9 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
       throw unavailable('MQTT_DYNSEC_ADMIN_TRANSPORT_UNSAFE');
     }
 
-    // La CA privada de desarrollo se proporciona por ruta de archivo local,
-    // nunca mediante contenido PEM en variables, logs o respuestas HTTP.
-    // En produccion es opcional si el broker utiliza una CA publica.
+    // The private development CA is supplied through a local file path,
+    // never as PEM content in variables, logs or HTTP responses.
+    // In production it is optional if the broker uses a public CA.
     let ca: Buffer | undefined;
     if (caPath) {
       if (!encrypted) {
@@ -160,7 +160,7 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
         if (finished) return;
         finished = true;
         clearTimeout(timeout);
-        // La conexion administrativa es de un solo uso: no hay respuestas cruzadas.
+        // The administrative connection is single-use: there are no crossed responses.
         client.end(true);
         if (error) reject(error);
         else resolve(data ?? {});
@@ -268,8 +268,8 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     try {
       data = await this.command('getClient', { username });
     } catch (error) {
-      // Solo la respuesta EXPLICITA del broker significa identidad ausente.
-      // Timeout, conexion fallida o error administrativo son estado desconocido.
+      // Only an EXPLICIT broker response means the identity is absent.
+      // A timeout, a failed connection or an administrative error are an unknown state.
       if (
         error instanceof DynsecCommandError &&
         error.dynsecCommand === 'getClient' &&
@@ -294,8 +294,8 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
   }
 
   private validateScopedAcls(input: VerifyPreparedMqttIdentityInput): void {
-    // El contrato de los cinco permisos llega exclusivamente del backend,
-    // derivado de la sesion y del manufacturerDeviceId reservado.
+    // The contract of the five permissions comes exclusively from the backend,
+    // derived from the session and the reserved manufacturerDeviceId.
     const scope = input.topicScope;
     if (
       typeof scope !== 'string' ||
@@ -356,8 +356,8 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
   }
 
   /**
-   * Verificacion independiente inmediatamente ANTES de confirmar la SQL 027.
-   * La operacion y su lease siguen siendo responsabilidad del worker SQL.
+   * Independent verification immediately BEFORE confirming SQL 027.
+   * The operation and its lease remain the responsibility of the SQL worker.
    */
   async verifyPreparedDisabled(input: VerifyPreparedMqttIdentityInput): Promise<void> {
     this.validateIdentifier(input.username);
@@ -387,9 +387,9 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     const roleResponse = await this.command('getRole', { rolename: input.roleName });
     const role = object(roleResponse.role);
     const actualAcls = role?.acls;
-    // Mosquitto DynSec getRole identifica el rol por el nombre solicitado,
-    // pero su respuesta real puede omitir rolename. Si lo incluye debe coincidir.
-    // Mantener la verificacion estricta de las cinco ACL a continuacion.
+    // Mosquitto DynSec getRole identifies the role by the requested name,
+    // but its real response may omit rolename. If included, it must match.
+    // Keep the strict verification of the five ACLs below.
     if ((role?.rolename !== undefined && role.rolename !== input.roleName) ||
         !Array.isArray(actualAcls) ||
         actualAcls.length !== input.acls.length) {
@@ -424,15 +424,15 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
     this.validateScopedAcls(input);
     await this.verifyBrokerPrerequisites();
 
-    // NOTA: la consulta inicial y el createClient no sustituyen una reserva
-    // transaccional. El orquestador de pairing deberá evitar colisiones.
-    // No reemplazar ni modificar credenciales de una identidad preexistente.
+    // NOTE: the initial query and createClient do not replace a transactional
+    // reservation. The pairing orchestrator must avoid collisions.
+    // Do not replace or modify the credentials of a pre-existing identity.
     if (await this.inspectIdentity(input.username)) {
       throw unavailable('MQTT_DYNSEC_IDENTITY_ALREADY_EXISTS');
     }
     let attemptedCreate = false;
     try {
-      // Sin password ni roles: esta identidad no puede autenticar.
+      // Without a password or roles: this identity cannot authenticate.
       attemptedCreate = true;
       await this.command('createClient', {
         username: input.username,
@@ -440,7 +440,7 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
         textdescription: input.operationId,
       });
       await this.command('disableClient', { username: input.username });
-      // La identidad sigue deshabilitada durante la configuracion restante.
+      // The identity stays disabled during the remaining configuration.
       await this.command('createRole', {
         rolename: input.roleName,
         acls: input.acls.map((acl: MqttIdentityAcl) => ({
@@ -467,8 +467,8 @@ export class MosquittoDynamicSecurityProvider extends MqttDeviceIdentityProvider
         acls: input.acls,
       });
     } catch (error) {
-      // Compensacion de mejor esfuerzo: un timeout sigue siendo estado incierto.
-      // NO entregar la password ni marcar identidad lista si hubo error.
+      // Best-effort compensation: a timeout is still an uncertain state.
+      // Do NOT return the password or mark the identity ready if there was an error.
       if (
         attemptedCreate && !(
           error instanceof DynsecCommandError &&

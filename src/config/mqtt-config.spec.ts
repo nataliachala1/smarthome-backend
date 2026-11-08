@@ -131,7 +131,7 @@ describe('MQTT configuration and topic boundaries', () => {
         MQTT_CLIENT_ID: 'same',
         MQTT_STATUS_CLIENT_ID: 'same',
       }),
-    ).toThrow('distintos');
+    ).toThrow('must be different');
   });
 
   it('preserves the default legacy local routes', () => {

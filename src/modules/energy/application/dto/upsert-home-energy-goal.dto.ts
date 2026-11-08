@@ -4,9 +4,9 @@ import { ValidateIf } from 'class-validator';
 import { IsPositiveDecimalString } from '../validators/is-positive-decimal-string.validator';
 
 /**
- * PUT = reemplazo completo: ambos campos son obligatorios en el JSON.
- * null significa "no configurado"; omitir el campo es un error 400.
- * Al menos uno de los dos debe ser distinto de null.
+ * PUT = full replacement: both fields are required in the JSON.
+ * null means "not configured"; omitting the field is a 400 error.
+ * At least one of the two must be different from null.
  */
 export class UpsertHomeEnergyGoalDto {
   @ApiProperty({
@@ -14,7 +14,7 @@ export class UpsertHomeEnergyGoalDto {
     nullable: true,
     example: '120000.00',
     description:
-      'Presupuesto mensual COP como texto (> 0, máx. 12 enteros y 2 decimales) o null',
+      'Monthly COP budget as text (> 0, at most 12 integer digits and 2 decimals) or null',
   })
   @ValidateIf((dto: UpsertHomeEnergyGoalDto) => dto.monthlyBudgetCop !== null)
   @IsPositiveDecimalString(14, 2)
@@ -25,7 +25,7 @@ export class UpsertHomeEnergyGoalDto {
     nullable: true,
     example: '125.000000',
     description:
-      'Meta mensual de consumo kWh como texto (> 0, máx. 8 enteros y 6 decimales) o null',
+      'Monthly kWh consumption target as text (> 0, at most 8 integer digits and 6 decimals) or null',
   })
   @ValidateIf((dto: UpsertHomeEnergyGoalDto) => dto.targetKwh !== null)
   @IsPositiveDecimalString(14, 6)

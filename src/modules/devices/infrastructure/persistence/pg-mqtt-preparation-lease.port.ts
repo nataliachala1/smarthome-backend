@@ -3,7 +3,7 @@ import type {
   PreparationLeaseClaim,
 } from '../../application/services/shelly-mqtt-preparation.coordinator';
 
-/** Cliente SQL exclusivamente autenticado como worker de leases (025). */
+/** SQL client authenticated exclusively as the lease worker (025). */
 export interface MqttLeaseQueryClient {
   query(sql: string, params: unknown[]): Promise<{ rows: unknown[] }>;
 }
@@ -15,7 +15,7 @@ function validUuid(value: string): boolean {
   return typeof value === 'string' && UUID_V4.test(value);
 }
 
-/** No puede declarar éxito de broker; solo claim y cuarentena (025). */
+/** Cannot declare broker success; only claim and quarantine (025). */
 export class PgMqttPreparationLeasePort implements MqttPreparationLeasePort {
   constructor(private readonly leaseWorker: MqttLeaseQueryClient) {}
 
@@ -36,8 +36,8 @@ export class PgMqttPreparationLeasePort implements MqttPreparationLeasePort {
       );
       rows = result.rows;
     } catch {
-      // La llamada podria haber hecho COMMIT aun cuando el cliente perdio la respuesta.
-      // No reclamar otro lease a ciegas; el worker superior debe reconciliar.
+      // The call could have COMMITted even though the client lost the response.
+      // Do not blindly claim another lease; the upper worker must reconcile.
       throw new Error('MQTT_LEASE_CLAIM_OUTCOME_UNKNOWN');
     }
     if (!Array.isArray(rows) || rows.length !== 1 ||

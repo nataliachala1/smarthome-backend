@@ -21,7 +21,7 @@ import { PgMqttPreparedConfirmationPort } from '../persistence/pg-mqtt-prepared-
 import { PgMqttPreparationSecretRepository } from '../secrets/pg-mqtt-preparation-secret.repository';
 import { EncryptedMqttPreparationSecretPort } from '../secrets/encrypted-mqtt-preparation-secret.port';
 
-// Tokens independientes: compartir un pool entre los dos roles violaría SQL025/027.
+// Independent tokens: sharing a pool between both roles would violate SQL025/027.
 export const MQTT_LEASE_GATEWAY = Symbol('MQTT_LEASE_GATEWAY');
 export const MQTT_CONFIRMER_GATEWAY = Symbol('MQTT_CONFIRMER_GATEWAY');
 
@@ -31,8 +31,8 @@ function requireMqttDatabaseMode(): 'local-dev' | 'vps-dev-tls' | 'production' {
 }
 
 /**
- * Base VPS DEV: solo gateways PostgreSQL especializados. Sus factories
- * validan cuenta, destino, TLS y privilegios. El modo requiere opt-in.
+ * VPS DEV base: only specialized PostgreSQL gateways. Their factories
+ * validate account, target, TLS and privileges. The mode requires opt-in.
  */
 export const shellyMqttPgDevProviders: Provider[] = [
   {
@@ -63,10 +63,10 @@ export const shellyMqttPgDevProviders: Provider[] = [
       c.get<string>('MQTT_SECRET_DATABASE_URL'), requireMqttDatabaseMode(),
     ),
   },
-  // El perfil DB-only termina aqui: no se crean acciones ni identidades MQTT.
+  // The DB-only profile ends here: no MQTT actions or identities are created.
 ];
 
-/** Flujo local de laboratorio legado; conserva el comportamiento anterior. */
+/** Legacy local lab flow; keeps the previous behavior. */
 export const shellyMqttDevProviders: Provider[] = [
   ...shellyMqttPgDevProviders,
   {

@@ -3,7 +3,7 @@ import type { home_energy_goal as PrismaHomeEnergyGoal } from '../../../../../ge
 import { HomeEnergyGoal } from '../../domain/entities/home-energy-goal.entity';
 import { fromDbDate, toDbDate } from './prisma-home-energy-tariff.mapper';
 
-/** 'YYYY-MM' -> Date del día 1 del mes (columna DATE month_start). */
+/** 'YYYY-MM' -> Date of the first day of the month (DATE month_start column). */
 export function monthToDbDate(month: string): Date {
   return toDbDate(month + '-01');
 }

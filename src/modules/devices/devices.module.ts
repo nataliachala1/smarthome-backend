@@ -98,7 +98,7 @@ if (flespiStateSyncEnabled && (
 )) {
   throw new Error('SHELLY_FLESPI_STATE_SYNC_DEV_ONLY');
 }
-// Se decide una sola vez al cargar el modulo. Nunca a partir de HTTP.
+// Decided only once when the module loads. Never from HTTP.
 const shellyMqttPlan = selectShellyMqttProviderPlan();
 
 @Module({
@@ -110,11 +110,11 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ...(shellyMqttPlan.localWorkflow &&
     process.env.SHELLY_MQTT_TRUSTED_LAB_BOOTSTRAP === 'true'
       ? [ShellyMqttBootstrapController, ShellyMqttEnableController] : []),
-    // VPS DEV expone preparación y bootstrap solo bajo el perfil TLS validado.
+    // VPS DEV exposes preparation and bootstrap only under the validated TLS profile.
     ...(shellyMqttPlan.vpsPairing
       ? [ShellyMqttPrepareController, ShellyMqttBootstrapController]
       : []),
-    // Enable y prueba MQTT requieren el opt-in adicional del worker aislado.
+    // MQTT enable and proof require the additional opt-in of the isolated worker.
     ...(shellyMqttPlan.vpsAuthWorker
       ? [ShellyMqttEnableController, ShellyMqttAuthenticationController]
       : []),
@@ -124,7 +124,7 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ...(shellyMqttPlan.productionAuthWorker
       ? [ShellyMqttEnableController, ShellyMqttAuthenticationController]
       : []),
-    // Endpoint controlado: no existe fuera del entorno development+opt-in.
+    // Controlled endpoint: it does not exist outside the development+opt-in environment.
     ...(shellyMqttPlan.localWorkflow
       ? [ShellyMqttPrepareController]
       : []),
@@ -163,12 +163,12 @@ const shellyMqttPlan = selectShellyMqttProviderPlan();
     ShellyPairingSessionService,
     ShellyDiscoveryService,
 
-    // Local: mantiene los coordinadores de laboratorio existentes.
+    // Local: keeps the existing lab coordinators.
     ...(shellyMqttPlan.localWorkflow ? shellyMqttDevProviders : []),
     // Base VPS DEV: cuatro gateways PG especializados.
     ...(shellyMqttPlan.vpsPgOnly ? shellyMqttPgDevProviders : []),
-    // VPS pairing: servicios internos bajo opt-in y precondiciones estrictas.
-    // Los controllers y el worker de autenticacion siguen fuera de este perfil.
+    // VPS pairing: internal services under opt-in and strict preconditions.
+    // The controllers and the authentication worker stay outside this profile.
     ...(shellyMqttPlan.vpsPairing ? shellyMqttVpsPairingProviders : []),
     ...(shellyMqttPlan.vpsPairing ? shellyMqttVpsBootstrapProviders : []),
     ...(shellyMqttPlan.vpsRevocationWorker

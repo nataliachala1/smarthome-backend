@@ -29,7 +29,7 @@ import { GetHomeEnergySummaryUseCase } from '../../application/use-cases/get-hom
 @ApiTags('energy')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
-@ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+@ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
 @ApiUnauthorizedResponse({ description: 'JWT ausente, vencido o revocado' })
 export class HomeEnergySummaryController {
   constructor(
@@ -39,13 +39,13 @@ export class HomeEnergySummaryController {
   @Get()
   @ApiOperation({
     summary:
-      'Resumen del mes: kWh y costo estimado con la tarifa histórica de cada lectura (OWNER o MEMBER autorizado)',
+      'Month summary: kWh and estimated cost using the historical tariff of each reading (OWNER or authorized MEMBER)',
   })
   @ApiOkResponse({ type: HomeEnergySummaryResponse })
-  @ApiBadRequestResponse({ description: 'UUID o mes inválidos' })
+  @ApiBadRequestResponse({ description: 'Invalid UUID or month' })
   @ApiForbiddenResponse({
     description:
-      'Sin permiso de detalle de consumo (GUEST, sin membresía o sin view_consumption)',
+      'No consumption detail permission (GUEST, no membership or no view_consumption)',
   })
   async getSummary(
     @CurrentUser() user: AuthenticatedUser,

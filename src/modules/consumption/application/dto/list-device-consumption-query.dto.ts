@@ -31,7 +31,7 @@ export class ListDeviceConsumptionQueryDto {
   @Min(1)
   @Max(200)
   @ApiPropertyOptional({
-    description: 'Cantidad máxima de lecturas a retornar',
+    description: 'Maximum number of readings to return',
     minimum: 1,
     maximum: 200,
     default: 50,

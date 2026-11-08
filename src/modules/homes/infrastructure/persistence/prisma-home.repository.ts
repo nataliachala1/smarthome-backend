@@ -87,50 +87,6 @@ export class PrismaHomeRepository
     );
   }
 
-  async deactivate(
-    userId: string,
-    homeId: string,
-  ): Promise<Home> {
-    return this.prismaRls.withUserContext(
-      userId,
-      async (tx) => {
-        const raw = await tx.home.update({
-          where: {
-            id_home: homeId,
-          },
-          data: {
-            status: 'DEACTIVATED',
-            deleted_at: new Date(),
-          },
-        });
-
-        return PrismaHomeMapper.toDomain(raw);
-      },
-    );
-  }
-
-  async reactivate(
-    userId: string,
-    homeId: string,
-  ): Promise<Home> {
-    return this.prismaRls.withUserContext(
-      userId,
-      async (tx) => {
-        const raw = await tx.home.update({
-          where: {
-            id_home: homeId,
-          },
-          data: {
-            status: 'ACTIVE',
-            deleted_at: null,
-          },
-        });
-
-        return PrismaHomeMapper.toDomain(raw);
-      },
-    );
-  }
-
   async update(
     data: UpdateHomeData,
   ): Promise<Home> {

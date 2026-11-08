@@ -1,9 +1,9 @@
 export interface HomeEnergyTariffProps {
   id: string;
   homeId: string;
-  /** Decimal exacto como texto, 4 decimales (NUMERIC(14,4)). */
+  /** Exact decimal as text, 4 decimals (NUMERIC(14,4)). */
   unitPriceCopKwh: string;
-  /** Fecha local America/Bogota en formato YYYY-MM-DD. */
+  /** Local America/Bogota date in YYYY-MM-DD format. */
   effectiveFrom: string;
   createdAt: Date;
 }

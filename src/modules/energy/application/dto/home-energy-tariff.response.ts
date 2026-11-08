@@ -43,7 +43,7 @@ export class CurrentHomeEnergyTariffResponse {
   @ApiProperty({
     type: HomeEnergyTariffResponse,
     nullable: true,
-    description: 'null si no hay tarifa vigente para esa fecha',
+    description: 'null when no tariff is effective on that date',
   })
   tariff: HomeEnergyTariffResponse | null;
 }
