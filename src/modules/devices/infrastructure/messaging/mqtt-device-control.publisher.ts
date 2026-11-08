@@ -33,6 +33,12 @@ export class MqttDeviceControlPublisher
   async publishControlCommand(
     input: PublishDeviceControlCommandInput,
   ): Promise<void> {
+    // Production cutover: read-only until operator explicitly confirms DEV is off.
+    if (this.mqtt.config.flespiProduction &&
+        (!this.mqtt.config.flespiControlEnabled ||
+         input.manufacturerDeviceId !== this.mqtt.config.flespiDeviceId)) {
+      throw new DeviceControlPublisherUnavailableError();
+    }
     if (!mqttDeviceId.test(input.manufacturerDeviceId)) {
       throw new DeviceControlNotConfiguredError();
     }
