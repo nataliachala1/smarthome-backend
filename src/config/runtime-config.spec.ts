@@ -71,7 +71,7 @@ describe('runtime configuration', () => {
     const DATABASE_URL = 'sensitive-invalid-connection-input';
     expect(() =>
       validateRuntimeConfig({ ...development(), DATABASE_URL }),
-    ).toThrow(new Error('DATABASE_URL debe ser una URL PostgreSQL válida.'));
+    ).toThrow(new Error('DATABASE_URL must be a valid PostgreSQL URL.'));
   });
 
   it('rejects different application and ingestion database names', () => {
@@ -80,7 +80,7 @@ describe('runtime configuration', () => {
         ...development(),
         DATABASE_IOT_URL: 'postgresql://ingest@localhost/other_test',
       }),
-    ).toThrow('mismo nombre');
+    ).toThrow('same PostgreSQL database name');
   });
 
   it('rejects a short production JWT secret', () => {

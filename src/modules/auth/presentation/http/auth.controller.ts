@@ -112,7 +112,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
     return false;
   }
 
-  throw new Error('COOKIE_SECURE debe ser un valor booleano.');
+  throw new Error('COOKIE_SECURE must be a boolean value.');
 }
 
 function getRefreshCookieOptions() {
@@ -135,7 +135,7 @@ function getRefreshCookieOptions() {
       sameSite = configuredSameSite;
       break;
     default:
-      throw new Error('COOKIE_SAME_SITE debe ser lax, strict o none.');
+      throw new Error('COOKIE_SAME_SITE must be lax, strict or none.');
   }
 
   const domain = process.env.COOKIE_DOMAIN?.trim() || undefined;
@@ -291,8 +291,8 @@ export class AuthController {
       });
 
       /*
-       * Nunca enviamos el refresh token
-       * dentro del JSON.
+       * The refresh token is never sent
+       * inside the JSON.
        */
       return {
         accessToken: result.accessToken,

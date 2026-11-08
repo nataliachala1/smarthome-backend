@@ -4,7 +4,7 @@ import { IsIP, IsNotEmpty, IsString } from 'class-validator';
 export class IdentifyShellyDeviceDto {
   @ApiProperty({
     example: '10.3.234.222',
-    description: 'Dirección IPv4 local del dispositivo Shelly',
+    description: 'Local IPv4 address of the Shelly device',
   })
   @IsString()
   @IsNotEmpty()

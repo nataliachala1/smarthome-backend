@@ -2,15 +2,15 @@ import { EnergyMonthFacts } from '../entities/home-energy-summary';
 
 export interface EnergyMonthPeriod {
   homeId: string;
-  /** Mes YYYY-MM (para leer presupuesto y meta). */
+  /** Month YYYY-MM (to read the budget and target). */
   month: string;
-  /** Inicio del mes en America/Bogota (incluido). */
+  /** Start of the month in America/Bogota (included). */
   from: Date;
-  /** Inicio del mes siguiente en America/Bogota (excluido). */
+  /** Start of the next month in America/Bogota (excluded). */
   to: Date;
 }
 
-/** Puerto de lectura de los datos crudos del resumen energético mensual. */
+/** Read port for the raw data of the monthly energy summary. */
 export abstract class HomeEnergySummaryRepository {
   abstract getMonthFacts(
     userId: string,

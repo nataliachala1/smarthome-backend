@@ -18,7 +18,7 @@ function repositoryMock() {
 }
 
 describe('GetHomeEnergySummaryUseCase', () => {
-  it('pide los datos del mes con el rango de Bogotá y arma el resumen', async () => {
+  it('requests the month data with the Bogota range and builds the summary', async () => {
     const { repository, getMonthFacts } = repositoryMock();
     getMonthFacts.mockResolvedValue({
       readingsCount: 4,
@@ -53,7 +53,7 @@ describe('GetHomeEnergySummaryUseCase', () => {
     });
   });
 
-  it('GUEST o sin permiso de detalle: 403 sin datos económicos', async () => {
+  it('GUEST or no detail permission: 403 without economic data', async () => {
     const { repository, getMonthFacts } = repositoryMock();
     getMonthFacts.mockRejectedValue(new EnergyReadAccessDeniedError());
 

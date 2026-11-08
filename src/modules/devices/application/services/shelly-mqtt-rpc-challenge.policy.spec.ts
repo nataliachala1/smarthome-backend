@@ -34,7 +34,7 @@ function fixture(scope = id) {
 }
 
 describe('Shelly MQTT RPC / validación de candidato, SIN broker ni SQL', () => {
-  it('envía GetDeviceInfo a rpc y espera la respuesta en <src>/rpc', () => {
+  it('sends GetDeviceInfo to rpc and waits for the response on <src>/rpc', () => {
     const { challenge, message } = fixture();
     expect(challenge.requestTopic).toBe(`${id}/rpc`);
     expect(challenge.responseTopic).toBe(`${id}/events/rpc`);
@@ -46,7 +46,7 @@ describe('Shelly MQTT RPC / validación de candidato, SIN broker ni SQL', () => 
     expect(matchesShellyRpcChallenge(challenge, message)).toBe(true);
   });
 
-  it('respeta el namespace del contrato de topics', () => {
+  it('respects the namespace of the topic contract', () => {
     const scope = `smart-home/devices/${id}`;
     const { challenge, message } = fixture(scope);
     expect(challenge.requestTopic).toBe(`${scope}/rpc`);
@@ -54,17 +54,17 @@ describe('Shelly MQTT RPC / validación de candidato, SIN broker ni SQL', () => 
     expect(matchesShellyRpcChallenge(challenge, message)).toBe(true);
   });
 
-  it('rechaza un scope que no pertenece al Shelly', () => {
+  it('rejects a scope that does not belong to the Shelly', () => {
     expect(() => createShellyRpcChallenge(plan('otro-dispositivo'))).toThrow();
     expect(() => createShellyRpcChallenge(plan('$CONTROL/dynamic-security/v1'))).toThrow();
   });
 
-  it('rechaza ausencia de ACL RPC necesaria', () => {
+  it('rejects a missing required RPC ACL', () => {
     const p = plan();
     expect(() => createShellyRpcChallenge({ ...p, acls: [] })).toThrow();
   });
 
-  it('rechaza notificaciones sin correlación, replay y respuestas retenidas', () => {
+  it('rejects notifications without correlation, replays and retained responses', () => {
     const { challenge, message } = fixture();
     expect(matchesShellyRpcChallenge(challenge, { ...message, retain: true })).toBe(false);
     expect(matchesShellyRpcChallenge(challenge, { ...message, receivedAtMs: 999 })).toBe(false);
@@ -73,7 +73,7 @@ describe('Shelly MQTT RPC / validación de candidato, SIN broker ni SQL', () => 
     expect(matchesShellyRpcChallenge(challenge, { ...message, payload: JSON.stringify({ id: 'otro' }) })).toBe(false);
   });
 
-  it('rechaza respuestas de otra identidad, otro destino o firmware/modelo incompatible', () => {
+  it('rejects responses from another identity, another target or an incompatible firmware/model', () => {
     const { challenge, message } = fixture();
     const data = JSON.parse(message.payload) as Record<string, unknown>;
     const variants = [
@@ -96,7 +96,7 @@ describe('Shelly MQTT RPC / validación de candidato, SIN broker ni SQL', () => 
     expect(matchesShellyRpcChallenge(challenge, { ...message, payload: 'a'.repeat(8193) })).toBe(false);
   });
 
-  it('exige conexión identificada y rol exclusivo en el snapshot Mosquitto', () => {
+  it('requires an identified connection and an exclusive role in the Mosquitto snapshot', () => {
     const binding = { username: 'shd_test', clientId: 'shd-test', roleName: 'role_shd_test' };
     const snapshot = {
       ...binding,

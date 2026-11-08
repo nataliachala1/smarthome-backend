@@ -7,8 +7,8 @@ const frame = (ts: unknown, data: unknown, method = 'NotifyStatus') => ({
   method, params: { ts, 'switch:0': data },
 });
 
-describe('SQL035: identidad de evento Shelly (sin claves por recepción)', () => {
-  it('produce una clave SHA-256 estable de 64 hex para el mismo evento', () => {
+describe('SQL035: Shelly event identity (no keys by reception)', () => {
+  it('produces a stable 64-hex SHA-256 key for the same event', () => {
     const value = payload(frame(1793388600.25, {
       output: true, apower: 12.5, aenergy: { total: 500, by_minute: [1, 2] },
     }));
@@ -19,7 +19,7 @@ describe('SQL035: identidad de evento Shelly (sin claves por recepción)', () =>
     expect(a?.deviceEventTs).toBe(1793388600.25);
   });
 
-  it('ignora el orden de las claves JSON y los cambios de envoltura', () => {
+  it('ignores the order of JSON keys and envelope changes', () => {
     const a = frame(1793388600.25, { output: false, aenergy: { total: 23, by_minute: [1, 2] } });
     const b = { method: 'NotifyStatus', params: {
       'switch:0': { aenergy: { by_minute: [1, 2], total: 23 }, output: false },
@@ -30,7 +30,7 @@ describe('SQL035: identidad de evento Shelly (sin claves por recepción)', () =>
     );
   });
 
-  it('distingue timestamps, valores, método y tópico', () => {
+  it('distinguishes timestamps, values, method and topic', () => {
     const first = identifyFlespiShellyEvent(topic, payload(frame(1793388600.25, { apower: 1 })), 0);
     const variants = [
       identifyFlespiShellyEvent(topic, payload(frame(1793388601, { apower: 1 })), 0),
@@ -44,20 +44,20 @@ describe('SQL035: identidad de evento Shelly (sin claves por recepción)', () =>
 
   it.each([
     ['direct status', topic.replace('/events/rpc', '/status/switch:0'), frame(1793388600.25, { apower: 1 })],
-    ['sin ts', topic, frame(undefined, { apower: 1 })],
+    ['without ts', topic, frame(undefined, { apower: 1 })],
     ['ts nulo', topic, frame(null, { apower: 1 })],
     ['ts string', topic, frame('1793388600.25', { apower: 1 })],
     ['ts cero', topic, frame(0, { apower: 1 })],
     ['ts negativo', topic, frame(-1, { apower: 1 })],
     ['ts infinito', topic, frame(Infinity, { apower: 1 })],
-    ['sin componente', topic, frame(1793388600.25, undefined)],
-    ['componente vacío', topic, frame(1793388600.25, {})],
-    ['método ajeno', topic, frame(1793388600.25, { apower: 1 }, 'NotifyEvent')],
-  ])('no crea una identidad falsa: %s', (_name, t, value) => {
+    ['without component', topic, frame(1793388600.25, undefined)],
+    ['empty component', topic, frame(1793388600.25, {})],
+    ['foreign method', topic, frame(1793388600.25, { apower: 1 }, 'NotifyEvent')],
+  ])('does not create a fake identity: %s', (_name, t, value) => {
     expect(identifyFlespiShellyEvent(t, payload(value), 0)).toBeNull();
   });
 
-  it('rechaza JSON inválido', () => {
+  it('rejects invalid JSON', () => {
     expect(identifyFlespiShellyEvent(topic, Buffer.from('{bad'), 0)).toBeNull();
   });
 });

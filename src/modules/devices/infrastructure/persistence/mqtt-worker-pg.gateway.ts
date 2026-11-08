@@ -4,7 +4,7 @@ import type { MqttLeaseQueryClient } from './pg-mqtt-preparation-lease.port';
 import type { MqttPreparedConfirmationQueryClient } from './pg-mqtt-prepared-confirmation.port';
 import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
-/** Separa conexiones y permisos del worker de leases y del confirmador 027. */
+/** Separates the connections and permissions of the lease worker and the 027 confirmer. */
 export type MqttWorkerKind = 'lease' | 'confirmer';
 export type MqttWorkerConnectionMode =
   | 'lab'
@@ -76,7 +76,7 @@ export function parseMqttWorkerConnection(
       throw new Error('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
     }
   } else if (mode === 'vps-dev-tls') {
-    // El modo de VPS es explícito; no modifica las reglas de laboratorio/remoto.
+    // The VPS mode is explicit; it does not modify the lab/remote rules.
     if (environment !== 'production' ||
         url.hostname !== 'smart-home-smarthomepostgresdev-vrmtpz' ||
         port !== 5432 || database !== 'smarthome_dev' ||
@@ -241,7 +241,7 @@ export interface MqttWorkerPrivilegeRow {
   can_create_db: boolean;
 }
 
-/** Comprobable con mocks antes de abrir una conexion SQL real. */
+/** Testable with mocks before opening a real SQL connection. */
 export function isMinimalMqttWorkerPrivilegeRow(
   row: unknown,
   target: Pick<MqttWorkerConnectionTarget, 'role' | 'database'>,
@@ -268,7 +268,7 @@ export function isMinimalMqttWorkerPrivilegeRow(
     r.can_create_role === false && r.can_create_db === false;
 }
 
-/** Pool privado, inactivo salvo factory opt-in. Nunca exportar el Pool. */
+/** Private pool, idle unless the opt-in factory runs. Never export the Pool. */
 export class MqttWorkerPgGateway
   implements MqttLeaseQueryClient, MqttPreparedConfirmationQueryClient, OnModuleDestroy {
   private verified = false;

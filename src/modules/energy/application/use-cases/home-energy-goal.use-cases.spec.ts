@@ -41,8 +41,8 @@ function repositoryMock() {
   return { repository, findByMonth, upsert };
 }
 
-describe('Casos de uso de presupuesto y meta mensual', () => {
-  it('consulta el mes indicado y devuelve el objetivo con decimales como texto', async () => {
+describe('Monthly budget and target use cases', () => {
+  it('reads the given month and returns the goal with decimals as text', async () => {
     const { repository, findByMonth } = repositoryMock();
     findByMonth.mockResolvedValue(goal);
 
@@ -68,7 +68,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     });
   });
 
-  it('responde goal null si el mes no está configurado y usa el mes actual por defecto', async () => {
+  it('returns goal null when the month is not configured and uses the current month by default', async () => {
     const { repository, findByMonth } = repositoryMock();
     findByMonth.mockResolvedValue(null);
 
@@ -81,7 +81,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     expect(result.goal).toBeNull();
   });
 
-  it('responde 403 a quien no puede leer (GUEST o sin view_consumption)', async () => {
+  it('returns 403 to someone who cannot read (GUEST or no view_consumption)', async () => {
     const { repository, findByMonth } = repositoryMock();
     findByMonth.mockRejectedValue(new EnergyReadAccessDeniedError());
 
@@ -94,7 +94,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('crea o reemplaza el objetivo del mes', async () => {
+  it('creates or replaces the month goal', async () => {
     const { repository, upsert } = repositoryMock();
     upsert.mockResolvedValue(goal);
 
@@ -115,7 +115,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     expect(result.targetKwh).toBe('125.000000');
   });
 
-  it('responde 400 sin escribir si presupuesto y meta son ambos null', async () => {
+  it('returns 400 without writing when budget and target are both null', async () => {
     const { repository, upsert } = repositoryMock();
 
     await expect(
@@ -130,7 +130,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it('responde 403 si quien escribe no es OWNER de un hogar activo', async () => {
+  it('returns 403 when the writer is not the OWNER of an active home', async () => {
     const { repository, upsert } = repositoryMock();
     upsert.mockRejectedValue(new EnergyManageAccessDeniedError());
 
@@ -145,7 +145,7 @@ describe('Casos de uso de presupuesto y meta mensual', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('responde 409 ante una escritura simultánea del mismo mes', async () => {
+  it('returns 409 on a concurrent write of the same month', async () => {
     const { repository, upsert } = repositoryMock();
     upsert.mockRejectedValue(new EnergyGoalConcurrentWriteError());
 

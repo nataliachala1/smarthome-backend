@@ -52,7 +52,7 @@ export class MqttRuntimeService {
         createSecureContext({ ca: this.ca, minVersion: 'TLSv1.2' });
       } catch {
         throw new Error(
-          'MQTT_TLS_CA_FILE no contiene certificados PEM legibles y válidos.',
+          'MQTT_TLS_CA_FILE does not contain readable and valid PEM certificates.',
         );
       }
     }

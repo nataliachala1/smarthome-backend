@@ -36,7 +36,7 @@ suite('PgMqttReservationPort / laboratorio PostgreSQL aislado', () => {
 
     pool = new Pool({
       connectionString: databaseUrl,
-      ssl: false, // EXCLUSIVAMENTE localhost y base desechable.
+      ssl: false, // EXCLUSIVELY localhost and a disposable database.
       max: 1,
       connectionTimeoutMillis: 3000,
       idleTimeoutMillis: 1000,
@@ -50,7 +50,7 @@ suite('PgMqttReservationPort / laboratorio PostgreSQL aislado', () => {
     if (pool) await pool.end();
   });
 
-  it('rechaza una contraseña incorrecta (no confía en la red)', async () => {
+  it('rejects a wrong password (does not trust the network)', async () => {
     const incorrect = new URL(databaseUrl);
     incorrect.password = 'intentionally_wrong_password_for_lab_test';
     const probe = new Pool({
@@ -66,7 +66,7 @@ suite('PgMqttReservationPort / laboratorio PostgreSQL aislado', () => {
     }
   });
 
-  it('confirma identidad y privilegios mínimos del LOGIN real', async () => {
+  it('confirms the identity and minimum privileges of the real LOGIN', async () => {
     const result = await pool.query<{
       db: string;
       role: string;
@@ -106,7 +106,7 @@ suite('PgMqttReservationPort / laboratorio PostgreSQL aislado', () => {
     });
   });
 
-  it('ejecuta el adaptador real y falla cerrado ante una sesión inexistente', async () => {
+  it('runs the real adapter and fails closed on a non-existent session', async () => {
     const adapter = new PgMqttReservationPort(pool);
     await expect(
       adapter.reserve(

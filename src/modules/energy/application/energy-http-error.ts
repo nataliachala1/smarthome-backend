@@ -12,7 +12,7 @@ import {
   HomeEnergyTariffAlreadyExistsError,
 } from '../domain/errors/energy.errors';
 
-/** Traduce errores de dominio de energía a respuestas HTTP sin filtrar detalles SQL. */
+/** Translates energy domain errors into HTTP responses without leaking SQL details. */
 export function throwEnergyHttpError(error: unknown): never {
   if (error instanceof EnergyReadAccessDeniedError) {
     throw new ForbiddenException({

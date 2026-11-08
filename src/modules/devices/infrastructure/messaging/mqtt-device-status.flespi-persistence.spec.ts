@@ -85,10 +85,10 @@ const rpcPayload = Buffer.from(JSON.stringify({
   params: { ts: 1793388600.25, 'switch:0': { output: false, apower: 15 } },
 }));
 
-describe('flespi: persistencia atómica de estado y consumo', () => {
+describe('flespi: atomic persistence of status and consumption', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('escribe estado y consumo desde la misma transacción', async () => {
+  it('writes status and consumption from the same transaction', async () => {
     const ctx = setup(false, 15);
     await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
 
@@ -115,7 +115,7 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     );
   });
 
-  it('calcula el delta con la lectura SQL limitada al rol ingest', async () => {
+  it('computes the delta with the SQL read limited to the ingest role', async () => {
     const ctx = setup(false, 15);
     const queryRaw = ctx.tx.$queryRaw.getMockImplementation() as (sql: TemplateStringsArray) => Promise<unknown>;
     ctx.tx.$queryRaw.mockImplementation((sql: TemplateStringsArray) => {
@@ -130,7 +130,7 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     }));
   });
 
-  it('si falla el consumo no emite estado ni consumo', async () => {
+  it('if consumption fails it emits neither status nor consumption', async () => {
     const ctx = setup(true, 15);
     await expect(ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload))
       .rejects.toThrow('SIMULATED_CONSUMPTION_FAILURE');
@@ -140,7 +140,7 @@ describe('flespi: persistencia atómica de estado y consumo', () => {
     expect(ctx.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('NotifyStatus sin potencia actualiza solo el estado sin crear consumo', async () => {
+  it('NotifyStatus without power updates only the status without creating consumption', async () => {
     const ctx = setup(false);
     await ctx.subscriber.handleStatusMessage(rpcTopic, rpcPayload);
     expect(ctx.tx.device.update).toHaveBeenCalledTimes(1);

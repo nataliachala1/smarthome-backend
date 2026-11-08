@@ -44,12 +44,12 @@ export class ConsumptionController {
 
   @Get('summary')
   @ApiOperation({
-    summary: 'Consultar resumen de consumo de un dispositivo: OWNER o MEMBER',
+    summary: 'Get the consumption summary of a device: OWNER or MEMBER',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiQuery({
@@ -63,13 +63,13 @@ export class ConsumptionController {
     description: 'Fecha final en formato ISO',
   })
   @ApiOkResponse({
-    description: 'Resumen agregado de consumo del dispositivo',
+    description: 'Aggregated consumption summary of the device',
   })
   @ApiBadRequestResponse({
-    description: 'UUID o rango de fechas inválido',
+    description: 'Invalid UUID or date range',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   @ApiNotFoundResponse({
     description: 'Dispositivo no encontrado',
@@ -91,12 +91,12 @@ export class ConsumptionController {
 
   @Get('daily')
   @ApiOperation({
-    summary: 'Consultar consumo diario de un dispositivo para gráficas',
+    summary: 'Get the daily consumption of a device for charts',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiQuery({
@@ -110,13 +110,13 @@ export class ConsumptionController {
     description: 'Fecha final en formato ISO',
   })
   @ApiOkResponse({
-    description: 'Consumo del dispositivo agrupado por día',
+    description: 'Device consumption grouped by day',
   })
   @ApiBadRequestResponse({
-    description: 'UUID o rango de fechas inválido',
+    description: 'Invalid UUID or date range',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   @ApiNotFoundResponse({
     description: 'Dispositivo no encontrado',
@@ -138,12 +138,12 @@ export class ConsumptionController {
 
   @Get()
   @ApiOperation({
-    summary: 'Consultar consumo histórico de un dispositivo: OWNER o MEMBER',
+    summary: 'Get the historical consumption of a device: OWNER or MEMBER',
   })
-  @ApiParam({ name: 'homeId', description: 'UUID del hogar', format: 'uuid' })
+  @ApiParam({ name: 'homeId', description: 'Home UUID', format: 'uuid' })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiQuery({
@@ -159,16 +159,16 @@ export class ConsumptionController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Cantidad máxima de registros, entre 1 y 200',
+    description: 'Maximum number of records, between 1 and 200',
   })
   @ApiOkResponse({
-    description: 'Lecturas históricas de consumo del dispositivo',
+    description: 'Historical consumption readings of the device',
   })
   @ApiBadRequestResponse({
-    description: 'UUID, fechas o límite inválidos',
+    description: 'Invalid UUID, dates or limit',
   })
   @ApiForbiddenResponse({
-    description: 'Sin membresía activa en el hogar',
+    description: 'No active membership in the home',
   })
   @ApiNotFoundResponse({
     description: 'Dispositivo no encontrado',

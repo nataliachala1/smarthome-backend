@@ -39,8 +39,8 @@ const HOME_ID = '22222222-2222-4222-8222-222222222222';
 const BASE = '/api/v1/homes/' + HOME_ID + '/energy';
 
 /**
- * Rechazo de PostgreSQL por privilegio o política RLS (SQLSTATE 42501), con un
- * mensaje que contiene detalles internos que NUNCA deben llegar al cliente.
+ * PostgreSQL rejection due to a privilege or RLS policy (SQLSTATE 42501), with a
+ * message containing internal details that must NEVER reach the client.
  */
 const SQL_DETAIL =
   'permission denied for table home_energy_tariff (schema config, role smarthome_runtime_app)';
@@ -124,7 +124,7 @@ describe('HTTP: rechazo 42501 de PostgreSQL según lectura o escritura (reposito
     ['GET /goals', BASE + '/goals?month=2026-11'],
     ['GET /summary', BASE + '/summary?month=2026-11'],
   ])(
-    '%s responde 403 ENERGY_READ_FORBIDDEN sin detalles SQL',
+    '%s returns 403 ENERGY_READ_FORBIDDEN without SQL details',
     async (_name, url) => {
       const response = await request(server()).get(url).expect(403);
 
@@ -137,7 +137,7 @@ describe('HTTP: rechazo 42501 de PostgreSQL según lectura o escritura (reposito
     },
   );
 
-  it('POST /tariffs responde 403 ENERGY_MANAGE_FORBIDDEN sin detalles SQL', async () => {
+  it('POST /tariffs returns 403 ENERGY_MANAGE_FORBIDDEN without SQL details', async () => {
     const response = await request(server())
       .post(BASE + '/tariffs')
       .send({ unitPriceCopKwh: '950.25', effectiveFrom: '2026-11-01' })
@@ -151,7 +151,7 @@ describe('HTTP: rechazo 42501 de PostgreSQL según lectura o escritura (reposito
     expect(JSON.stringify(response.body)).not.toMatch(LEAK_PATTERN);
   });
 
-  it('PUT /goals/:month responde 403 ENERGY_MANAGE_FORBIDDEN sin detalles SQL', async () => {
+  it('PUT /goals/:month returns 403 ENERGY_MANAGE_FORBIDDEN without SQL details', async () => {
     const response = await request(server())
       .put(BASE + '/goals/2026-11')
       .send({ monthlyBudgetCop: '120000.00', targetKwh: null })

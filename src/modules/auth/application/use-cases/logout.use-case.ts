@@ -16,9 +16,9 @@ export class LogoutUseCase {
 
   async execute(rawRefreshToken?: string): Promise<void> {
     /*
-     * Logout será idempotente.
+     * Logout is idempotent.
      *
-     * Si no existe cookie, simplemente termina.
+     * Without a cookie, it simply finishes.
      */
     if (!rawRefreshToken) {
       return;

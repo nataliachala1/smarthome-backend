@@ -406,12 +406,12 @@ model alert {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-/// SQL034: tarifa referencial COP/kWh por hogar. Histórico inmutable: cada nueva vigencia es un INSERT.
+/// SQL034: reference COP/kWh tariff per home. Immutable history: each new effective period is an INSERT.
 model home_energy_tariff {
   id_home_energy_tariff String   @id(map: "pk_home_energy_tariff") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_home               String   @db.Uuid
   unit_price_cop_kwh    Decimal  @db.Decimal(14, 4)
-  /// Fecha de entrada en vigor según el calendario local America/Bogota.
+  /// Effective date according to the local America/Bogota calendar.
   effective_from        DateTime @db.Date
   created_at            DateTime @default(now()) @db.Timestamptz(6)
   home                  home     @relation(fields: [id_home], references: [id_home], onDelete: Restrict, onUpdate: NoAction, map: "fk_home_energy_tariff_home")
@@ -422,15 +422,15 @@ model home_energy_tariff {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-/// SQL034: presupuesto COP y/o meta kWh mensual por hogar. Al menos uno de los dos debe existir (ck_home_energy_goal_budget_or_target).
+/// SQL034: monthly COP budget and/or kWh target per home. At least one of them must exist (ck_home_energy_goal_budget_or_target).
 model home_energy_goal {
   id_home_energy_goal String   @id(map: "pk_home_energy_goal") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   id_home             String   @db.Uuid
-  /// Siempre el día 1 del mes (ck_home_energy_goal_month_first).
+  /// Always the first day of the month (ck_home_energy_goal_month_first).
   month_start         DateTime @db.Date
-  /// Opcional desde SQL034/002; NULL = sin presupuesto en dinero.
+  /// Optional since SQL034/002; NULL = no money budget.
   monthly_budget_cop  Decimal? @db.Decimal(14, 2)
-  /// Opcional; NULL = sin meta energética.
+  /// Optional; NULL = no energy target.
   target_kwh          Decimal? @db.Decimal(14, 6)
   created_at          DateTime @default(now()) @db.Timestamptz(6)
   updated_at          DateTime @default(now()) @db.Timestamptz(6)

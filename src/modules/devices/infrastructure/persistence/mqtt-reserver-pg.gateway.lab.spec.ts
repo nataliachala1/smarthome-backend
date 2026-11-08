@@ -5,13 +5,13 @@ import {
 } from './mqtt-reserver-pg.gateway';
 
 /**
- * Prueba opt-in contra PostgreSQL desechable exclusivamente.
- * NO crea reservas reales, NO modifica bases DEV ni gestiona Mosquitto.
+ * Opt-in test exclusively against a disposable PostgreSQL.
+ * It does NOT create real reservations, modify DEV databases or manage Mosquitto.
  */
 const enabled = process.env.MQTT_RESERVER_RUN_LAB_TEST === 'true';
 const suite = enabled ? describe : describe.skip;
 
-suite('MqttReserverPgGateway / integración real de solo lectura', () => {
+suite('MqttReserverPgGateway / real read-only integration', () => {
   let databaseUrl: string;
 
   beforeAll(() => {
@@ -50,7 +50,7 @@ suite('MqttReserverPgGateway / integración real de solo lectura', () => {
     }
   }
 
-  it('verifica de verdad privilegios mínimos antes de permitir consultas', async () => {
+  it('really verifies minimum privileges before allowing queries', async () => {
     await withGateway(async (gateway) => {
       const response = await gateway.query(
         'SELECT current_user::text AS username, current_database()::text AS database',
@@ -65,7 +65,7 @@ suite('MqttReserverPgGateway / integración real de solo lectura', () => {
     });
   });
 
-  it('rechaza contraseña incorrecta con error genérico y sin revelar secretos', async () => {
+  it('rejects a wrong password with a generic error and without revealing secrets', async () => {
     const wrongUrl = new URL(databaseUrl);
     wrongUrl.password = 'intentionally_invalid_lab_password';
     await expect(
@@ -73,7 +73,7 @@ suite('MqttReserverPgGateway / integración real de solo lectura', () => {
     ).rejects.toThrow('MQTT_RESERVER_PRIVILEGES_UNVERIFIED');
   });
 
-  it('encadena gateway real y adaptador, sin reservar una sesión inexistente', async () => {
+  it('chains the real gateway and adapter without reserving a non-existent session', async () => {
     await withGateway(async (gateway) => {
       const adapter = new PgMqttReservationPort(gateway);
       await expect(

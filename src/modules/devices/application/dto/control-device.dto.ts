@@ -7,7 +7,7 @@ export class ControlDeviceDto {
   @IsIn(['TURN_ON', 'TURN_OFF'])
   @ApiProperty({
     enum: ['TURN_ON', 'TURN_OFF'],
-    description: 'Comando remoto que se enviará al dispositivo',
+    description: 'Remote command to send to the device',
     example: 'TURN_ON',
   })
   command!: DeviceControlCommand;

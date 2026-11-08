@@ -68,10 +68,10 @@ function setup(duplicate: boolean) {
   return { internal, tx, prisma, emitToUser };
 }
 
-describe('flespi: SQL035 ledger y consumo en una transacción', () => {
+describe('flespi: SQL035 ledger and consumption in one transaction', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('inserta ledger antes de estado y consumo y notifica después de confirmar', async () => {
+  it('inserts the ledger before status and consumption and notifies after confirming', async () => {
     const c = setup(false);
     await c.internal.handleStatusMessage(topic, rpc);
     expect(c.prisma.device.update).not.toHaveBeenCalled();
@@ -87,7 +87,7 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     expect(ledgerOrder).toBeLessThan(deviceOrder);
   });
 
-  it('no actualiza estado, consumo ni realtime al detectar duplicado', async () => {
+  it('does not update status, consumption or realtime when a duplicate is detected', async () => {
     const c = setup(true);
     await c.internal.handleStatusMessage(topic, rpc);
     expect(c.tx.$queryRaw).toHaveBeenCalledTimes(3);
@@ -96,7 +96,7 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('sin timestamp de origen no altera estado ni inventa consumo', async () => {
+  it('without an origin timestamp it does not change status or invent consumption', async () => {
     const c = setup(false);
     const noTs = Buffer.from(JSON.stringify({
       method: 'NotifyStatus', params: { 'switch:0': { output: true, apower: 25 } },
@@ -108,7 +108,7 @@ describe('flespi: SQL035 ledger y consumo en una transacción', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('status/switch:0 no inventa una identidad por hora de recepción', async () => {
+  it('status/switch:0 does not invent an identity from the reception time', async () => {
     const c = setup(false);
     await c.internal.handleStatusMessage(direct, Buffer.from(JSON.stringify({ output: true, apower: 25 })));
     expect(c.tx.$queryRaw).not.toHaveBeenCalled();

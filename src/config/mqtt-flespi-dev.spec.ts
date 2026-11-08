@@ -18,7 +18,7 @@ const base = () => ({
 });
 
 describe('Flespi MQTT: transporte aislado en VPS DEV', () => {
-  it('admite token ACL solo como username, sin password ni CA privada', () => {
+  it('accepts the ACL token only as the username, without a password or private CA', () => {
     const c = parseMqttConfig(base());
     expect(c.brokerUrl).toBe('mqtts://mqtt.flespi.io:8883');
     expect(c.tls).toBe(true);
@@ -41,13 +41,13 @@ describe('Flespi MQTT: transporte aislado en VPS DEV', () => {
     { override: { APP_ENV: 'production' }, error: 'MQTT_FLESPI_DEV_MODE_NOT_ALLOWED' },
     { override: { MQTT_ENABLED: 'false' }, error: 'MQTT_FLESPI_DEV_MODE_NOT_ALLOWED' },
     { override: { MQTT_BROKER_PROVIDER: 'unknown' }, error: 'MQTT_BROKER_PROVIDER_INVALID' },
-    { override: { MQTT_TLS_REJECT_UNAUTHORIZED: 'false' }, error: 'No se permite desactivar' },
+    { override: { MQTT_TLS_REJECT_UNAUTHORIZED: 'false' }, error: 'Disabling MQTT TLS verification is not allowed' },
   ];
   it.each(invalid)('rechaza configuracion insegura: %p', ({ override, error }) => {
     expect(() => parseMqttConfig({ ...base(), ...override })).toThrow(error);
   });
 
-  it('no altera el comportamiento del broker Mosquitto sin opt-in', () => {
+  it('does not alter the Mosquitto broker behavior without opt-in', () => {
     const e = {
       ...base(),
       MQTT_BROKER_PROVIDER: 'mosquitto',

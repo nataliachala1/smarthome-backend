@@ -51,8 +51,8 @@ export class RequestReactivationUseCase {
       );
 
     /*
-     * Respuesta genérica para no revelar
-     * si una cuenta existe o está desactivada.
+     * Generic response so as not to reveal
+     * whether an account exists or is deactivated.
      */
     if (
       !user ||

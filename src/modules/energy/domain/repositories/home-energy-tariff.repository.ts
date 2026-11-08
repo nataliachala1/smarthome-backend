@@ -2,24 +2,24 @@ import { HomeEnergyTariff } from '../entities/home-energy-tariff.entity';
 
 export interface CreateHomeEnergyTariffData {
   homeId: string;
-  /** Decimal positivo como texto, máximo 10 enteros y 4 decimales. */
+  /** Positive decimal as text, at most 10 integer digits and 4 decimals. */
   unitPriceCopKwh: string;
-  /** Fecha local YYYY-MM-DD. */
+  /** Local date YYYY-MM-DD. */
   effectiveFrom: string;
 }
 
 /**
- * Puerto de persistencia de tarifas SQL034.
- * Las tarifas son inmutables: no existen métodos de actualización ni borrado.
+ * Persistence port for SQL034 tariffs.
+ * Tariffs are immutable: there are no update or delete methods.
  */
 export abstract class HomeEnergyTariffRepository {
-  /** Historial completo ordenado por vigencia descendente. */
+  /** Full history ordered by descending effective date. */
   abstract findAllByHome(
     userId: string,
     homeId: string,
   ): Promise<HomeEnergyTariff[]>;
 
-  /** Tarifa con mayor effective_from <= date (nunca una tarifa futura). */
+  /** Tariff with the greatest effective_from <= date (never a future tariff). */
   abstract findEffectiveAt(
     userId: string,
     homeId: string,

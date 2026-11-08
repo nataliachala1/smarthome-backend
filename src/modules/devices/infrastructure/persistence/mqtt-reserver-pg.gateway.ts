@@ -4,8 +4,8 @@ import type { MqttRegistrarQueryClient } from './pg-mqtt-reservation.port';
 import { isProductionMqttDatabaseTarget } from './mqtt-production-db-target';
 
 /**
- * Solo se puede configurar para la cuenta de reserva HU16. Nunca toma
- * DATABASE_URL, la cuenta normal de Prisma ni credenciales de Mosquitto.
+ * Can only be configured for the HU16 reservation account. It never takes
+ * DATABASE_URL, the regular Prisma account or Mosquitto credentials.
  */
 export type ReserverConnectionMode =
   | 'lab'
@@ -21,8 +21,8 @@ export interface ReserverConnectionTarget {
 }
 
 /**
- * Comprueba el destino ANTES de crear el pool. No revela URLs ni contraseñas.
- * Las opciones de la URL están prohibidas para evitar anular TLS mediante
+ * Checks the target BEFORE creating the pool. Reveals no URLs or passwords.
+ * URL options are forbidden to prevent overriding TLS through
  * sslmode/sslcert, application_name, etc.
  */
 export function parseMqttReserverConnection(
@@ -72,7 +72,7 @@ export function parseMqttReserverConnection(
   )) {
     throw new Error('MQTT_RESERVER_DATABASE_TARGET_NOT_ALLOWED');
   }
-  // Solo servidor DEV independiente, sin reutilizar el modo remoto genérico.
+  // Only an independent DEV server, without reusing the generic remote mode.
   if (vpsDevTls && (
     environment !== 'production' ||
     url.hostname !== 'smart-home-smarthomepostgresdev-vrmtpz' ||
@@ -103,7 +103,7 @@ export function parseMqttReserverConnection(
     database,
     options: {
       connectionString,
-      // El modo local sólo está permitido para el laboratorio exacto.
+      // Local mode is only allowed for the exact lab.
       ssl: (lab || localDev) ? false : { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
       max: 2,
       connectionTimeoutMillis: 3000,
@@ -176,9 +176,9 @@ function isMinimalPrivilegeRow(row: unknown, target: Pick<ReserverConnectionTarg
 }
 
 /**
- * Consulta sólo si los privilegios han sido verificados. Esta clase NO se
- * inyecta automáticamente: registrar con una factory async cuando HU16
- * tenga transiciones persistentes y la migración instalada en destino.
+ * Queries only when the privileges have been verified. This class is NOT
+ * injected automatically: register it with an async factory when HU16
+ * has persistent transitions and the migration is installed on the target.
  */
 export class MqttReserverPgGateway
   implements MqttRegistrarQueryClient, OnModuleDestroy {
@@ -206,8 +206,8 @@ export class MqttReserverPgGateway
 
   async query(sql: string, parameters: unknown[]): Promise<QueryResponse> {
     if (!this.verified) throw new Error('MQTT_RESERVER_NOT_READY');
-    // No ampliar a APIs DML genéricas: el adaptador sólo tiene el permiso
-    // PostgreSQL de EXECUTE para reservar.
+    // Do not widen to generic DML APIs: the adapter only has the PostgreSQL
+    // EXECUTE permission to reserve.
     return this.pool.query(sql, parameters);
   }
 
@@ -218,8 +218,8 @@ export class MqttReserverPgGateway
 }
 
 /**
- * Fábrica opt-in; falla cerrado y destruye el pool si no verifica permisos.
- * NO ejecutar en el arranque normal todavía; no registrar en DevicesModule.
+ * Opt-in factory; fails closed and destroys the pool if it cannot verify permissions.
+ * Do NOT run it at normal startup yet; do not register it in DevicesModule.
  */
 export async function openMqttReserverPgGateway(
   connectionString: string | undefined,

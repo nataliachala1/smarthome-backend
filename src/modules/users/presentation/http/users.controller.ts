@@ -62,7 +62,7 @@ export class UsersController {
     dto: DeactivateMyAccountDto,
   ) {
     /*
-    * La validación DTO ya exige true.
+    * DTO validation already requires true.
     */
     void dto;
 

@@ -1,6 +1,6 @@
-// Etapa 3D.3-A: política fail-closed ante timestamps ambiguos y reinicio
-// del contador. Este archivo prueba el subscriber real con transacciones
-// simuladas. El paquete incluye una integración PostgreSQL independiente.
+// Stage 3D.3-A: fail-closed policy for ambiguous timestamps and counter
+// resets. This file tests the real subscriber with simulated transactions.
+// The package includes an independent PostgreSQL integration.
 jest.mock('./mqtt-runtime.service', () => ({ MqttRuntimeService: class {} }));
 jest.mock('../../../../infrastructure/database/prisma/prisma-iot.service', () => ({ PrismaIotService: class {} }));
 jest.mock('../../../../infrastructure/database/prisma/prisma-rls.service', () => ({ PrismaRlsService: class {} }));
@@ -72,7 +72,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
   afterEach(() => jest.restoreAllMocks());
 
 
-  it('rechaza un evento Shelly con reloj adelantado una hora antes de toda escritura', async () => {
+  it('rejects a Shelly event with a clock one hour ahead before any write', async () => {
     const c = setup();
     await c.internal.handleStatusMessage(
       TOPIC, frame(Date.now() / 1000 + 3600, true, 40, 7500),
@@ -83,7 +83,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('acepta una pequeña desviación positiva del reloj para conservar telemetría válida', async () => {
+  it('accepts a small positive clock drift to keep valid telemetry', async () => {
     const c = setup();
     await c.internal.handleStatusMessage(
       TOPIC, frame(Date.now() / 1000 + 60, true, 40, 7500),
@@ -91,7 +91,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     expect(c.tx.device.update).toHaveBeenCalledTimes(1);
     expect(c.tx.consumption.createMany).toHaveBeenCalledTimes(1);
   });
-  it('3D.3-B2: read_at anterior al ultimo persistido se eleva sin perder delta', async () => {
+  it('3D.3-B2: a read_at earlier than the last persisted one is raised without losing the delta', async () => {
     const last = new Date(Date.now() + 15_000);
     const c = setup({ previousKwh: 1.0, latestReadAt: last });
     jest.spyOn(c.internal, 'parsePayload').mockReturnValue({
@@ -111,7 +111,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     );
   });
 
-  it('3D.3-B2: consumo sin total tambien mantiene read_at posterior', async () => {
+  it('3D.3-B2: consumption without a total also keeps the later read_at', async () => {
     const last = new Date(Date.now() + 15_000);
     const c = setup({ latestReadAt: last });
     jest.spyOn(c.internal, 'parsePayload').mockReturnValue({
@@ -126,7 +126,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     }));
   });
 
-  it('reconoce hashes distintos pero rechaza el segundo frame con el mismo ts', async () => {
+  it('recognizes different hashes but rejects the second frame with the same ts', async () => {
     const first = frame(1793388603.75, false, 10, 1800);
     const changed = frame(1793388603.75, true, 20, 1900);
     expect(identifyFlespiShellyEvent(TOPIC, first, 0)?.eventKey)
@@ -139,7 +139,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('reloj de origen retrocedido: rechaza estado y consumo', async () => {
+  it('origin clock moved backwards: rejects status and consumption', async () => {
     const c = setup({ watermark: 1793388603.75, previousKwh: 2 });
     await c.internal.handleStatusMessage(TOPIC, frame(1793380000, true, 50, 4000));
     expect(c.tx.$queryRaw).toHaveBeenCalledTimes(2);
@@ -148,7 +148,7 @@ describe('flespi 3D.3-A: timestamp ambiguo y contador reiniciado', () => {
     expect(c.emitToUser).not.toHaveBeenCalled();
   });
 
-  it('contador reiniciado con nuevo ts: crea lectura con delta cero', async () => {
+  it('counter reset with a new ts: creates a reading with a zero delta', async () => {
     const c = setup({ watermark: 1793388603.75, previousKwh: 2 });
     await c.internal.handleStatusMessage(TOPIC, frame(1793388603.9, true, 15, 100));
     expect(c.tx.device.update).toHaveBeenCalledTimes(1);

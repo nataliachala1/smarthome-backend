@@ -49,7 +49,7 @@ export class PrismaRecoveryTokenRepository
 
     if (!raw) {
       throw new Error(
-        'No fue posible crear el token de recuperación',
+        'The recovery token could not be created',
       );
     }
 

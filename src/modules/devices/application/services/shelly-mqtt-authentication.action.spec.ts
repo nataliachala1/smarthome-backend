@@ -49,7 +49,7 @@ function fixture(status = 'WAITING_FOR_MQTT') {
 }
 
 describe('ShellyMqttAuthenticationAction', () => {
-  it('autoriza OWNER y token, llama worker con identidad de sesión y relee CONNECTED', async () => {
+  it('authorizes OWNER and token, calls the worker with the session identity and re-reads CONNECTED', async () => {
     const f = fixture();
     await expect(f.action.confirm(request)).resolves.toEqual({
       phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED',
@@ -60,7 +60,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     expect(f.sessions.get).toHaveBeenCalledTimes(2);
   });
 
-  it('no vuelve a ejecutar el desafío si CONNECTED ya quedó persistido', async () => {
+  it('does not run the challenge again if CONNECTED is already persisted', async () => {
     const f = fixture('CONNECTED');
     await expect(f.action.confirm(request)).resolves.toMatchObject({
       mqttAuthenticated: true,
@@ -69,7 +69,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     expect(f.worker.confirm).not.toHaveBeenCalled();
   });
 
-  it('responde de forma idempotente después de COMPLETED sin reabrir el broker', async () => {
+  it('responds idempotently after COMPLETED without reopening the broker', async () => {
     const f = fixture('COMPLETED');
     f.session.expiresAt = new Date(Date.now() - 1).toISOString();
     await expect(f.action.confirm(request)).resolves.toEqual({
@@ -80,7 +80,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     expect(f.worker.confirm).not.toHaveBeenCalled();
   });
 
-  it('rechaza acceso sin autorización de hogar antes de invocar el worker', async () => {
+  it('rejects access without home authorization before invoking the worker', async () => {
     const f = fixture();
     f.sessions.assertCanManageHome.mockRejectedValueOnce(new Error('not owner'));
     await expect(f.action.confirm(request)).rejects.toThrow('not owner');
@@ -88,7 +88,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     expect(f.worker.confirm).not.toHaveBeenCalled();
   });
 
-  it('rechaza token, UUID, expiración y estado no elegible sin prueba MQTT', async () => {
+  it('rejects a token, UUID, expiration and ineligible state without an MQTT proof', async () => {
     const f = fixture();
     await expect(f.action.confirm({ ...request, sessionToken: 'bad' }))
       .rejects.toThrow('REQUEST_INVALID');
@@ -99,7 +99,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     expect(f.worker.confirm).not.toHaveBeenCalled();
   });
 
-  it('no afirma CONNECTED si SQL no persiste la confirmación', async () => {
+  it('does not claim CONNECTED if SQL does not persist the confirmation', async () => {
     const f = fixture();
     f.worker.confirm.mockResolvedValueOnce({
       phase: 'MQTT_AUTH_PERSISTED_SESSION_CONNECTED',
@@ -107,7 +107,7 @@ describe('ShellyMqttAuthenticationAction', () => {
     await expect(f.action.confirm(request)).rejects.toThrow('PERSISTENCE_UNCERTAIN');
   });
 
-  it('propaga el resultado incierto para que el controller lo sanitice', async () => {
+  it('propagates the uncertain result so that the controller sanitizes it', async () => {
     const f = fixture();
     f.worker.confirm.mockRejectedValueOnce(new Error('broker/SQL secret detail'));
     await expect(f.action.confirm(request)).rejects.toThrow('broker/SQL secret detail');

@@ -439,7 +439,7 @@ describe('HU10 MQTT adapter integration (synthetic transport, no broker/DB/Shell
         ),
     ).toThrow(
       new Error(
-        'MQTT_TLS_CA_FILE no contiene certificados PEM legibles y válidos.',
+        'MQTT_TLS_CA_FILE does not contain readable and valid PEM certificates.',
       ),
     );
   });

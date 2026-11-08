@@ -1,6 +1,6 @@
 /**
- * Aritmética decimal exacta sobre texto (sin Number binario) para importes y kWh.
- * Usa BigInt escalado; redondeo "half-up" (0.5 se aleja de cero).
+ * Exact decimal arithmetic on text (no binary Number) for amounts and kWh.
+ * Uses scaled BigInt; "half-up" rounding (0.5 moves away from zero).
  */
 
 const DECIMAL_PATTERN = /^-?\d+(\.\d+)?$/;
@@ -12,7 +12,7 @@ interface Scaled {
 
 function parse(value: string): Scaled {
   if (!DECIMAL_PATTERN.test(value)) {
-    throw new Error('Decimal inválido: ' + value);
+    throw new Error('Invalid decimal: ' + value);
   }
 
   const negative = value.startsWith('-');
@@ -39,7 +39,7 @@ function format(value: bigint, digits: number): string {
   return negative && /[1-9]/.test(text) ? '-' + text : text;
 }
 
-/** División entera con redondeo half-up. */
+/** Integer division with half-up rounding. */
 function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
   const negative = numerator < BigInt(0) !== denominator < BigInt(0);
   const n = numerator < BigInt(0) ? -numerator : numerator;
@@ -73,10 +73,10 @@ export function percentage(
   const d = parse(denominator);
 
   if (d.value === BigInt(0)) {
-    throw new Error('División por cero');
+    throw new Error('Division by zero');
   }
 
-  // n/d * 100 * 10^digits, llevando ambos a la misma escala.
+  // n/d * 100 * 10^digits, bringing both to the same scale.
   const scaledNumerator =
     n.value * pow10(d.scale) * BigInt(100) * pow10(digits);
   const scaledDenominator = d.value * pow10(n.scale);

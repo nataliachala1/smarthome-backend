@@ -9,8 +9,8 @@ const parseEvent = (method: string, value: unknown) =>
     params: { 'switch:0': value },
   }, 0, now);
 
-describe('flespi: validación estricta de telemetría Shelly', () => {
-  it('interpreta Switch.GetStatus / status/switch:0 con lectura real OFF', () => {
+describe('flespi: strict validation of Shelly telemetry', () => {
+  it('parses Switch.GetStatus / status/switch:0 with a real OFF reading', () => {
     expect(parseSwitch({
       id: 0, output: false, apower: 0, voltage: 117.8, current: 0,
       freq: 59.9, aenergy: { total: 1 }, temperature: { tC: 37.1 },
@@ -22,13 +22,13 @@ describe('flespi: validación estricta de telemetría Shelly', () => {
     });
   });
 
-  it('interpreta NotifyStatus parcial sin inventar estado ON/OFF', () => {
+  it('parses a partial NotifyStatus without inventing an ON/OFF state', () => {
     const result = parseEvent('NotifyStatus', { apower: 13.4 });
     expect(result).toMatchObject({ connectivityStatus: 'ONLINE', currentPowerW: 13.4 });
     expect(result?.isOn).toBeUndefined();
   });
 
-  it('interpreta NotifyFullStatus con switch:0', () => {
+  it('parses NotifyFullStatus with switch:0', () => {
     expect(parseEvent('NotifyFullStatus', {
       output: true, apower: 23.6, aenergy: { total: 1500 },
     })).toMatchObject({
@@ -37,43 +37,43 @@ describe('flespi: validación estricta de telemetría Shelly', () => {
     });
   });
 
-  it('tolera temperatura negativa (pero no consumo eléctrico negativo)', () => {
+  it('tolerates a negative temperature (but not negative electrical consumption)', () => {
     expect(parseSwitch({ temperature: { tC: -2.5 } })?.temperatureC).toBe(-2.5);
     expect(parseSwitch({ apower: -10 })).toBeNull();
   });
 
   it.each([
     ['output no booleano', { output: 'on', apower: 20 }],
-    ['potencia no numérica', { apower: '20' }],
+    ['non-numeric power', { apower: '20' }],
     ['voltaje negativo', { voltage: -1 }],
     ['corriente negativa', { current: -2 }],
     ['frecuencia infinita', { freq: Infinity }],
-    ['aenergy inválido', { apower: 1, aenergy: 'bad' }],
-    ['energía negativa', { aenergy: { total: -100 } }],
-    ['energía no numérica', { aenergy: { total: '1' } }],
-    ['temperatura inválida', { temperature: { tC: '37' } }],
+    ['invalid aenergy', { apower: 1, aenergy: 'bad' }],
+    ['negative energy', { aenergy: { total: -100 } }],
+    ['non-numeric energy', { aenergy: { total: '1' } }],
+    ['invalid temperature', { temperature: { tC: '37' } }],
   ])('rechaza %s', (_label, payload) => {
     expect(parseSwitch(payload as Record<string, unknown>)).toBeNull();
   });
 
-  it('descarta notificaciones sin datos de switch', () => {
+  it('discards notifications without switch data', () => {
     expect(parseSwitch({ id: 0, source: 'init' })).toBeNull();
     expect(parseEvent('NotifyStatus', { source: 'init' })).toBeNull();
   });
 
-  it('ignora métodos RPC no soportados y switch distinto de 0', () => {
+  it('ignores unsupported RPC methods and switches other than 0', () => {
     expect(parseEvent('NotifyEvent', { output: true })).toBeNull();
     expect(parseFlespiShellyTelemetry('shelly-events', {
       method: 'NotifyStatus', params: { 'switch:1': { output: true } },
     }, 0, now)).toBeNull();
   });
 
-  it('no confía en timestamps enviados por el dispositivo', () => {
+  it('does not trust timestamps sent by the device', () => {
     const result = parseSwitch({ output: false, ts: '2020-01-01' });
     expect(result?.readAt).toBe(now.toISOString());
   });
 
-  it('mantiene números nulos como ausencia y no los interpreta como cero', () => {
+  it('keeps null numbers as absence and does not interpret them as zero', () => {
     const result = parseSwitch({ output: false, apower: null });
     expect(result?.currentPowerW).toBeNull();
     expect(result?.isOn).toBe(false);

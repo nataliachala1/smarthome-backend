@@ -9,7 +9,7 @@ const LEASE = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const SUFFIX = ID.replace(/-/g, '');
 
 describe('PgMqttEnablePort', () => {
-  it('pasa a SQL solo el hash del token URL-safe del pairing', async () => {
+  it('passes to SQL only the hash of the URL-safe pairing token', async () => {
     const query = jest.fn().mockResolvedValue({ rows: [{ requested: true }] });
     const port = new PgMqttEnablePort({ query });
     await port.request(OP, USER, TOKEN);
@@ -20,7 +20,7 @@ describe('PgMqttEnablePort', () => {
     expect(JSON.stringify(query.mock.calls)).not.toContain(TOKEN);
   });
 
-  it('rechaza un token fuera del contrato antes de llamar SQL', async () => {
+  it('rejects a token outside the contract before calling SQL', async () => {
     const query = jest.fn();
     const port = new PgMqttEnablePort({ query });
     await expect(port.request(OP, USER, 'short-token')).rejects.toThrow(
@@ -29,7 +29,7 @@ describe('PgMqttEnablePort', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('valida lease, operación e identidad entregadas por fn_claim_mqtt_enable', async () => {
+  it('validates the lease, operation and identity returned by fn_claim_mqtt_enable', async () => {
     const query = jest.fn().mockResolvedValue({ rows: [{
       operationId: OP,
       leaseToken: LEASE,

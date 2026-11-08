@@ -42,7 +42,7 @@ export class PrismaUserPreferenceRepository
           time_format: '24h',
           timezone: 'America/Bogota',
 
-          // Existen en BD, pero no se exponen en el API por alcance.
+          // They exist in the DB, but are not exposed in the API by scope.
           currency: 'COP',
           temperature_unit: 'C',
         },
@@ -87,7 +87,7 @@ export class PrismaUserPreferenceRepository
           time_format: input.timeFormat ?? '24h',
           timezone: input.timezone ?? 'America/Bogota',
 
-          // Existen en BD, pero no se exponen en el API por alcance.
+          // They exist in the DB, but are not exposed in the API by scope.
           currency: 'COP',
           temperature_unit: 'C',
         },

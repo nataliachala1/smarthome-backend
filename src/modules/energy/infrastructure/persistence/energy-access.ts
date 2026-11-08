@@ -6,9 +6,9 @@ import {
 } from '../../domain/errors/energy.errors';
 
 /**
- * Lectura económica: OWNER, o MEMBER activo con view_consumption, en hogar activo
- * (OWNER también en hogar desactivado). GUEST nunca pasa.
- * Debe ejecutarse dentro de la transacción de withUserContext.
+ * Economic read: OWNER, or an active MEMBER with view_consumption, in an active home
+ * (the OWNER also in a deactivated home). A GUEST never passes.
+ * Must run inside the withUserContext transaction.
  */
 export async function assertCanReadEnergy(
   tx: Prisma.TransactionClient,
@@ -23,7 +23,7 @@ export async function assertCanReadEnergy(
   }
 }
 
-/** Escritura: solo OWNER activo, con cuenta activa, de un hogar activo. */
+/** Write: only an active OWNER, with an active account, of an active home. */
 export async function assertCanManageEnergy(
   tx: Prisma.TransactionClient,
   homeId: string,
@@ -37,13 +37,13 @@ export async function assertCanManageEnergy(
   }
 }
 
-/** Tipo de operación sobre datos económicos: consultar o configurar. */
+/** Kind of operation on economic data: read or configure. */
 export type EnergyAccessKind = 'read' | 'manage';
 
 /**
- * Error de dominio para un rechazo de acceso según el tipo de operación.
- * Se usa al traducir un rechazo de PostgreSQL (42501, privilegio o política RLS):
- * una lectura denegada nunca debe reportarse como denegación de escritura.
+ * Domain error for an access rejection according to the kind of operation.
+ * Used when translating a PostgreSQL rejection (42501, privilege or RLS policy):
+ * a denied read must never be reported as a denied write.
  */
 export function energyAccessDeniedError(
   kind: EnergyAccessKind,
@@ -53,7 +53,7 @@ export function energyAccessDeniedError(
     : new EnergyManageAccessDeniedError();
 }
 
-/** Código Prisma de violación de restricción única. */
+/** Prisma code for a unique constraint violation. */
 export function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === 'object' &&

@@ -35,7 +35,7 @@ export class MonthHomeEnergyGoalResponse {
   @ApiProperty({
     type: HomeEnergyGoalResponse,
     nullable: true,
-    description: 'null si el mes no tiene presupuesto ni meta configurados',
+    description: 'null when the month has no configured budget or target',
   })
   goal: HomeEnergyGoalResponse | null;
 }

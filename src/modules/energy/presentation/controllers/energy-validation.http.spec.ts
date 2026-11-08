@@ -78,7 +78,7 @@ const summaryRepository: HomeEnergySummaryRepository = {
   getMonthFacts,
 };
 
-describe('Validaciones HTTP de la API de energía', () => {
+describe('HTTP validation of the energy API', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
@@ -114,7 +114,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    // Misma configuración global que src/main.ts.
+    // Same global configuration as src/main.ts.
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -144,7 +144,7 @@ describe('Validaciones HTTP de la API de energía', () => {
 
   const server = () => app.getHttpServer();
 
-  describe('UUID del hogar', () => {
+  describe('Home UUID', () => {
     it.each([
       ['GET', '/api/v1/homes/no-es-uuid/energy/tariffs'],
       ['GET', '/api/v1/homes/no-es-uuid/energy/tariffs/current'],
@@ -154,7 +154,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       await request(server()).get(url).expect(400);
     });
 
-    it('POST y PUT con UUID inválido responden 400 sin escribir', async () => {
+    it('POST and PUT with an invalid UUID return 400 without writing', async () => {
       await request(server())
         .post('/api/v1/homes/123/energy/tariffs')
         .send({ unitPriceCopKwh: '1', effectiveFrom: '2026-11-01' })
@@ -169,7 +169,7 @@ describe('Validaciones HTTP de la API de energía', () => {
     });
   });
 
-  describe('Fechas (YYYY-MM-DD reales, año 2000–2099)', () => {
+  describe('Dates (real YYYY-MM-DD, year 2000–2099)', () => {
     it.each([
       ['2026-02-29'],
       ['2026-02-30'],
@@ -188,7 +188,7 @@ describe('Validaciones HTTP de la API de energía', () => {
     });
 
     it.each([['2026-02-30'], ['hoy'], ['0000-01-01']])(
-      'rechaza la consulta de tarifa vigente con at=%p',
+      'rejects the current tariff query with at=%p',
       async (at) => {
         await request(server())
           .get(BASE + '/tariffs/current')
@@ -197,7 +197,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       },
     );
 
-    it('acepta fechas válidas, incluido el 29 de febrero bisiesto', async () => {
+    it('accepts valid dates, including February 29 of a leap year', async () => {
       await request(server())
         .post(BASE + '/tariffs')
         .send({ unitPriceCopKwh: '950.25', effectiveFrom: '2028-02-29' })
@@ -205,7 +205,7 @@ describe('Validaciones HTTP de la API de energía', () => {
     });
   });
 
-  describe('Meses (YYYY-MM, año 2000–2099, mes 01..12)', () => {
+  describe('Months (YYYY-MM, year 2000–2099, month 01..12)', () => {
     it.each([['2026-13'], ['2026-00'], ['2026-1'], ['0000-01'], ['9999-12']])(
       'GET goals y GET summary rechazan month=%p (400, nunca 500)',
       async (month) => {
@@ -221,7 +221,7 @@ describe('Validaciones HTTP de la API de energía', () => {
     );
 
     it.each([['2026-13'], ['0000-01'], ['2026-11-01'], ['noviembre']])(
-      'PUT goals rechaza el mes de la ruta %p',
+      'PUT goals rejects the route month %p',
       async (month) => {
         await request(server())
           .put(BASE + '/goals/' + month)
@@ -231,7 +231,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       },
     );
 
-    it('el mes 2099-12 es válido y su rango termina el 1 de enero de 2100', async () => {
+    it('month 2099-12 is valid and its range ends on January 1, 2100', async () => {
       const response = await request(server())
         .get(BASE + '/summary')
         .query({ month: '2099-12' })
@@ -258,7 +258,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       ['1.'],
       ['007'],
       [950.25],
-    ])('rechaza el precio %p', async (unitPriceCopKwh) => {
+    ])('rejects the price %p', async (unitPriceCopKwh) => {
       await request(server())
         .post(BASE + '/tariffs')
         .send({ unitPriceCopKwh, effectiveFrom: '2026-11-01' })
@@ -273,7 +273,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       [{ monthlyBudgetCop: null, targetKwh: '-5' }],
       [{ monthlyBudgetCop: null, targetKwh: '1.1234567' }],
       [{ monthlyBudgetCop: '', targetKwh: '1' }],
-    ])('rechaza presupuesto o meta inválidos %p', async (body) => {
+    ])('rejects an invalid budget or target %p', async (body) => {
       await request(server())
         .put(BASE + '/goals/2026-11')
         .send(body)
@@ -282,8 +282,8 @@ describe('Validaciones HTTP de la API de energía', () => {
     });
   });
 
-  describe('Regla presupuesto/meta y cuerpo del PUT', () => {
-    it('presupuesto y meta ambos null: 400 ENERGY_GOAL_VALUE_REQUIRED sin escribir', async () => {
+  describe('Budget/target rule and PUT body', () => {
+    it('budget and target both null: 400 ENERGY_GOAL_VALUE_REQUIRED without writing', async () => {
       const response = await request(server())
         .put(BASE + '/goals/2026-11')
         .send({ monthlyBudgetCop: null, targetKwh: null })
@@ -301,7 +301,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       [{}],
       [[]],
       [{ monthlyBudgetCop: '1', targetKwh: null, id_home: HOME_ID }],
-    ])('rechaza cuerpo incompleto o con campos extra %p', async (body) => {
+    ])('rejects an incomplete body or extra fields %p', async (body) => {
       await request(server())
         .put(BASE + '/goals/2026-11')
         .send(body)
@@ -313,7 +313,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       [{ monthlyBudgetCop: '120000.00', targetKwh: null }],
       [{ monthlyBudgetCop: null, targetKwh: '125' }],
       [{ monthlyBudgetCop: '120000', targetKwh: '125.5' }],
-    ])('acepta solo presupuesto, solo meta o ambos %p', async (body) => {
+    ])('accepts only a budget, only a target or both %p', async (body) => {
       await request(server())
         .put(BASE + '/goals/2026-11')
         .send(body)
@@ -322,7 +322,7 @@ describe('Validaciones HTTP de la API de energía', () => {
   });
 
   describe('Duplicados', () => {
-    it('tarifa con la misma fecha de vigencia: 409 ENERGY_TARIFF_DUPLICATE', async () => {
+    it('tariff with the same effective date: 409 ENERGY_TARIFF_DUPLICATE', async () => {
       createTariff.mockRejectedValue(new HomeEnergyTariffAlreadyExistsError());
 
       const response = await request(server())
@@ -334,7 +334,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       expect(JSON.stringify(response.body)).not.toMatch(/select|insert|P2002/i);
     });
 
-    it('meta del mismo mes escrita a la vez: 409 ENERGY_GOAL_CONCURRENT_WRITE', async () => {
+    it('goal of the same month written concurrently: 409 ENERGY_GOAL_CONCURRENT_WRITE', async () => {
       upsertGoal.mockRejectedValue(new EnergyGoalConcurrentWriteError());
 
       const response = await request(server())
@@ -347,7 +347,7 @@ describe('Validaciones HTTP de la API de energía', () => {
       });
     });
 
-    it('PUT repetido del mismo mes es idempotente (mismo resultado, sin error)', async () => {
+    it('repeated PUT of the same month is idempotent (same result, no error)', async () => {
       const body = { monthlyBudgetCop: '120000.00', targetKwh: null };
 
       const first = await request(server())
@@ -363,7 +363,7 @@ describe('Validaciones HTTP de la API de energía', () => {
     });
   });
 
-  it('rechaza parámetros de consulta desconocidos', async () => {
+  it('rejects unknown query parameters', async () => {
     await request(server())
       .get(BASE + '/summary')
       .query({ month: '2026-11', foo: '1' })

@@ -19,16 +19,16 @@ export interface PrepareMqttIdentityInput {
   readonly roleName: string;
   readonly password: string;
   /**
-   * Prefijo de tópicos del equipo reservado.
-   * El orquestador debe derivarlo de MqttTopicContract.shellyPrefix(manufacturerDeviceId)
-   * después de verificar ownership, sesión y manufacturerDeviceId.
-   * Nunca confiar en un prefijo introducido por el cliente HTTP/móvil.
+   * Topic prefix of the reserved device.
+   * The orchestrator must derive it from MqttTopicContract.shellyPrefix(manufacturerDeviceId)
+   * after verifying ownership, session and manufacturerDeviceId.
+   * Never trust a prefix supplied by the HTTP/mobile client.
    */
   readonly topicScope: string;
   readonly acls: readonly MqttIdentityAcl[];
 }
 
-/** Verifica una identidad ya preparada sin manejar ni revelar su password. */
+/** Verifies an already prepared identity without handling or revealing its password. */
 export type VerifyPreparedMqttIdentityInput = Pick<
   PrepareMqttIdentityInput,
   'username' | 'clientId' | 'roleName' | 'topicScope' | 'acls'
@@ -41,44 +41,44 @@ export interface MqttBrokerIdentitySnapshot {
   readonly roleNames: readonly string[];
 
   /**
-   * null indica que el proveedor no puede demostrar
-   * la cantidad de conexiones autenticadas.
-   * No constituye por si solo una prueba de posesion fisica.
+   * null means the provider cannot prove
+   * the number of authenticated connections.
+   * On its own it is not proof of physical possession.
    */
   readonly authenticatedConnectionCount: number | null;
 }
 
 /**
- * Administracion de credenciales individuales MQTT.
+ * Management of individual MQTT credentials.
  *
- * Nunca utiliza las credenciales MQTT de control o telemetria
- * del backend.
+ * It never uses the backend's control or telemetry
+ * MQTT credentials.
  *
- * Un fallo de comunicacion con el broker debe lanzar un error.
- * No debe interpretarse como identidad ausente o revocada.
+ * A communication failure with the broker must throw an error.
+ * It must not be interpreted as an absent or revoked identity.
  */
 export abstract class MqttDeviceIdentityProvider {
   /** Read-only broker checks required before provisioning can be advertised. */
   abstract verifyBrokerPrerequisites(): Promise<void>;
 
   /**
-   * Prepara la identidad sin permitir todavia su conexion.
-   * Al retornar, deben estar confirmados el clientId,
-   * los permisos exactos y el estado deshabilitado.
+   * Prepares the identity without allowing it to connect yet.
+   * On return, the clientId, the exact permissions
+   * and the disabled state must be confirmed.
    */
   abstract prepareDisabled(
     input: PrepareMqttIdentityInput,
   ): Promise<void>;
 
   /**
-   * null significa ausencia confirmada por el broker.
-   * Error o timeout significa estado desconocido.
+   * null means the broker confirmed the absence.
+   * An error or timeout means an unknown state.
    */
   abstract inspectIdentity(
     username: string,
   ): Promise<MqttBrokerIdentitySnapshot | null>;
 
-  /** Reconsulta cliente, grupos, rol y cinco ACL exactas antes de SQL 027. */
+  /** Re-queries the client, groups, role and five exact ACLs before SQL 027. */
   abstract verifyPreparedDisabled(
     input: VerifyPreparedMqttIdentityInput,
   ): Promise<void>;
@@ -86,8 +86,8 @@ export abstract class MqttDeviceIdentityProvider {
   abstract enableIdentity(username: string): Promise<void>;
 
   /**
-   * La implementacion debe confirmar el estado deshabilitado y cero
-   * conexiones autenticadas; evidencia ausente o incierta no es revocacion.
+   * The implementation must confirm the disabled state and zero
+   * authenticated connections; missing or uncertain evidence is not a revocation.
    */
   abstract disableIdentity(username: string): Promise<void>;
 }

@@ -34,15 +34,15 @@ export class DiscoverShellyDevicesUseCase {
     );
 
     /*
-     * 1. Buscar candidatos mediante mDNS.
+     * 1. Find candidates through mDNS.
      */
     const candidates =
       await this.discoveryService.discover();
 
     /*
-     * 2. No confiamos únicamente en el anuncio mDNS.
-     * Consultamos /shelly para verificar que realmente
-     * sea un Shelly compatible.
+     * 2. The mDNS announcement alone is not trusted.
+     * /shelly is queried to verify that it really
+     * is a compatible Shelly.
      */
     const inspected =
       await Promise.all(
@@ -94,10 +94,10 @@ export class DiscoverShellyDevicesUseCase {
               };
             } catch {
               /*
-               * Un dispositivo puede desaparecer durante
-               * los segundos que dura el descubrimiento.
-               * No hacemos fallar toda la búsqueda por un
-               * candidato individual.
+               * A device can disappear during
+               * the seconds the discovery takes.
+               * The whole search does not fail because of a
+               * single candidate.
                */
               return null;
             }
@@ -114,8 +114,8 @@ export class DiscoverShellyDevicesUseCase {
       );
 
     /*
-     * Eliminamos duplicados por ID del fabricante.
-     * Algunos equipos pueden anunciar más de una IP.
+     * Duplicates are removed by manufacturer ID.
+     * Some devices may announce more than one IP.
      */
     const unique =
       new Map<

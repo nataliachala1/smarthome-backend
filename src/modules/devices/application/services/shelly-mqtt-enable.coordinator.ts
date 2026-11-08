@@ -18,16 +18,16 @@ export interface MqttEnablePort {
 export interface MqttEnableRequest {
   userId:string; homeId:string; sessionId:string; sessionToken:string;
   operationId:string;
-  /** Confirmación obtenida de readback MQTT.GetConfig en el mismo Shelly físico. */
+  /** Confirmation obtained from an MQTT.GetConfig readback on the same physical Shelly. */
   localConfigurationReadbackVerified?:boolean;
-  /** Confirmación humana para una red LAN aislada de desarrollo. */
+  /** Human confirmation for an isolated development LAN. */
   explicitlyTrustedLocalNetwork?:boolean;
 }
 
 export type MqttEnableProfile = 'local-dev' | 'vps-dev-tls' | 'production-mosquitto';
 /**
- * Local exige readback y aprobación de laboratorio; VPS usa autorización
- * OWNER+token y lease SQL030. En ambos perfiles solo alcanza AWAITING_AUTH.
+ * Local requires readback and lab approval; VPS uses OWNER+token
+ * authorization and the SQL030 lease. Both profiles only reach AWAITING_AUTH.
  */
 export class ShellyMqttEnableCoordinator {
   constructor(
@@ -62,8 +62,8 @@ export class ShellyMqttEnableCoordinator {
     const manufacturerId=current.identity.manufacturerDeviceId;
     const plan=buildShellyMqttAclPlan(this.runtime.topics,manufacturerId,
       this.runtime.config.switchId);
-    // SQL030 confirma OWNER, token, vigencia, operacion PREPARED_DISABLED y secreto.
-    // SQL030 reclama lease único; no repetir automáticamente una respuesta incierta.
+    // SQL030 confirms OWNER, token, validity, PREPARED_DISABLED operation and secret.
+    // SQL030 claims a single lease; do not automatically repeat an uncertain response.
     await this.port.request(input.operationId,input.userId,input.sessionToken);
     const claim=await this.port.claim(input.operationId);
     const suffix=claim.identityId.replace(/-/g,'');
@@ -97,7 +97,7 @@ export class ShellyMqttEnableCoordinator {
       await this.port.confirm(claim);
       return {phase:'AWAITING_MQTT_AUTH',mqttAuthenticated:false};
     } catch {
-      // Resultado de Mosquitto o del COMMIT SQL incierto: bloquear reintentos.
+      // Uncertain Mosquitto result or SQL COMMIT: block retries.
       // The validated binding is safe to disable even if inspection failed
       // before enable; fail closed on a possibly active broker account.
       await this.broker.disableIdentity(claim.username).catch(()=>undefined);

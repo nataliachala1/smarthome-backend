@@ -5,8 +5,8 @@ import type {
 import type { ShellyMqttPreparationCoordinator } from './shelly-mqtt-preparation.coordinator';
 
 /**
- * Fase 504.10, servidor solamente. No habilita MQTT, no entrega la password
- * al Android y JAMAS marca el dispositivo CONNECTED ni COMPLETED.
+ * Phase 504.10, server only. Does not enable MQTT, does not deliver the password
+ * to Android and NEVER marks the device CONNECTED or COMPLETED.
  */
 export class ShellyMqttPrepareAction {
   constructor(
@@ -26,7 +26,7 @@ export class ShellyMqttPrepareAction {
         result.operationId !== reservation.operationId) {
       throw new Error('MQTT_PREPARE_RESULT_INVALID');
     }
-    // Deliberadamente no retorna username, roleName, clientId, token ni secretos.
+    // Deliberately does not return username, roleName, clientId, token or secrets.
     return {
       phase: 'PREPARED_DISABLED_ONLY',
       operationId: reservation.operationId,

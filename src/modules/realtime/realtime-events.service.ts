@@ -14,7 +14,7 @@ export class RealtimeEventsService {
   // Preserve the best-effort publisher contract; failures suppress delivery.
   emitToUser(userId: string, event: string, payload: unknown): void {
     void this.deliver(userId, event, payload).catch(() => {
-      this.logger.warn('No se pudo autorizar una entrega realtime.');
+      this.logger.warn('A realtime delivery could not be authorized.');
     });
   }
 

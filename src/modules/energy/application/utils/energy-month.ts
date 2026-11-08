@@ -1,16 +1,16 @@
 /**
- * Rango técnico de años admitido para fechas y meses de energía (2000–2099).
- * Evita valores que PostgreSQL o JavaScript no pueden representar (año 0000,
- * mes siguiente a 9999-12) y que terminarían en errores 500. Si el negocio
- * necesita otro rango, se ajusta solo aquí.
+ * Technical range of years accepted for energy dates and months (2000–2099).
+ * Prevents values that PostgreSQL or JavaScript cannot represent (year 0000,
+ * the month after 9999-12) and that would end in 500 errors. If the business
+ * needs another range, adjust it only here.
  */
 export const ENERGY_MIN_YEAR = 2000;
 export const ENERGY_MAX_YEAR = 2099;
 
-/** YYYY-MM con año 2000–2099 y mes 01..12. */
+/** YYYY-MM with year 2000–2099 and month 01..12. */
 export const ENERGY_MONTH_PATTERN = /^20\d{2}-(0[1-9]|1[0-2])$/;
 
-/** YYYY-MM-DD con año 2000–2099 (la validez del día la comprueba IsISO8601). */
+/** YYYY-MM-DD with year 2000–2099 (IsISO8601 checks the day validity). */
 export const ENERGY_DATE_PATTERN =
   /^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 

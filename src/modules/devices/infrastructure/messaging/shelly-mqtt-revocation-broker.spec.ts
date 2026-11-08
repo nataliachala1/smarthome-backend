@@ -38,7 +38,7 @@ describe('ShellyMqttRevocationBroker', () => {
     broker = new ShellyMqttRevocationBroker(provider as unknown as MqttDeviceIdentityProvider);
   });
 
-  it('solo deshabilita la identidad asociada al claim y comprueba estado y conexiones', async () => {
+  it('only disables the identity bound to the claim and checks state and connections', async () => {
     provider.inspectIdentity
       .mockResolvedValueOnce(snapshot())
       .mockResolvedValueOnce(snapshot({ disabled: true }));
@@ -47,7 +47,7 @@ describe('ShellyMqttRevocationBroker', () => {
     expect(provider.inspectIdentity).toHaveBeenCalledTimes(2);
   });
 
-  it('confirma ausencia solo a partir de una respuesta explícita del broker', async () => {
+  it('confirms absence only from an explicit broker response', async () => {
     provider.inspectIdentity.mockResolvedValueOnce(null);
     await expect(broker.revokeClaim(claim)).resolves.toBe('IDENTITY_ABSENT');
     expect(provider.disableIdentity).not.toHaveBeenCalled();
@@ -56,7 +56,7 @@ describe('ShellyMqttRevocationBroker', () => {
   it.each([
     snapshot({ clientId: 'another-client' }),
     snapshot({ roleNames: ['another-role'] }),
-  ])('no deshabilita una identidad cuyo binding no coincide', async (wrong) => {
+  ])('does not disable an identity whose binding does not match', async (wrong) => {
     provider.inspectIdentity.mockResolvedValueOnce(wrong);
     await expect(broker.revokeClaim(claim)).rejects.toThrow('MQTT_REVOCATION_BINDING_MISMATCH');
     expect(provider.disableIdentity).not.toHaveBeenCalled();
@@ -66,12 +66,12 @@ describe('ShellyMqttRevocationBroker', () => {
     snapshot({ disabled: false }),
     snapshot({ disabled: true, authenticatedConnectionCount: 1 }),
     snapshot({ disabled: true, authenticatedConnectionCount: null }),
-  ])('no genera evidencia cuando el broker no demuestra revocación completa', async (after) => {
+  ])('produces no evidence when the broker does not prove a full revocation', async (after) => {
     provider.inspectIdentity.mockResolvedValueOnce(snapshot()).mockResolvedValueOnce(after);
     await expect(broker.revokeClaim(claim)).rejects.toThrow('MQTT_REVOCATION_OUTCOME_UNVERIFIED');
   });
 
-  it('no interpreta fallos/timeout de consulta como ausencia y no inicia otra operación', async () => {
+  it('does not interpret query failures/timeouts as absence and does not start another operation', async () => {
     provider.inspectIdentity.mockRejectedValueOnce(new Error('transport timeout'));
     await expect(broker.revokeClaim(claim)).rejects.toThrow('transport timeout');
     expect(provider.disableIdentity).not.toHaveBeenCalled();

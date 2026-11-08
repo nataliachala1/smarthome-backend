@@ -1,8 +1,8 @@
 /**
- * BE-01 / LABORATORIO EXCLUSIVO MQTT 127.0.0.1:1885.
- * Verifica getClient.connections y defaults ACL deny de Mosquitto 2.1+
- * usando una identidad
- * sintetica. No usa Shelly real, PostgreSQL ni cambia AUTH_VERIFIED.
+ * BE-01 / EXCLUSIVE MQTT LAB 127.0.0.1:1885.
+ * Verifies getClient.connections and the Mosquitto 2.1+ ACL deny defaults
+ * using a synthetic
+ * identity. Does not use a real Shelly, PostgreSQL or change AUTH_VERIFIED.
  */
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
@@ -37,7 +37,7 @@ async function connectSynthetic(username: string, password: string, clientId: st
       reject(new Error('MQTT_LAB_CONNECT_TIMEOUT'));
     }, 6_000);
     client.on('error', () => {
-      if (settled) return; // Evita error no gestionado despues de disableClient.
+      if (settled) return; // Avoids an unhandled error after disableClient.
       settled = true;
       clearTimeout(timer);
       client.end(true);
@@ -53,8 +53,8 @@ async function connectSynthetic(username: string, password: string, clientId: st
 }
 
 run('HU16 / conexion MQTT autenticada observada en Mosquitto (LAB REAL)', () => {
-  it('solo reporta conexion activa con cuenta habilitada; revocarla expulsa al cliente', async () => {
-    // Guardia estricta: JAMAS apuntar estas pruebas a un broker principal/remoto.
+  it('only reports an active connection with an enabled account; revoking it kicks the client', async () => {
+    // Strict guard: NEVER point these tests at a main/remote broker.
     if (
       process.env.NODE_ENV === 'production' ||
       process.env.MQTT_DYNSEC_ADMIN_URL !== BROKER ||
@@ -114,7 +114,7 @@ run('HU16 / conexion MQTT autenticada observada en Mosquitto (LAB REAL)', () => 
       expect(active?.authenticatedConnectionCount).toBe(1);
       expect(matchesBrokerIdentityConnection(active, binding)).toBe(true);
 
-      // Dynamic Security debe desconectar al cliente de prueba activo.
+      // Dynamic Security must disconnect the active test client.
       await provider.disableIdentity(username);
       let revoked = await provider.inspectIdentity(username);
       for (let attempt = 0; attempt < 12 && revoked?.authenticatedConnectionCount !== 0; attempt++) {
@@ -125,11 +125,11 @@ run('HU16 / conexion MQTT autenticada observada en Mosquitto (LAB REAL)', () => 
       expect(revoked?.authenticatedConnectionCount).toBe(0);
       expect(matchesBrokerIdentityConnection(revoked, binding)).toBe(false);
     } finally {
-      // Aunque falle una assertion, nunca dejar la identidad sintetica habilitada.
+      // Even if an assertion fails, never leave the synthetic identity enabled.
       client?.end(true);
       const snapshot = await provider.inspectIdentity(username);
       if (snapshot && !snapshot.disabled) await provider.disableIdentity(username);
-      // Por diseno conservamos la identidad LAB deshabilitada como evidencia.
+      // By design, the LAB identity is kept disabled as evidence.
       if (prepared) console.info(`LAB_ONLY_DISABLED_IDENTITY=${username}`);
     }
   }, 90_000);

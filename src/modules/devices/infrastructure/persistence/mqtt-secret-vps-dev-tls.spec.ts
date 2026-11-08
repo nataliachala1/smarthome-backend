@@ -1,12 +1,12 @@
 import { parseMqttSecretConnection, parseMqttSecretDevConnection } from './mqtt-secret-pg.gateway';
 
-describe('MQTT secret VPS DEV - TLS y aislamiento de roles', () => {
+describe('MQTT secret VPS DEV - TLS and role isolation', () => {
   const host = 'smart-home-smarthomepostgresdev-vrmtpz';
-  const password = 'A'.repeat(43); // marcador sintetico; nunca usar una clave real
+  const password = 'A'.repeat(43); // synthetic marker; never use a real key
   const mk = (role = 'smarthome_mqtt_secret_dev_login', db = 'smarthome_dev', server = host) =>
     `postgresql://${role}:${password}@${server}:5432/${db}`;
 
-  it('permite la cuenta secret exclusivamente sobre VPS DEV TLS verificado', () => {
+  it('allows the secret account exclusively on verified VPS DEV TLS', () => {
     const target = parseMqttSecretConnection(mk(), 'vps-dev-tls', 'production');
     expect(target.role).toBe('smarthome_mqtt_secret_dev_login');
     expect(target.database).toBe('smarthome_dev');
@@ -22,7 +22,7 @@ describe('MQTT secret VPS DEV - TLS y aislamiento de roles', () => {
     expect(() => parseMqttSecretConnection(mk(), 'local-dev', 'production')).toThrow('MQTT_SECRET_DATABASE_TARGET_NOT_ALLOWED');
     expect(() => parseMqttSecretConnection(mk(), 'vps-dev-tls', 'development')).toThrow('MQTT_SECRET_DATABASE_TARGET_NOT_ALLOWED');
   });
-  it('conserva local-dev sin TLS solo en desarrollo local', () => {
+  it('keeps local-dev without TLS only in local development', () => {
     const local = mk(undefined, 'smarthome', '127.0.0.1');
     expect(parseMqttSecretDevConnection(local, 'development').options.ssl).toBe(false);
     expect(() => parseMqttSecretDevConnection(local, 'production')).toThrow('MQTT_SECRET_DATABASE_TARGET_NOT_ALLOWED');
