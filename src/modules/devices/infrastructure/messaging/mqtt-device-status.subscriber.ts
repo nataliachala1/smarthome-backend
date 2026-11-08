@@ -66,7 +66,7 @@ export class MqttDeviceStatusSubscriber
 
     if (!brokerUrl) {
       this.logger.warn(
-        'MQTT_BROKER_URL no está configurado. No se iniciará el subscriber MQTT.',
+        'MQTT_BROKER_URL is not configured. The MQTT subscriber will not start.',
       );
       return;
     }
@@ -87,14 +87,14 @@ export class MqttDeviceStatusSubscriber
           ));
         if (error || flespiGrantRejected) {
           this.logger.error(
-            'MQTT_SUBSCRIBE_FAILED: no se pudo suscribir a los tópicos de estado.',
+            'MQTT_SUBSCRIBE_FAILED: could not subscribe to the status topics.',
           );
           if (flespiGrantRejected) client.end(true);
           return;
         }
 
         this.logger.log(
-          `Suscrito a tópicos MQTT de estado: ${topics.join(', ')}`,
+          `Subscribed to MQTT status topics: ${topics.join(', ')}`,
         );
       });
     });
@@ -107,13 +107,13 @@ export class MqttDeviceStatusSubscriber
       }
       void this.handleStatusMessage(topic, payload).catch(() => {
         this.logger.error(
-          'MQTT_STATUS_PROCESSING_FAILED: no se pudo procesar el mensaje de estado.',
+          'MQTT_STATUS_PROCESSING_FAILED: could not process the status message.',
         );
       });
     });
 
     client.on('error', () => {
-      this.logger.error('MQTT_CONNECTION_FAILED: error de conexión de estado.');
+      this.logger.error('MQTT_CONNECTION_FAILED: status connection error.');
     });
 
     client.on('reconnect', () => {
@@ -121,11 +121,11 @@ export class MqttDeviceStatusSubscriber
     });
 
     client.on('offline', () => {
-      this.logger.warn('Cliente MQTT sin conexión.');
+      this.logger.warn('MQTT client offline.');
     });
 
     client.on('close', () => {
-      this.logger.warn('Conexión MQTT cerrada.');
+      this.logger.warn('MQTT connection closed.');
     });
   }
 
@@ -144,7 +144,7 @@ export class MqttDeviceStatusSubscriber
 
     if (!manufacturerDeviceId) {
       this.logger.warn(
-        'MQTT_TOPIC_REJECTED: tópico fuera del contrato configurado.',
+        'MQTT_TOPIC_REJECTED: topic outside the configured contract.',
       );
       return;
     }
@@ -154,13 +154,13 @@ export class MqttDeviceStatusSubscriber
     if (!message) {
       if (this.isShellyTopic(topic)) {
         this.logger.debug(
-          `Mensaje MQTT Shelly ignorado porque no contiene datos de switch: ${topic}`,
+          `Shelly MQTT message ignored because it has no switch data: ${topic}`,
         );
         return;
       }
 
       this.logger.warn(
-        `Payload MQTT de estado inválido para ${manufacturerDeviceId}`,
+        `Invalid MQTT status payload for ${manufacturerDeviceId}`,
       );
       return;
     }
@@ -181,7 +181,7 @@ export class MqttDeviceStatusSubscriber
 
     if (!device) {
       this.logger.warn(
-        `No se encontró dispositivo activo para manufacturerDeviceId=${manufacturerDeviceId}`,
+        `No active device found for manufacturerDeviceId=${manufacturerDeviceId}`,
       );
       return;
     }
@@ -234,8 +234,8 @@ export class MqttDeviceStatusSubscriber
     const shouldCreateConsumption = typeof powerW === 'number' &&
       (!isFlespi || eventIdentity !== null);
 
-    // Mosquitto conserva la política histórica: estado independiente del consumo.
-    // flespi actualiza el estado DENTRO de la transacción de consumo.
+    // Mosquitto keeps the historical policy: status independent of consumption.
+    // flespi updates the status INSIDE the consumption transaction.
     const legacyUpdatedDevice = this.mqtt.config?.flespiDeviceId
       ? null
       : await this.prisma.device.update({
@@ -397,8 +397,8 @@ export class MqttDeviceStatusSubscriber
             previousConsumption?.energy_total_kwh ?? null,
           );
 
-        // La ingesta no necesita consultar columnas adicionales al insertar.
-        // El agregado estadistico pertenece a un worker independiente.
+        // Ingest does not need to read additional columns when inserting.
+        // The statistical aggregate belongs to an independent worker.
         const consumptionId = randomUUID();
 
         await tx.consumption.createMany({
@@ -432,7 +432,7 @@ export class MqttDeviceStatusSubscriber
           temperatureC: message.temperatureC ?? null,
           readAt: orderedReadAt,
         };
-        // Estadisticas y alertas: pendientes de worker con permisos propios.
+        // Statistics and alerts: pending a worker with its own permissions.
       }
 
       return {
@@ -452,8 +452,8 @@ export class MqttDeviceStatusSubscriber
 
       this.logger.error(`MQTT_CONSUMPTION_PERSISTENCE_FAILED: ${code}`);
 
-      // No emitir estado confirmado si el consumo del mismo mensaje falló.
-      // PostgreSQL revierte la actualización del dispositivo al fallar tx.
+      // Do not emit a confirmed status if the consumption of the same message failed.
+      // PostgreSQL rolls back the device update when the tx fails.
       if (this.mqtt.config?.flespiDeviceId) throw error;
 
       return {
@@ -471,9 +471,9 @@ export class MqttDeviceStatusSubscriber
     }
 
     /*
-     * Los eventos se emiten DESPUÉS de que la transacción termina
-     * correctamente. Así evitamos enviar eventos de datos que luego
-     * podrían ser revertidos por un rollback.
+     * Events are emitted AFTER the transaction finishes
+     * successfully. This avoids sending data events that could
+     * later be undone by a rollback.
      */
     if (transactionResult.consumptionEvent) {
       for (const recipient of transactionResult.recipients) {
@@ -546,7 +546,7 @@ export class MqttDeviceStatusSubscriber
     }
 
     this.logger.log(
-      `Estado MQTT actualizado para ${manufacturerDeviceId}. Consumo guardado=${transactionResult.consumptionEvent !== null}`,
+      `MQTT status updated for ${manufacturerDeviceId}. Consumption stored=${transactionResult.consumptionEvent !== null}`,
     );
   }
 

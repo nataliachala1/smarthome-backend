@@ -69,21 +69,21 @@ export class ResetPasswordUseCase {
     );
 
     /*
-     * El token de recuperación es de un solo uso.
+     * The recovery token is single-use.
      */
     await this.recoveryTokenRepository.markAsUsed(
       recoveryToken.id,
     );
 
     /*
-     * Invalidamos los JWT existentes.
+     * Existing JWTs are invalidated.
      */
     await this.userRepository.incrementSessionVersion(
       recoveryToken.userId,
     );
 
     /*
-     * Y revocamos todas las sesiones renovables.
+     * And every renewable session is revoked.
      */
     await this.refreshTokenRepository.revokeAllByUser(
       recoveryToken.userId,

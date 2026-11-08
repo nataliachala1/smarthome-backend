@@ -8,20 +8,43 @@ import {
   SendPasswordResetEmailInput,
   SendAccountReactivationEmailInput,
 } from '../../domain/ports/email-sender.port';
+/**
+ * Sends account emails through SMTP.
+ *
+ * With SMTP_HOST set, any SMTP server is used (for example Mailpit in local
+ * environments). Without it, the Gmail service is used with SMTP_USER and
+ * SMTP_APP_PASSWORD.
+ */
 @Injectable()
-export class GmailEmailSender implements EmailSender {
+export class SmtpEmailSender implements EmailSender {
   private readonly transporter: Transporter;
   private readonly from: string;
 
   constructor(private readonly configService: ConfigService) {
-    const user =
-      this.configService.getOrThrow<string>('SMTP_USER');
+    const host = this.configService.get<string>('SMTP_HOST')?.trim();
 
-    const password =
-      this.configService.getOrThrow<string>('SMTP_APP_PASSWORD');
+    if (host) {
+      const user = this.configService.get<string>('SMTP_USER')?.trim();
+      const password = this.configService.get<string>('SMTP_APP_PASSWORD');
 
-    this.from =
-      this.configService.get<string>('SMTP_FROM') ?? user;
+      this.from =
+        this.configService.get<string>('SMTP_FROM') ??
+        user ??
+        'SmartHome <no-reply@smarthome.local>';
+
+      this.transporter = nodemailer.createTransport({
+        host,
+        port: Number(this.configService.get<string>('SMTP_PORT') ?? 587),
+        secure: this.configService.get<string>('SMTP_SECURE') === 'true',
+        auth: user ? { user, pass: password ?? '' } : undefined,
+      });
+      return;
+    }
+
+    const user = this.configService.getOrThrow<string>('SMTP_USER');
+    const password = this.configService.getOrThrow<string>('SMTP_APP_PASSWORD');
+
+    this.from = this.configService.get<string>('SMTP_FROM') ?? user;
 
     this.transporter = nodemailer.createTransport({
       service: 'gmail',

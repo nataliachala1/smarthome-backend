@@ -58,11 +58,11 @@ import { ControlDeviceUseCase } from '../../application/use-cases/control-device
 @ApiBearerAuth('access-token')
 @ApiBadRequestResponse({
   description:
-    'UUID o datos del dispositivo inválidos',
+    'Invalid UUID or device data',
 })
 @ApiForbiddenResponse({
   description:
-    'Sin membresía activa o rol suficiente en el hogar',
+    'No active membership or insufficient role in the home',
 })
 @UseGuards(JwtAuthGuard)
 export class DevicesController {
@@ -96,22 +96,22 @@ export class DevicesController {
   ) {}
 
   // =========================================================
-  // LISTAR DISPOSITIVOS ACTIVOS
+  // LIST ACTIVE DEVICES
   // =========================================================
 
   @Get()
   @ApiOperation({
     summary:
-      'Listar dispositivos activos del hogar: OWNER, MEMBER o GUEST',
+      'List the active devices of the home: OWNER, MEMBER or GUEST',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Lista de dispositivos activos del hogar',
+      'List of active devices of the home',
   })
   async findAll(
     @CurrentUser()
@@ -130,27 +130,27 @@ export class DevicesController {
   }
 
   // =========================================================
-  // LISTAR DISPOSITIVOS INACTIVOS
+  // LIST INACTIVE DEVICES
   // =========================================================
   //
-  // IMPORTANTE:
-  // Esta ruta debe declararse antes de @Get(':deviceId')
-  // para que "inactive" no sea interpretado como un UUID.
+  // IMPORTANT:
+  // This route must be declared before @Get(':deviceId')
+  // so that "inactive" is not interpreted as a UUID.
   // =========================================================
 
   @Get('inactive')
   @ApiOperation({
     summary:
-      'Listar dispositivos inactivos del hogar: OWNER',
+      'List the inactive devices of the home: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Lista de dispositivos inactivos del hogar',
+      'List of inactive devices of the home',
   })
   async findInactive(
     @CurrentUser()
@@ -169,26 +169,26 @@ export class DevicesController {
   }
 
   // =========================================================
-  // CONSULTAR DISPOSITIVO
+  // GET DEVICE
   // =========================================================
 
   @Get(':deviceId')
   @ApiOperation({
     summary:
-      'Consultar un dispositivo del hogar por id',
+      'Get a device of the home by id',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
-    description: 'Dispositivo autorizado',
+    description: 'Authorized device',
   })
   async findById(
     @CurrentUser()
@@ -223,26 +223,26 @@ export class DevicesController {
   }
 
   // =========================================================
-  // CREAR DISPOSITIVO
+  // CREATE DEVICE
   // =========================================================
 
   @Post()
   @ApiOperation({
     summary:
-      'Registrar un dispositivo directamente en el hogar: OWNER',
+      'Register a device directly in the home: OWNER',
   })
   @ApiConflictResponse({
     description:
-      'Nombre activo o identificador de fabricante duplicado',
+      'Duplicate active name or manufacturer identifier',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiCreatedResponse({
     description:
-      'Dispositivo creado en estado OFFLINE',
+      'Device created in OFFLINE state',
   })
   async create(
     @CurrentUser()
@@ -278,27 +278,27 @@ export class DevicesController {
   }
 
   // =========================================================
-  // ACTUALIZAR DISPOSITIVO
+  // UPDATE DEVICE
   // =========================================================
 
   @Patch(':deviceId')
   @ApiOperation({
     summary:
-      'Actualizar la configuración de un dispositivo: OWNER',
+      'Update the configuration of a device: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Dispositivo actualizado',
+      'Device updated',
   })
   async update(
     @CurrentUser()
@@ -339,27 +339,27 @@ export class DevicesController {
   }
 
   // =========================================================
-  // ACTIVAR DISPOSITIVO
+  // ACTIVATE DEVICE
   // =========================================================
 
   @Patch(':deviceId/activate')
   @ApiOperation({
     summary:
-      'Reactivar un dispositivo inactivo: OWNER',
+      'Reactivate an inactive device: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Dispositivo activado correctamente',
+      'Device activated successfully',
   })
   async activate(
     @CurrentUser()
@@ -388,27 +388,27 @@ export class DevicesController {
   }
 
   // =========================================================
-  // DESACTIVAR DISPOSITIVO
+  // DEACTIVATE DEVICE
   // =========================================================
 
   @Patch(':deviceId/deactivate')
   @ApiOperation({
     summary:
-      'Desactivar temporalmente un dispositivo: OWNER',
+      'Temporarily deactivate a device: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Dispositivo desactivado correctamente',
+      'Device deactivated successfully',
   })
   async deactivate(
     @CurrentUser()
@@ -443,25 +443,25 @@ export class DevicesController {
   @Patch(':deviceId/control')
   @ApiOperation({
     summary:
-      'Enviar comando ON/OFF al dispositivo: OWNER o MEMBER',
+      'Send an ON/OFF command to the device: OWNER or MEMBER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
     description:
-      'Comando de control aceptado para publicación',
+      'Control command accepted for publication',
   })
   @ApiConflictResponse({
     description:
-      'Dispositivo desconectado, no configurable o publicador MQTT no configurado',
+      'Device disconnected, not configurable or MQTT publisher not configured',
   })
   async control(
     @CurrentUser()
@@ -496,26 +496,26 @@ export class DevicesController {
   }
 
   // =========================================================
-  // ELIMINAR DISPOSITIVO
+  // DELETE DEVICE
   // =========================================================
   //
-  // El endpoint es DELETE, pero internamente realizamos
-  // eliminación lógica mediante deleted_at.
+  // The endpoint is DELETE, but internally a logical
+  // deletion is performed through deleted_at.
   // =========================================================
 
   @Delete(':deviceId')
   @ApiOperation({
     summary:
-      'Eliminar lógicamente un dispositivo del hogar: OWNER',
+      'Logically delete a device of the home: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiParam({
     name: 'deviceId',
-    description: 'UUID del dispositivo',
+    description: 'Device UUID',
     format: 'uuid',
   })
   @ApiOkResponse({

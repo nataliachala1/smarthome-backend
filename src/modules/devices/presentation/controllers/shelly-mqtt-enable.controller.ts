@@ -25,7 +25,7 @@ export class ShellyMqttEnableController {
   @Header('Vary', 'Authorization, X-Pairing-Token')
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   @ApiHeader({ name: 'X-SmartHome-Lab-Network-Approval', required: false,
-    description: 'Requerido solo por el perfil local; VPS DEV no confía en este header.' })
+    description: 'Required only by the local profile; VPS DEV does not trust this header.' })
   async enable(
     @CurrentUser() user: AuthenticatedUser,
     @Param('homeId', ParseUUIDPipe) homeId: string,
@@ -59,7 +59,7 @@ export class ShellyMqttEnableController {
       } : request);
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      // Una respuesta incierta de Mosquitto/SQL se reconcilia; JAMAS se reintenta.
+      // An uncertain Mosquitto/SQL response is reconciled; it is NEVER retried.
       throw new ServiceUnavailableException({code: 'MQTT_ENABLE_OUTCOME_REQUIRES_RECONCILIATION'});
     }
   }

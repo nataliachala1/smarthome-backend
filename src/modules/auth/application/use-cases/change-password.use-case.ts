@@ -67,15 +67,15 @@ export class ChangePasswordUseCase {
     );
 
     /*
-     * Invalida todos los access tokens emitidos
-     * anteriormente para este usuario.
+     * Invalidates every access token issued
+     * earlier for this user.
      */
     await this.userRepository.incrementSessionVersion(
       user.id,
     );
 
     /*
-     * Revoca todos los refresh tokens existentes.
+     * Revokes every existing refresh token.
      */
     await this.refreshTokenRepository.revokeAllByUser(
       user.id,

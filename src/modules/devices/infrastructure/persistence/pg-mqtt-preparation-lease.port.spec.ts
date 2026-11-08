@@ -12,7 +12,7 @@ function harness(rows: unknown[] = [{
 }
 
 describe('PgMqttPreparationLeasePort / SQL 025', () => {
-  it('reclama solo SQL 025, con parametros y token cercado', async () => {
+  it('claims only SQL 025, with parameters and a fenced token', async () => {
     const { port, query } = harness();
     await expect(port.claim(operationId, 60)).resolves.toEqual({ operationId, leaseToken });
     expect(query).toHaveBeenCalledTimes(1);
@@ -29,22 +29,22 @@ describe('PgMqttPreparationLeasePort / SQL 025', () => {
   });
 
   it.each([
-    { name: 'sin filas', rows: [] },
+    { name: 'no rows', rows: [] },
     { name: 'duplicadas', rows: [{ operationId, leaseToken, expiresAt: new Date(Date.now() + 60_000), attemptNumber: 1 }, { operationId, leaseToken, expiresAt: new Date(Date.now() + 60_000), attemptNumber: 1 }] },
-    { name: 'token invalido', rows: [{ operationId, leaseToken: 'bad', expiresAt: new Date(Date.now() + 60_000), attemptNumber: 1 }] },
+    { name: 'invalid token', rows: [{ operationId, leaseToken: 'bad', expiresAt: new Date(Date.now() + 60_000), attemptNumber: 1 }] },
     { name: 'lease vencido', rows: [{ operationId, leaseToken, expiresAt: new Date(Date.now() - 60_000), attemptNumber: 1 }] },
   ])('rechaza respuesta $name', async ({ rows }) => {
     const { port } = harness(rows);
     await expect(port.claim(operationId, 60)).rejects.toThrow('MQTT_LEASE_CLAIM_RESPONSE_INVALID');
   });
 
-  it('falla cerrado si la llamada de claim pierde su respuesta', async () => {
+  it('fails closed if the claim call loses its response', async () => {
     const { port, query } = harness();
     query.mockRejectedValueOnce(new Error('timeout'));
     await expect(port.claim(operationId, 60)).rejects.toThrow('MQTT_LEASE_CLAIM_OUTCOME_UNKNOWN');
   });
 
-  it('reporta incertidumbre con codigo permitido por SQL 025, nunca exito', async () => {
+  it('reports uncertainty with a code allowed by SQL 025, never success', async () => {
     const { port, query } = harness([{ reported: true }]);
     await expect(port.reportUncertain(operationId, leaseToken)).resolves.toBeUndefined();
     expect(query).toHaveBeenCalledTimes(1);
@@ -54,7 +54,7 @@ describe('PgMqttPreparationLeasePort / SQL 025', () => {
     );
   });
 
-  it('no trata una respuesta false como confirmacion de incertidumbre', async () => {
+  it('does not treat a false response as an uncertainty confirmation', async () => {
     const { port } = harness([{ reported: false }]);
     await expect(port.reportUncertain(operationId, leaseToken))
       .rejects.toThrow('MQTT_LEASE_REPORT_RESPONSE_INVALID');

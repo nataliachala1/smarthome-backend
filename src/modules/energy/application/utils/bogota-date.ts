@@ -7,24 +7,24 @@ const bogotaDateFormatter = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
-/** Fecha calendario actual en America/Bogota, formato YYYY-MM-DD. */
+/** Current calendar date in America/Bogota, YYYY-MM-DD format. */
 export function todayInBogota(now: Date = new Date()): string {
   return bogotaDateFormatter.format(now);
 }
 
-/** Mes calendario actual en America/Bogota, formato YYYY-MM. */
+/** Current calendar month in America/Bogota, YYYY-MM format. */
 export function currentMonthInBogota(now: Date = new Date()): string {
   return todayInBogota(now).slice(0, 7);
 }
 
 /**
- * Colombia usa UTC-5 fijo (sin horario de verano), por eso el desfase es constante.
+ * Colombia uses a fixed UTC-5 (no daylight saving time), so the offset is constant.
  */
 const BOGOTA_UTC_OFFSET = '-05:00';
 
 /**
- * Rango [from, to) del mes YYYY-MM en America/Bogota, expresado como instantes:
- * from = día 1 a las 00:00 en Bogotá; to = día 1 del mes siguiente a las 00:00.
+ * Range [from, to) of the YYYY-MM month in America/Bogota, expressed as instants:
+ * from = day 1 at 00:00 in Bogota; to = day 1 of the next month at 00:00.
  */
 export function monthRangeInBogota(month: string): { from: Date; to: Date } {
   const [year, monthNumber] = month.split('-').map(Number);

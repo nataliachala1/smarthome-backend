@@ -1,4 +1,4 @@
-// Solo mocks: NO conecta ni modifica Mosquitto real.
+// Mocks only: does NOT connect to or modify a real Mosquitto.
 jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 import { MosquittoDynamicSecurityProvider } from './mosquitto-dynamic-security.provider';

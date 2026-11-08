@@ -158,7 +158,7 @@ function reasonCode(value: Error | Packet | undefined): number | undefined {
 }
 
 runIsolation('Mosquitto lab / ACLs aisladas por identidad', () => {
-  it('rechaza identidad deshabilitada, separa dos dispositivos y revoca sin conexiones', async () => {
+  it('rejects a disabled identity, separates two devices and revokes without connections', async () => {
     const runId = requireIsolatedLab();
     const provider = createProvider();
     const devices = [makeDevice(runId, 'a'), makeDevice(runId, 'b')] as const;
@@ -249,7 +249,7 @@ runIsolation('Mosquitto lab / ACLs aisladas por identidad', () => {
 });
 
 runRecovery('Mosquitto lab / persistencia DynSec tras reinicio', () => {
-  it('rechaza la identidad revocada y recupera la conexión autorizada tras el reinicio', async () => {
+  it('rejects the revoked identity and recovers the authorized connection after a restart', async () => {
     const runId = requireIsolatedLab();
     const provider = createProvider();
     const revokedDevice = makeDevice(runId, 'a');

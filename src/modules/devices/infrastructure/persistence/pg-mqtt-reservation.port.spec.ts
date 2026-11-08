@@ -21,8 +21,8 @@ function setup(rows: unknown[] = [validRow]) {
   return { query, port: new PgMqttReservationPort({ query }) };
 }
 
-describe('PgMqttReservationPort / acceso privilegiado solo-reserva', () => {
-  it('ejecuta una sola consulta parametrizada y devuelve el enlace verificado', async () => {
+describe('PgMqttReservationPort / privileged reservation-only access', () => {
+  it('runs a single parameterized query and returns the verified link', async () => {
     const { port, query } = setup();
     await expect(port.reserve(sessionId, scope, actorId, tokenProofHash)).resolves.toEqual(validRow);
     expect(query).toHaveBeenCalledTimes(1);
@@ -33,7 +33,7 @@ describe('PgMqttReservationPort / acceso privilegiado solo-reserva', () => {
     expect(args).toEqual([sessionId, scope, actorId, tokenProofHash]);
   });
 
-  it('rechaza UUID invalido antes de llamar PostgreSQL', async () => {
+  it('rejects an invalid UUID before calling PostgreSQL', async () => {
     const { port, query } = setup();
     await expect(port.reserve('invalido', scope, actorId, tokenProofHash)).rejects.toThrow('MQTT_REGISTRAR_SESSION_ID_INVALID');
     expect(query).not.toHaveBeenCalled();
@@ -53,7 +53,7 @@ describe('PgMqttReservationPort / acceso privilegiado solo-reserva', () => {
     await expect(setup([validRow, validRow]).port.reserve(sessionId, scope, actorId, tokenProofHash)).rejects.toThrow('MQTT_REGISTRAR_INVALID_RESPONSE');
   });
 
-  it('rechaza el scope y los nombres del broker manipulados en la respuesta', async () => {
+  it('rejects a tampered scope and broker names in the response', async () => {
     await expect(setup([{ ...validRow, reservedTopicScope: 'shelly1pmg4-other' }]).port.reserve(sessionId, scope, actorId, tokenProofHash))
       .rejects.toThrow('MQTT_REGISTRAR_INVALID_RESPONSE');
     await expect(setup([{ ...validRow, clientId: 'backend-admin' }]).port.reserve(sessionId, scope, actorId, tokenProofHash))
@@ -62,12 +62,12 @@ describe('PgMqttReservationPort / acceso privilegiado solo-reserva', () => {
       .rejects.toThrow('MQTT_REGISTRAR_INVALID_RESPONSE');
   });
 
-  it('falla cerrado sin filtrar mensajes internos de PostgreSQL', async () => {
+  it('fails closed without leaking internal PostgreSQL messages', async () => {
     const { port, query } = setup();
     query.mockRejectedValueOnce(new Error('password=NO_MOSTRAR host=internal'));
     await expect(port.reserve(sessionId, scope, actorId, tokenProofHash)).rejects.toThrow('MQTT_REGISTRAR_RESERVATION_FAILED');
   });
-  it('rechaza pruebas de autenticacion invalidas antes de consultar PostgreSQL', async () => {
+  it('rejects invalid authentication proofs before querying PostgreSQL', async () => {
     const { port, query } = setup();
     await expect(port.reserve(sessionId, scope, 'usuario-falso', tokenProofHash))
       .rejects.toThrow('MQTT_REGISTRAR_AUTH_PROOF_INVALID');

@@ -3,9 +3,9 @@ import type { MqttDeviceIdentityProvider } from '../../domain/services/mqtt-devi
 import type { ConfirmMqttPreparedInput } from '../../infrastructure/persistence/pg-mqtt-prepared-confirmation.port';
 
 /**
- * Contratos SQL especializados: lease_worker (SQL 025) y prepare_confirmer
- * (SQL 027). Solo se registra bajo perfiles cuya factory comprueba destino y
- * privilegios de cada conexión.
+ * Specialized SQL contracts: lease_worker (SQL 025) and prepare_confirmer
+ * (SQL 027). Registered only under profiles whose factory checks the target and
+ * the privileges of each connection.
  */
 export interface PreparationLeaseClaim {
   readonly operationId: string;
@@ -22,8 +22,8 @@ export interface MqttPreparedConfirmationPort {
 }
 
 /**
- * El secreto individual se conserva cifrado y durable por operationId; solo
- * el endpoint de bootstrap autorizado lo revela brevemente al flujo local.
+ * The individual secret is kept encrypted and durable per operationId; only
+ * the authorized bootstrap endpoint briefly reveals it to the local flow.
  */
 export interface MqttPreparationSecretPort {
   issueOrLoadForOperation(operationId: string, leaseToken: string): Promise<string>;
@@ -35,9 +35,9 @@ export interface PreparedOnlyResult {
 }
 
 /**
- * Orquestador del perfil MQTT: usa una reserva autenticada, deja la cuenta
- * deshabilitada y solo confirma PREPARED_DISABLED tras releer Mosquitto.
- * No habilita cuentas ni devuelve passwords.
+ * MQTT profile orchestrator: uses an authenticated reservation, leaves the account
+ * disabled and only confirms PREPARED_DISABLED after re-reading Mosquitto.
+ * Does not enable accounts or return passwords.
  */
 export class ShellyMqttPreparationCoordinator {
   constructor(
@@ -56,8 +56,8 @@ export class ShellyMqttPreparationCoordinator {
       throw new Error('MQTT_PREPARATION_RESERVATION_INVALID');
     }
 
-    // La funcion SQL 025 valida estado RESERVED, propietario, sesion,
-    // dispositivo, vigencia y entrega un lease cercado por token.
+    // SQL function 025 validates the RESERVED state, owner, session,
+    // device, validity and returns a token-fenced lease.
     const lease = await this.leases.claim(reservation.operationId, 60);
     if (lease.operationId !== reservation.operationId || !lease.leaseToken) {
       throw new Error('MQTT_PREPARATION_LEASE_INVALID');
@@ -72,8 +72,8 @@ export class ShellyMqttPreparationCoordinator {
     };
 
     try {
-      // La clave debe proceder de una fuente DURABLE e idempotente.
-      // No guardarla en logs, resultados ni variables de entorno globales.
+      // The key must come from a DURABLE and idempotent source.
+      // Do not store it in logs, results or global environment variables.
       const password = await this.secrets.issueOrLoadForOperation(reservation.operationId, lease.leaseToken);
       if (typeof password !== 'string' || password.length < 32) {
         throw new Error('MQTT_PREPARATION_SECRET_UNAVAILABLE');
@@ -83,7 +83,7 @@ export class ShellyMqttPreparationCoordinator {
         operationId: reservation.operationId,
         password,
       });
-      // Verificacion NUEVA e independiente justo antes de SQL 027.
+      // NEW and independent verification right before SQL 027.
       await this.broker.verifyPreparedDisabled(identity);
       await this.confirmer.confirm({
         operationId: reservation.operationId,
@@ -95,12 +95,12 @@ export class ShellyMqttPreparationCoordinator {
       });
       return { phase: 'PREPARED_DISABLED_ONLY', operationId: reservation.operationId };
     } catch {
-      // NUNCA habilitar identidad ni inferir resultado; puede existir
-      // un efecto parcial en Mosquitto o un COMMIT SQL sin respuesta.
+      // NEVER enable the identity or infer the result; there may be
+      // a partial effect in Mosquitto or a SQL COMMIT without a response.
       try {
         await this.leases.reportUncertain(reservation.operationId, lease.leaseToken);
       } catch {
-        // El worker de reconciliacion debe inspeccionar el estado durable.
+        // The reconciliation worker must inspect the durable state.
       }
       throw new Error('MQTT_PREPARATION_OUTCOME_REQUIRES_RECONCILIATION');
     }

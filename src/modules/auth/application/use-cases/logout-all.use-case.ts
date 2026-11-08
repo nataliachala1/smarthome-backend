@@ -22,18 +22,18 @@ export class LogoutAllUseCase {
     }
 
     /*
-     * Primero invalidamos todos los access tokens.
+     * First, every access token is invalidated.
      */
     const sessionVersion =
       await this.userRepository.incrementSessionVersion(userId);
     this.revocations.revokeOlderSessions(userId, sessionVersion);
 
     /*
-     * Después revocamos todos los refresh tokens.
+     * Then every refresh token is revoked.
      *
-     * Incluso si esta segunda operación fallara,
-     * los refresh anteriores quedarían inválidos
-     * porque su session_version ya no coincidiría.
+     * Even if this second operation failed,
+     * the previous refresh tokens would stay invalid
+     * because their session_version would no longer match.
      */
     await this.refreshTokenRepository.revokeAllByUser(userId);
   }

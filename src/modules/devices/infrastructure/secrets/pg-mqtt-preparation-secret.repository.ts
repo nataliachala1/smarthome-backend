@@ -4,9 +4,9 @@ import type {
 } from './encrypted-mqtt-preparation-secret.port';
 
 /**
- * Puerto SQL deliberadamente estrecho; conectar SOLO con el login especializado
- * de secretos y previa verificacion de privilegios del futuro gateway 503.28.
- * No se registra en DevicesModule.
+ * Deliberately narrow SQL port; connect ONLY with the specialized secrets
+ * login and after verifying the privileges of the future 503.28 gateway.
+ * It is not registered in DevicesModule.
  */
 export interface MqttSecretSqlQueryPort {
   query(sql: string, params: unknown[]): Promise<{ rows: unknown[] }>;

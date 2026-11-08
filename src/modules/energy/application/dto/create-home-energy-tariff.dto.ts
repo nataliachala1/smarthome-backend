@@ -10,7 +10,7 @@ import { IsPositiveDecimalString } from '../validators/is-positive-decimal-strin
 export class CreateHomeEnergyTariffDto {
   @ApiProperty({
     description:
-      'Tarifa referencial COP por kWh como texto decimal (> 0, máx. 10 enteros y 4 decimales)',
+      'Reference COP per kWh tariff as decimal text (> 0, at most 10 integer digits and 4 decimals)',
     example: '950.2500',
   })
   @IsPositiveDecimalString(14, 4)
@@ -18,7 +18,7 @@ export class CreateHomeEnergyTariffDto {
 
   @ApiProperty({
     description:
-      'Fecha de entrada en vigor (calendario America/Bogota), año 2000–2099',
+      'Effective date (America/Bogota calendar), year 2000–2099',
     example: '2026-11-01',
     format: 'date',
   })

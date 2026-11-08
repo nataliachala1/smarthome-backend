@@ -17,8 +17,8 @@ export interface UpsertHomeEnergyGoalInput {
 }
 
 /**
- * Crea o reemplaza el presupuesto y la meta del mes (PUT idempotente).
- * Política de concurrencia: última escritura gana.
+ * Creates or replaces the budget and target of the month (idempotent PUT).
+ * Concurrency policy: last write wins.
  */
 @Injectable()
 export class UpsertHomeEnergyGoalUseCase {

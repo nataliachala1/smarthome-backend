@@ -1,10 +1,10 @@
 /**
- * Puerto EXCLUSIVO para confirmar la migracion 027.
- * IMPORTANTE: el cliente debe autenticarse con una cuenta propia cuyo unico
- * privilegio de escritura sea EXECUTE sobre fn_confirm_mqtt_pairing_prepared.
- * NO reutilizar DATABASE_URL, Prisma ni MqttReserverPgGateway.
- * Este adaptador NO constituye evidencia del broker: el orquestador debe
- * invocarlo solamente DESPUES de verifyPreparedDisabled().
+ * EXCLUSIVE port to confirm migration 027.
+ * IMPORTANT: the client must authenticate with its own account whose only
+ * write privilege is EXECUTE on fn_confirm_mqtt_pairing_prepared.
+ * Do NOT reuse DATABASE_URL, Prisma or MqttReserverPgGateway.
+ * This adapter is NOT broker evidence: the orchestrator must
+ * invoke it only AFTER verifyPreparedDisabled().
  */
 export interface MqttPreparedConfirmationQueryClient {
   query(sql: string, params: unknown[]): Promise<{ rows: unknown[] }>;
@@ -48,8 +48,8 @@ export class PgMqttPreparedConfirmationPort {
       );
       rows = result.rows;
     } catch {
-      // Un timeout DESPUES de ejecutar SQL deja un resultado incierto.
-      // No devolver un falso negativo que permita reintentos inseguros.
+      // A timeout AFTER running SQL leaves an uncertain result.
+      // Do not return a false negative that would allow unsafe retries.
       throw new Error('MQTT_PREPARED_CONFIRM_OUTCOME_UNKNOWN');
     }
     if (!Array.isArray(rows) || rows.length !== 1 ||

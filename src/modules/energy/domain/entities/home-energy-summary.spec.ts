@@ -27,7 +27,7 @@ function build(facts: Partial<EnergyMonthFacts>) {
 }
 
 describe('buildHomeEnergySummary', () => {
-  it('con tarifa para todas las lecturas: costo estimado y avance', () => {
+  it('with a tariff for every reading: estimated cost and progress', () => {
     const summary = build({});
 
     expect(summary).toMatchObject({
@@ -41,7 +41,7 @@ describe('buildHomeEnergySummary', () => {
     });
   });
 
-  it('con lecturas sin tarifa: no presenta el costo parcial como total', () => {
+  it('with readings without a tariff: does not present the partial cost as the total', () => {
     const summary = build({ unpricedReadings: 2, pricedCostCop: '1000.5' });
 
     expect(summary.costComplete).toBe(false);
@@ -51,14 +51,14 @@ describe('buildHomeEnergySummary', () => {
     expect(summary.targetUsagePercent).toBe('130.00');
   });
 
-  it('sin presupuesto ni meta: porcentajes en null', () => {
+  it('without budget or target: percentages are null', () => {
     const summary = build({ monthlyBudgetCop: null, targetKwh: null });
 
     expect(summary.budgetUsagePercent).toBeNull();
     expect(summary.targetUsagePercent).toBeNull();
   });
 
-  it('mes sin lecturas: 0 kWh y costo 0 con cobertura completa', () => {
+  it('month without readings: 0 kWh and cost 0 with full coverage', () => {
     const summary = build({
       readingsCount: 0,
       totalKwh: '0',

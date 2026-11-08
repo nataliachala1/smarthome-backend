@@ -403,8 +403,8 @@ export class ShellyPairingSessionService {
           },
         });
 
-        // SQL029: misma transaccion Prisma que crea el device. Nunca cerrar
-        // la sesion antes de registrar mqtt_identity y asociar la operacion.
+        // SQL029: same Prisma transaction that creates the device. Never close
+        // the session before registering mqtt_identity and linking the operation.
         const [attached] = await tx.$queryRaw<{ completed: boolean }[]>`
           SELECT devices.fn_finish_verified_pairing(
             ${sessionId}::uuid, ${device.id_device}::uuid

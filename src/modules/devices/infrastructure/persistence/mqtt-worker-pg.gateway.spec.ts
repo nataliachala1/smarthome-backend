@@ -1,4 +1,4 @@
-// Evitar abrir un pool real: los tests ejercitan el parser y la comprobacion de privilegios.
+// Avoid opening a real pool: the tests exercise the parser and the privilege check.
 jest.mock('pg', () => ({ Pool: jest.fn() }));
 
 import {
@@ -26,7 +26,7 @@ function row(kind: 'lease' | 'confirmer'): MqttWorkerPrivilegeRow {
 }
 
 describe('MQTT worker PG / no privilege crossover', () => {
-  it('permite local-dev solo con destino y login exactos para cada rol', () => {
+  it('allows local-dev only with the exact target and login for each role', () => {
     const a = parseMqttWorkerConnection(lease, 'lease', 'local-dev', 'development');
     const b = parseMqttWorkerConnection(confirmer, 'confirmer', 'local-dev', 'development');
     expect(a.options.ssl).toBe(false);
@@ -36,14 +36,14 @@ describe('MQTT worker PG / no privilege crossover', () => {
       .toThrow('MQTT_WORKER_DATABASE_URL_INVALID');
   });
 
-  it('bloquea uso de local-dev en produccion y URLs que alteran opciones', () => {
+  it('blocks local-dev in production and URLs that alter options', () => {
     expect(() => parseMqttWorkerConnection(lease, 'lease', 'local-dev', 'production'))
       .toThrow('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
     expect(() => parseMqttWorkerConnection(`${lease}?sslmode=disable`, 'lease', 'local-dev', 'development'))
       .toThrow('MQTT_WORKER_DATABASE_URL_INVALID');
   });
 
-  it('obliga TLS verificable fuera del host local', () => {
+  it('requires verifiable TLS outside the local host', () => {
     expect(() => parseMqttWorkerConnection(lease, 'lease', 'remote-tls', 'production'))
       .toThrow('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
     const remote = parseMqttWorkerConnection(
@@ -53,7 +53,7 @@ describe('MQTT worker PG / no privilege crossover', () => {
     expect(remote.options.ssl).toMatchObject({ rejectUnauthorized: true });
   });
 
-  it.each(['lease', 'confirmer'] as const)('acepta SOLO privilegios exactos para %s', (kind) => {
+  it.each(['lease', 'confirmer'] as const)('accepts ONLY the exact privileges for %s', (kind) => {
     const p = row(kind);
     expect(isMinimalMqttWorkerPrivilegeRow(p, p, kind)).toBe(true);
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, can_reserve: true }, p, kind)).toBe(false);
@@ -63,7 +63,7 @@ describe('MQTT worker PG / no privilege crossover', () => {
     expect(isMinimalMqttWorkerPrivilegeRow({ ...p, is_superuser: true }, p, kind)).toBe(false);
   });
 
-  it('requiere verificacion antes de usar la conexion', async () => {
+  it('requires verification before using the connection', async () => {
     const p = row('lease');
     const query = jest.fn().mockResolvedValue({ rows: [p] });
     const end = jest.fn().mockResolvedValue(undefined);
@@ -77,7 +77,7 @@ describe('MQTT worker PG / no privilege crossover', () => {
     await expect(gateway.query('SELECT 1', [])).rejects.toThrow('MQTT_WORKER_NOT_READY');
   });
 
-  it('rechaza permisos de otro worker aunque ambos tengan funciones validas', async () => {
+  it('rejects another worker\'s permissions even when both have valid functions', async () => {
     const p = { ...row('lease'), can_confirm: true };
     const query = jest.fn().mockResolvedValue({ rows: [p] });
     const end = jest.fn().mockResolvedValue(undefined);

@@ -21,8 +21,8 @@ const env = () => ({
 
 const prefix = `smarthome/dev/v1/devices/${deviceId}`;
 
-describe('flespi: suscripciones MQTT de telemetría por dispositivo', () => {
-  it('usa solo dos tópicos exactos autorizados, sin comodines', () => {
+describe('flespi: per-device MQTT telemetry subscriptions', () => {
+  it('uses only two exact authorized topics, without wildcards', () => {
     const contract = new MqttTopicContract(parseMqttConfig(env()));
     expect(contract.subscriptions()).toEqual([
       `${prefix}/status/switch:0`,
@@ -31,7 +31,7 @@ describe('flespi: suscripciones MQTT de telemetría por dispositivo', () => {
     expect(contract.subscriptions().every((topic) => !/[+#]/.test(topic))).toBe(true);
   });
 
-  it('reconoce los mensajes propios de switch y eventos RPC', () => {
+  it('recognizes its own switch messages and RPC events', () => {
     const contract = new MqttTopicContract(parseMqttConfig(env()));
     expect(contract.parseStatus(`${prefix}/status/switch:0`)).toEqual({
       manufacturerDeviceId: deviceId, kind: 'shelly-switch',
@@ -51,7 +51,7 @@ describe('flespi: suscripciones MQTT de telemetría por dispositivo', () => {
     `${prefix}/status/switch:1`,
     `${prefix}/events/rpc/extra`,
     `smarthome/prod/v1/devices/${deviceId}/events/rpc`,
-  ])('rechaza otros tópicos y respuestas RPC en la ingesta: %s', (topic) => {
+  ])('rejects other topics and RPC responses in ingest: %s', (topic) => {
     const contract = new MqttTopicContract(parseMqttConfig(env()));
     expect(contract.parseStatus(topic)).toBeNull();
   });
@@ -64,24 +64,24 @@ describe('flespi: suscripciones MQTT de telemetría por dispositivo', () => {
     'shelly1pmg4-d885acf06990/#',
     'shelly1pmg4-d885acf06990/status',
     'shelly1pmg4-d885acf06990 ',
-  ])('rechaza un identificador flespi inválido: %p', (id) => {
+  ])('rejects an invalid flespi identifier: %p', (id) => {
     expect(() => parseMqttConfig({ ...env(), MQTT_FLESPI_DEVICE_ID: id }))
       .toThrow('MQTT_FLESPI_DEVICE_ID_INVALID');
   });
 
-  it('rechaza namespace ajeno al alcance exacto de ACL', () => {
+  it('rejects a namespace outside the exact ACL scope', () => {
     expect(() => parseMqttConfig({
       ...env(), MQTT_TOPIC_NAMESPACE: 'smarthome/dev/v2',
     })).toThrow('MQTT_FLESPI_NAMESPACE_NOT_ALLOWED');
   });
 
-  it('rechaza un ID flespi presente en la configuración Mosquitto', () => {
+  it('rejects a flespi ID present in the Mosquitto configuration', () => {
     expect(() => parseMqttConfig({
       ...env(), MQTT_BROKER_PROVIDER: 'mosquitto',
     })).toThrow('MQTT_FLESPI_DEVICE_ID_UNEXPECTED');
   });
 
-  it('conserva los tres filtros históricos para Mosquitto', () => {
+  it('keeps the three historical filters for Mosquitto', () => {
     const config = parseMqttConfig({
       ...env(),
       MQTT_BROKER_PROVIDER: 'mosquitto',

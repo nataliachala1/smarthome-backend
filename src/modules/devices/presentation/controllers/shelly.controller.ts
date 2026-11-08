@@ -71,11 +71,11 @@ export class ShellyController {
 
   @Get('setup-capabilities')
   @ApiOperation({
-    summary: 'Consultar capacidades disponibles para alta Shelly por red local',
+    summary: 'Get the capabilities available to add a Shelly over the local network',
   })
   @ApiOkResponse({
     description:
-      'LAN-first para Shelly en la Wi-Fi; AP para equipo nuevo. Android ejecuta la configuración local; las pruebas físicas siguen pendientes.',
+      'LAN-first for a Shelly on the Wi-Fi; AP for a new device. Android runs the local configuration; physical tests are still pending.',
   })
   async setupCapabilities(
     @CurrentUser() user: AuthenticatedUser,
@@ -156,10 +156,10 @@ export class ShellyController {
   }
 
   @Post('setup-sessions')
-  @ApiOperation({ summary: 'Iniciar sesión temporal de pairing para OWNER' })
+  @ApiOperation({ summary: 'Start a temporary pairing session for an OWNER' })
   @ApiCreatedResponse({
     description:
-      'Sesión PENDING creada; LAN o AP. El token de sesión no se devuelve.',
+      'PENDING session created; LAN or AP. The session token is not returned.',
   })
   async createSetupSession(
     @CurrentUser() user: AuthenticatedUser,
@@ -170,7 +170,7 @@ export class ShellyController {
   }
 
   @Get('setup-sessions/:sessionId')
-  @ApiOperation({ summary: 'Consultar sesión de pairing' })
+  @ApiOperation({ summary: 'Get a pairing session' })
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   async getSetupSession(
     @CurrentUser() user: AuthenticatedUser,
@@ -189,7 +189,7 @@ export class ShellyController {
   @Post('setup-sessions/:sessionId/identify')
   @ApiOperation({
     summary:
-      'Guardar identidad reportada por el móvil; no completa ni verifica posesión',
+      'Store the identity reported by the mobile app; does not complete or verify possession',
   })
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   async reportSetupIdentity(
@@ -209,7 +209,7 @@ export class ShellyController {
   }
 
   @Delete('setup-sessions/:sessionId')
-  @ApiOperation({ summary: 'Cancelar sesión de pairing activa' })
+  @ApiOperation({ summary: 'Cancel an active pairing session' })
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   async cancelSetupSession(
     @CurrentUser() user: AuthenticatedUser,
@@ -228,14 +228,14 @@ export class ShellyController {
   @Post('setup-sessions/:sessionId/complete')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Completar el registro solo tras confirmar MQTT autenticado',
+    summary: 'Complete the registration only after confirming authenticated MQTT',
   })
   @ApiHeader({ name: 'X-Pairing-Token', required: true })
   @ApiOkResponse({
-    description: 'Sesión completada o aún esperando verificación MQTT.',
+    description: 'Session completed or still waiting for MQTT verification.',
   })
   @ApiConflictResponse({
-    description: 'La sesión no está lista o el dispositivo ya está registrado.',
+    description: 'The session is not ready or the device is already registered.',
   })
   async completeSetupSession(
     @CurrentUser() user: AuthenticatedUser,
@@ -256,20 +256,20 @@ export class ShellyController {
   @Get('discover')
   @UseGuards(ShellyLocalGuard)
   @ApiOperation({
-    summary: 'Buscar automáticamente Shelly 1PM Gen4 en la red local: OWNER',
+    summary: 'Automatically find Shelly 1PM Gen4 devices on the local network: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
-    description: 'Dispositivos Shelly 1PM Gen4 encontrados en la red local',
+    description: 'Shelly 1PM Gen4 devices found on the local network',
     type: DiscoveredShellyDeviceDto,
     isArray: true,
   })
   @ApiForbiddenResponse({
-    description: 'El usuario no puede administrar el hogar',
+    description: 'The user cannot manage the home',
   })
   async discover(
     @CurrentUser()
@@ -288,7 +288,7 @@ export class ShellyController {
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiOkResponse({
@@ -296,17 +296,17 @@ export class ShellyController {
     type: ShellyDeviceInfoResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'IP o UUID inválido',
+    description: 'Invalid IP or UUID',
   })
   @ApiForbiddenResponse({
-    description: 'El usuario no puede administrar el hogar',
+    description: 'The user cannot manage the home',
   })
   @ApiUnprocessableEntityResponse({
     description:
-      'El dispositivo encontrado no es un Shelly 1PM Gen4 compatible',
+      'The device found is not a compatible Shelly 1PM Gen4',
   })
   @ApiBadGatewayResponse({
-    description: 'El Shelly no responde o no es accesible',
+    description: 'The Shelly does not respond or is not reachable',
   })
   async identify(
     @CurrentUser() user: AuthenticatedUser,
@@ -324,35 +324,35 @@ export class ShellyController {
   @UseGuards(ShellyLocalGuard)
   @ApiServiceUnavailableResponse({
     description:
-      'MQTT_DEVICE_BOOTSTRAP_REQUIRED: TLS o namespace requieren alta con identidad individual; el flujo LAN heredado no entrega credenciales de servicio.',
+      'MQTT_DEVICE_BOOTSTRAP_REQUIRED: TLS or namespace require onboarding with an individual identity; the legacy LAN flow does not hand out service credentials.',
   })
   @ApiOperation({
     summary:
-      'Configurar MQTT y registrar un Shelly 1PM Gen4 en el hogar: OWNER',
+      'Configure MQTT and register a Shelly 1PM Gen4 in the home: OWNER',
   })
   @ApiParam({
     name: 'homeId',
-    description: 'UUID del hogar',
+    description: 'Home UUID',
     format: 'uuid',
   })
   @ApiCreatedResponse({
     description: 'Shelly configurado y registrado correctamente',
   })
   @ApiBadRequestResponse({
-    description: 'IP, UUID o datos inválidos',
+    description: 'Invalid IP, UUID or data',
   })
   @ApiForbiddenResponse({
-    description: 'El usuario no puede administrar el hogar',
+    description: 'The user cannot manage the home',
   })
   @ApiConflictResponse({
-    description: 'El Shelly o el nombre del dispositivo ya están registrados',
+    description: 'The Shelly or the device name is already registered',
   })
   @ApiUnprocessableEntityResponse({
-    description: 'Shelly incompatible o con autenticación local habilitada',
+    description: 'Incompatible Shelly or local authentication enabled',
   })
   @ApiBadGatewayResponse({
     description:
-      'No fue posible configurar el Shelly o conectarlo al broker MQTT',
+      'The Shelly could not be configured or connected to the MQTT broker',
   })
   async provision(
     @CurrentUser() user: AuthenticatedUser,

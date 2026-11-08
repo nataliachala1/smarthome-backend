@@ -3,19 +3,19 @@ import { EnergyGoalRequiresValueError } from '../errors/energy.errors';
 export interface HomeEnergyGoalProps {
   id: string;
   homeId: string;
-  /** Mes calendario YYYY-MM (en BD se guarda como el día 1 del mes). */
+  /** Calendar month YYYY-MM (stored in the DB as the first day of the month). */
   month: string;
-  /** Presupuesto COP como texto con 2 decimales; null si no se configuró. */
+  /** COP budget as text with 2 decimals; null when not configured. */
   monthlyBudgetCop: string | null;
-  /** Meta de consumo kWh como texto con 6 decimales; null si no se configuró. */
+  /** kWh consumption target as text with 6 decimals; null when not configured. */
   targetKwh: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
- * Regla SQL034/002: un objetivo mensual debe tener presupuesto COP,
- * meta kWh o ambos. Nunca los dos ausentes.
+ * SQL034/002 rule: a monthly goal must have a COP budget,
+ * a kWh target or both. Never both missing.
  */
 export function assertEnergyGoalHasValue(
   monthlyBudgetCop: string | null,

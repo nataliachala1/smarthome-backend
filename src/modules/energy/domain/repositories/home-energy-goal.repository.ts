@@ -9,8 +9,8 @@ export interface UpsertHomeEnergyGoalData {
 }
 
 /**
- * Puerto de persistencia de objetivos mensuales SQL034.
- * No existe borrado: la BD no concede DELETE a la aplicación.
+ * Persistence port for SQL034 monthly goals.
+ * There is no delete: the DB does not grant DELETE to the application.
  */
 export abstract class HomeEnergyGoalRepository {
   abstract findByMonth(
@@ -20,8 +20,8 @@ export abstract class HomeEnergyGoalRepository {
   ): Promise<HomeEnergyGoal | null>;
 
   /**
-   * Crea el objetivo del mes o reemplaza sus dos valores (idempotente sobre
-   * id_home + month_start). Solo actualiza monthly_budget_cop y target_kwh.
+   * Creates the month goal or replaces its two values (idempotent on
+   * id_home + month_start). Only updates monthly_budget_cop and target_kwh.
    */
   abstract upsert(
     userId: string,

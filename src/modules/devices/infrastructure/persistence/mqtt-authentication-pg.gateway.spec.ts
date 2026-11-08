@@ -15,12 +15,12 @@ const validRow = (kind: 'rpc' | 'confirm') => ({
   can_read_secrets: false, can_write_secrets: false, privileged: false,
 });
 
-describe('Etapa1 cierre - dos logins separados y worker sin autoejecucion', () => {
+describe('Stage 1 closure - two separate logins and a worker without self-execution', () => {
   const oldNodeEnv = process.env.NODE_ENV;
   beforeEach(() => { process.env.NODE_ENV = 'development'; });
   afterAll(() => { process.env.NODE_ENV = oldNodeEnv; });
 
-  it('exige el usuario exacto y PostgreSQL local de desarrollo', () => {
+  it('requires the exact user and local development PostgreSQL', () => {
     expect(parseMqttAuthPgUrl(
       `postgresql://${rpcLogin}:${pass}@127.0.0.1:5432/smarthome`, 'rpc',
     ).role).toBe(rpcLogin);
@@ -40,7 +40,7 @@ describe('Etapa1 cierre - dos logins separados y worker sin autoejecucion', () =
     expect(isMinimalMqttAuthPgPrivileges({ ...validRow('confirm'), can_edit_operations: true }, 'confirm')).toBe(false);
   });
 
-  it('no consulta SQL operativa sin previa verificacion', async () => {
+  it('does not run operational SQL without a previous verification', async () => {
     const pool = { query: jest.fn().mockResolvedValue({ rows: [validRow('rpc')] }),
       end: jest.fn().mockResolvedValue(undefined) };
     const port = new MqttAuthenticationPgGateway(pool, 'rpc');
@@ -52,7 +52,7 @@ describe('Etapa1 cierre - dos logins separados y worker sin autoejecucion', () =
     await port.onModuleDestroy();
   });
 
-  it('rechaza factory ante permisos distintos y siempre cierra el pool', async () => {
+  it('rejects the factory on different permissions and always closes the pool', async () => {
     const pool = { query: jest.fn().mockResolvedValue({ rows: [{ ...validRow('rpc'), privileged: true }] }),
       end: jest.fn().mockResolvedValue(undefined) };
     const port = new MqttAuthenticationPgGateway(pool, 'rpc');

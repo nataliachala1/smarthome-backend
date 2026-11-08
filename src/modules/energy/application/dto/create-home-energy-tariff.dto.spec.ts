@@ -10,7 +10,7 @@ async function errorsFor(body: Record<string, unknown>): Promise<string[]> {
 }
 
 describe('CreateHomeEnergyTariffDto', () => {
-  it('acepta un precio decimal en texto y una fecha real', async () => {
+  it('accepts a decimal price as text and a real date', async () => {
     await expect(
       errorsFor({ unitPriceCopKwh: '950.2500', effectiveFrom: '2026-11-01' }),
     ).resolves.toEqual([]);
@@ -37,7 +37,7 @@ describe('CreateHomeEnergyTariffDto', () => {
     [''],
     [950.25],
     [null],
-  ])('rechaza el precio %p', async (unitPriceCopKwh) => {
+  ])('rejects the price %p', async (unitPriceCopKwh) => {
     await expect(
       errorsFor({ unitPriceCopKwh, effectiveFrom: '2026-11-01' }),
     ).resolves.toEqual(['unitPriceCopKwh']);
@@ -53,7 +53,7 @@ describe('CreateHomeEnergyTariffDto', () => {
     ['2100-01-01'],
     ['2026-11-1'],
     [undefined],
-  ])('rechaza la fecha %p', async (effectiveFrom) => {
+  ])('rejects the date %p', async (effectiveFrom) => {
     await expect(
       errorsFor({ unitPriceCopKwh: '950.25', effectiveFrom }),
     ).resolves.toEqual(['effectiveFrom']);

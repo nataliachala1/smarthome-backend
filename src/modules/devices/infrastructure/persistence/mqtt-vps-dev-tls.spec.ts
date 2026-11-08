@@ -1,11 +1,11 @@
-// Validación local sin crear pools ni conectarse a PostgreSQL.
+// Local validation without creating pools or connecting to PostgreSQL.
 jest.mock('pg', () => ({ Pool: jest.fn() }));
 import { parseMqttReserverConnection } from './mqtt-reserver-pg.gateway';
 import { parseMqttWorkerConnection } from './mqtt-worker-pg.gateway';
 
 const host = 'smart-home-smarthomepostgresdev-vrmtpz';
 const db = 'smarthome_dev';
-const password = 'A'.repeat(43); // Contraseña ficticia; no usar secretos reales.
+const password = 'A'.repeat(43); // Fictitious password; do not use real secrets.
 const make = (role: string, hostname = host, database = db) =>
   `postgresql://${role}:${password}@${hostname}:5432/${database}`;
 
@@ -15,8 +15,8 @@ const accounts = [
   ['confirmer', 'smarthome_mqtt_confirmer_dev_login'],
 ] as const;
 
-describe('MQTT PostgreSQL VPS DEV: aislamiento y TLS obligatorio', () => {
-  it('permite únicamente la cuenta reserver DEV con TLS verificable', () => {
+describe('MQTT PostgreSQL VPS DEV: isolation and mandatory TLS', () => {
+  it('allows only the DEV reserver account with verifiable TLS', () => {
     const target = parseMqttReserverConnection(make(accounts[0][1]), 'vps-dev-tls', 'production');
     expect(target.role).toBe(accounts[0][1]);
     expect(target.database).toBe(db);
@@ -26,7 +26,7 @@ describe('MQTT PostgreSQL VPS DEV: aislamiento y TLS obligatorio', () => {
     });
   });
 
-  it.each(['lease', 'confirmer'] as const)('permite %s solo con rol individual y TLS', (kind) => {
+  it.each(['lease', 'confirmer'] as const)('allows %s only with an individual role and TLS', (kind) => {
     const role = kind === 'lease' ? accounts[1][1] : accounts[2][1];
     const target = parseMqttWorkerConnection(make(role), kind, 'vps-dev-tls', 'production');
     expect(target.role).toBe(role);
@@ -37,7 +37,7 @@ describe('MQTT PostgreSQL VPS DEV: aislamiento y TLS obligatorio', () => {
     });
   });
 
-  it.each(accounts)('rechaza un host distinto para %s', (kind, role) => {
+  it.each(accounts)('rejects a different host for %s', (kind, role) => {
     if (kind === 'reserver') {
       expect(() => parseMqttReserverConnection(make(role, 'postgres'), 'vps-dev-tls', 'production'))
         .toThrow('MQTT_RESERVER_DATABASE_TARGET_NOT_ALLOWED');
@@ -57,7 +57,7 @@ describe('MQTT PostgreSQL VPS DEV: aislamiento y TLS obligatorio', () => {
     }
   });
 
-  it('rechaza intercambio de cuentas entre lease y confirmer', () => {
+  it('rejects swapping accounts between lease and confirmer', () => {
     expect(() => parseMqttWorkerConnection(make(accounts[2][1]), 'lease', 'vps-dev-tls', 'production'))
       .toThrow('MQTT_WORKER_DATABASE_URL_INVALID');
   });
@@ -69,7 +69,7 @@ describe('MQTT PostgreSQL VPS DEV: aislamiento y TLS obligatorio', () => {
       .toThrow('MQTT_WORKER_DATABASE_TARGET_NOT_ALLOWED');
   });
 
-  it('rechaza parámetros URL que puedan alterar TLS', () => {
+  it('rejects URL parameters that could alter TLS', () => {
     const url = make(accounts[0][1]) + '?sslmode=disable';
     expect(() => parseMqttReserverConnection(url, 'vps-dev-tls', 'production'))
       .toThrow('MQTT_RESERVER_DATABASE_URL_INVALID');

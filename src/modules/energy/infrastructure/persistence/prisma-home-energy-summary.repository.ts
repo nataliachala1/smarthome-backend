@@ -26,14 +26,14 @@ interface MonthFactsRow {
 }
 
 /**
- * Calcula en PostgreSQL (NUMERIC exacto) los totales del mes:
- * - cada lectura toma la tarifa con mayor effective_from <= su fecha en America/Bogota;
- * - nunca se aplica una tarifa futura ni la tarifa actual a todo el período;
- * - el rango es [from, to) por read_at; las filas visibles las decide RLS.
- * Se ejecuta tras consumption.fn_can_read_detail, en la misma transacción.
+ * Computes the month totals in PostgreSQL (exact NUMERIC):
+ * - each reading takes the tariff with the greatest effective_from <= its date in America/Bogota;
+ * - a future tariff, or the current tariff for the whole period, is never applied;
+ * - the range is [from, to) by read_at; RLS decides the visible rows.
+ * Runs after consumption.fn_can_read_detail, in the same transaction.
  *
- * Importante: los instantes se envían como texto ISO con zona (toISOString) para
- * que PostgreSQL no los interprete en la zona horaria de la sesión/servidor.
+ * Important: instants are sent as ISO text with a zone (toISOString) so that
+ * PostgreSQL does not interpret them in the session/server time zone.
  */
 @Injectable()
 export class PrismaHomeEnergySummaryRepository implements HomeEnergySummaryRepository {
@@ -104,8 +104,8 @@ export class PrismaHomeEnergySummaryRepository implements HomeEnergySummaryRepos
     try {
       return await this.prismaRls.withUserContext(userId, operation);
     } catch (error) {
-      // 42501 (privilegio o política RLS): se reporta según la operación,
-      // sin exponer detalles SQL.
+      // 42501 (privilege or RLS policy): reported according to the operation,
+      // without exposing SQL details.
       if (isPostgresAccessDeniedError(error)) {
         throw energyAccessDeniedError(access);
       }

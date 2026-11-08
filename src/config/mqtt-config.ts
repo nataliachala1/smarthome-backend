@@ -70,7 +70,7 @@ export interface MqttConfiguration {
 const topicPath = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*(?![\s\S])/;
 export const mqttDeviceId = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}(?![\s\S])/;
 
-/** VPS DEV utiliza un host PostgreSQL dedicado, nunca smarthome de Production. */
+/** VPS DEV uses a dedicated PostgreSQL host, never the Production smarthome DB. */
 function isVpsDevDatabaseUrl(raw: string | undefined): boolean {
   if (!raw) return false;
   try {
@@ -91,7 +91,7 @@ export function parseMqttConfig(
     const value = environment[name];
     if (value === undefined || value === '') return undefined;
     if (typeof value !== 'string' || !value.trim()) {
-      throw new Error(`${name} debe ser una cadena no vacía.`);
+      throw new Error(`${name} must be a non-empty string.`);
     }
     return value;
   };
@@ -99,9 +99,9 @@ export function parseMqttConfig(
   const vpsDev = production && read('APP_ENV') === 'development';
   const enabledSetting = read('MQTT_ENABLED');
   if (enabledSetting !== undefined && !['true', 'false'].includes(enabledSetting)) {
-    throw new Error('MQTT_ENABLED debe ser true o false.');
+    throw new Error('MQTT_ENABLED must be true or false.');
   }
-  // Opt-in: fuera de VPS DEV el comportamiento histórico se conserva.
+  // Opt-in: outside VPS DEV the historical behavior is kept.
   const brokerProvider = read('MQTT_BROKER_PROVIDER') ?? 'mosquitto';
   if (!['mosquitto', 'flespi'].includes(brokerProvider)) {
     throw new Error('MQTT_BROKER_PROVIDER_INVALID');
@@ -160,7 +160,7 @@ export function parseMqttConfig(
     try {
       url = new URL(brokerUrl);
     } catch {
-      throw new Error('MQTT_BROKER_URL debe ser una URL MQTT válida.');
+      throw new Error('MQTT_BROKER_URL must be a valid MQTT URL.');
     }
     if (
       !['mqtt:', 'mqtts:'].includes(url.protocol) ||
@@ -177,13 +177,13 @@ export function parseMqttConfig(
         (!/^\d+$/.test(url.port) || +url.port < 1 || +url.port > 65535))
     ) {
       throw new Error(
-        'MQTT_BROKER_URL solo admite mqtt:// o mqtts:// con host y puerto, sin credenciales, rutas ni parámetros.',
+        'MQTT_BROKER_URL only accepts mqtt:// or mqtts:// with a host and port, without credentials, paths or parameters.',
       );
     }
     tls = url.protocol === 'mqtts:';
     if (vpsDev && enabledSetting === 'true') {
-      // El host autorizado se fija en el despliegue DEV, no desde HTTP.
-      // Se inspeccionara como recurso DEV independiente antes del rollout.
+      // The authorized host is set in the DEV deployment, not from HTTP.
+      // It will be inspected as an independent DEV resource before the rollout.
       const expectedHost = read('SHELLY_MQTT_VPS_DEV_BROKER_HOST');
       if (!expectedHost || !/^[a-z0-9][a-z0-9.-]{1,249}$/.test(expectedHost) ||
           url.hostname !== expectedHost || !tls) {
@@ -192,46 +192,46 @@ export function parseMqttConfig(
     }
   }
   if (production && (!brokerUrl || !tls)) {
-    throw new Error('MQTT_BROKER_URL requiere mqtts:// en producción.');
+    throw new Error('MQTT_BROKER_URL requires mqtts:// in production.');
   }
   const username = read('MQTT_USERNAME');
   const password = read('MQTT_PASSWORD');
   if (flespi) {
-    // En flespi el token MQTT ACL es el username y no hay password.
+    // In flespi the MQTT ACL token is the username and there is no password.
     if (!username || password) {
       throw new Error('MQTT_FLESPI_TOKEN_AUTH_REQUIRED');
     }
   } else if (Boolean(username) !== Boolean(password) || (production && !username)) {
     throw new Error(
-      'MQTT_USERNAME y MQTT_PASSWORD deben configurarse juntos; son obligatorios en producción.',
+      'MQTT_USERNAME and MQTT_PASSWORD must be configured together; they are mandatory in production.',
     );
   }
   const caFile = read('MQTT_TLS_CA_FILE');
   if (flespi && caFile) {
-    // No mezclar la CA privada del Mosquitto DEV con las raíces públicas.
+    // Do not mix the private CA of the DEV Mosquitto with the public roots.
     throw new Error('MQTT_FLESPI_SYSTEM_TRUST_REQUIRED');
   }
   if (vpsDev && enabledSetting === 'true' && !caFile && !flespi) {
     throw new Error('MQTT_VPS_DEV_TLS_CA_REQUIRED');
   }
   if (caFile && !tls) {
-    throw new Error('MQTT_TLS_CA_FILE requiere mqtts://.');
+    throw new Error('MQTT_TLS_CA_FILE requires mqtts://.');
   }
   const verifyTls = read('MQTT_TLS_REJECT_UNAUTHORIZED');
   if (
     (verifyTls !== undefined && verifyTls !== 'true') ||
     (tls && read('NODE_TLS_REJECT_UNAUTHORIZED') === '0')
   ) {
-    throw new Error('No se permite desactivar la verificación TLS de MQTT.');
+    throw new Error('Disabling MQTT TLS verification is not allowed.');
   }
   const namespace = read('MQTT_TOPIC_NAMESPACE');
   if (namespace && (!topicPath.test(namespace) || namespace.length > 128)) {
     throw new Error(
-      'MQTT_TOPIC_NAMESPACE debe tener hasta 128 caracteres alfanuméricos, guiones y niveles separados por /, sin comodines.',
+      'MQTT_TOPIC_NAMESPACE must have up to 128 alphanumeric characters, hyphens and levels separated by /, without wildcards.',
     );
   }
   if (production && !namespace) {
-    throw new Error('MQTT_TOPIC_NAMESPACE es obligatorio en producción.');
+    throw new Error('MQTT_TOPIC_NAMESPACE is mandatory in production.');
   }
   if (vpsDev && enabledSetting === 'true' &&
       !namespace?.startsWith('smarthome/dev/')) {
@@ -245,14 +245,14 @@ export function parseMqttConfig(
     ? `${namespace}/devices`
     : (legacyPrefix ?? 'smarthome/devices');
   if (!topicPath.test(devicePrefix) || devicePrefix.length > 136) {
-    throw new Error('MQTT_CONTROL_TOPIC_PREFIX no es un prefijo MQTT válido.');
+    throw new Error('MQTT_CONTROL_TOPIC_PREFIX is not a valid MQTT prefix.');
   }
   const rawSwitchId = read('MQTT_SHELLY_SWITCH_ID') ?? '0';
   if (
     !/^\d+(?![\s\S])/.test(rawSwitchId) ||
     !Number.isSafeInteger(+rawSwitchId)
   ) {
-    throw new Error('MQTT_SHELLY_SWITCH_ID debe ser un entero no negativo.');
+    throw new Error('MQTT_SHELLY_SWITCH_ID must be a non-negative integer.');
   }
   const switchId = +rawSwitchId;
   const shellyPrefix = flespi
@@ -268,7 +268,7 @@ export function parseMqttConfig(
     const configured = read(key);
     if (configured !== undefined && configured !== expected) {
       throw new Error(
-        `${key} debe coincidir con el contrato derivado de MQTT_TOPIC_NAMESPACE y MQTT_SHELLY_SWITCH_ID; retire el override incompatible.`,
+        `${key} must match the contract derived from MQTT_TOPIC_NAMESPACE and MQTT_SHELLY_SWITCH_ID; remove the incompatible override.`,
       );
     }
   }
@@ -276,7 +276,7 @@ export function parseMqttConfig(
     const id = read(key);
     if (id && !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(id)) {
       throw new Error(
-        `${key} debe ser un identificador MQTT alfanumérico con guiones, de hasta 128 caracteres.`,
+        `${key} must be an alphanumeric MQTT identifier with hyphens, up to 128 characters.`,
       );
     }
     return id;
@@ -285,7 +285,7 @@ export function parseMqttConfig(
   const statusClientId = clientId('MQTT_STATUS_CLIENT_ID');
   if (controlClientId && controlClientId === statusClientId) {
     throw new Error(
-      'MQTT_CLIENT_ID y MQTT_STATUS_CLIENT_ID deben ser distintos.',
+      'MQTT_CLIENT_ID and MQTT_STATUS_CLIENT_ID must be different.',
     );
   }
   const rpcSource =
@@ -304,7 +304,7 @@ export function parseMqttConfig(
       !rpcSource.startsWith(`${namespace}/backend/`))
   ) {
     throw new Error(
-      'MQTT_SHELLY_RPC_SOURCE debe ser un prefijo válido dentro del namespace backend configurado.',
+      'MQTT_SHELLY_RPC_SOURCE must be a valid prefix inside the configured backend namespace.',
     );
   }
   return {

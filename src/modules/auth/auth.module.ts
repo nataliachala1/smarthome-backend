@@ -21,11 +21,13 @@ import { Argon2PasswordHasher } from './infrastructure/security/argon2-password-
 import { NodeSecureToken } from './infrastructure/security/node-secure-token';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
 
-import { GmailEmailSender } from './infrastructure/email/gmail-email-sender';
+import { SmtpEmailSender } from './infrastructure/email/smtp-email-sender';
 import { DisabledEmailSender } from './infrastructure/email/disabled-email-sender';
 
 import { PrismaRecoveryTokenRepository } from './infrastructure/persistence/prisma-recovery-token.repository';
 
+import { AccountRegistrationRepository } from './domain/repositories/account-registration.repository';
+import { PrismaAccountRegistrationRepository } from './infrastructure/persistence/prisma-account-registration.repository';
 import { PrismaAccountActivationRepository } from './infrastructure/persistence/prisma-account-activation.repository';
 
 import { JwtAuthGuard } from './presentation/http/guards/jwt-auth.guard';
@@ -97,7 +99,7 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
       inject: [ConfigService],
       useFactory: (configService: ConfigService) =>
         configService.get<string>('EMAIL_ENABLED') === 'true'
-          ? new GmailEmailSender(configService)
+          ? new SmtpEmailSender(configService)
           : new DisabledEmailSender(),
     },
 
@@ -114,6 +116,10 @@ import { ReactivateAccountUseCase } from './application/use-cases/reactivate-acc
     {
       provide: AccountActivationRepository,
       useClass: PrismaAccountActivationRepository,
+    },
+    {
+      provide: AccountRegistrationRepository,
+      useClass: PrismaAccountRegistrationRepository,
     },
     {
       provide: RefreshTokenRepository,

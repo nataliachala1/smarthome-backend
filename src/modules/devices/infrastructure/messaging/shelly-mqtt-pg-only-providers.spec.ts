@@ -42,13 +42,13 @@ import { ShellyMqttEnableCoordinator } from '../../application/services/shelly-m
 import { PgMqttBootstrapPort } from '../persistence/pg-mqtt-bootstrap.port';
 import { PgMqttRevocationPort } from '../persistence/pg-mqtt-revocation.port';
 
-// No se ejecuta ninguna factory ni se crea un Pool/Mosquitto.
+// No factory runs and no Pool/Mosquitto is created.
 const tokens = (providers: readonly unknown[]): unknown[] =>
   providers.map((provider) =>
     (provider as { provide?: unknown }).provide,
   );
 
-describe('VPS DEV: aislar SQL del broker MQTT', () => {
+describe('VPS DEV: isolate SQL from the MQTT broker', () => {
   it('registra exactamente 4 conexiones PostgreSQL independientes', () => {
     expect(tokens(shellyMqttPgDevProviders)).toEqual([
       MqttReserverPgGateway,
@@ -60,7 +60,7 @@ describe('VPS DEV: aislar SQL del broker MQTT', () => {
     expect(tokens(shellyMqttPgDevProviders)).not.toContain(ShellyMqttPreparationCoordinator);
   });
 
-  it('agrega exactamente 2 conexiones SQL para auth sin registrar un worker', () => {
+  it('adds exactly 2 SQL connections for auth without registering a worker', () => {
     expect(tokens(shellyMqttAuthPgDevProviders)).toEqual([
       MQTT_RPC_AUTH_GATEWAY,
       MQTT_CONFIRM_AUTH_GATEWAY,
@@ -68,7 +68,7 @@ describe('VPS DEV: aislar SQL del broker MQTT', () => {
     expect(tokens(shellyMqttAuthPgDevProviders)).not.toContain(ShellyMqttAuthenticationWorker);
   });
 
-  it('registra el worker VPS y su wrapper HTTP solo en el grupo explícito', () => {
+  it('registers the VPS worker and its HTTP wrapper only in the explicit group', () => {
     const workerTokens = tokens(shellyMqttVpsAuthWorkerProviders);
     expect(workerTokens).toContain(ShellyMqttAuthenticationWorker);
     expect(workerTokens).toContain(ShellyMqttAuthenticationAction);
@@ -77,13 +77,13 @@ describe('VPS DEV: aislar SQL del broker MQTT', () => {
     expect(new Set(workerTokens).size).toBe(workerTokens.length);
   });
 
-  it('mantiene el conjunto local y su worker de autenticacion separados', () => {
+  it('keeps the local set and its authentication worker separate', () => {
     expect(tokens(shellyMqttDevProviders)).toContain(ShellyMqttPreparationCoordinator);
     expect(tokens(shellyMqttDevProviders)).toContain(MqttDeviceIdentityProvider);
     expect(tokens(shellyMqttAuthDevProviders)).toContain(ShellyMqttAuthenticationWorker);
   });
 
-  it('separa el conjunto VPS de orquestacion del SQL y bootstrap local', () => {
+  it('separates the VPS orchestration set from the local SQL and bootstrap', () => {
     const vpsTokens = tokens(shellyMqttVpsPairingProviders);
     expect(vpsTokens).toEqual(expect.arrayContaining([
       PgMqttPrivilegedReservationPort,
@@ -106,7 +106,7 @@ describe('VPS DEV: aislar SQL del broker MQTT', () => {
     expect(new Set(vpsTokens).size).toBe(vpsTokens.length);
   });
 
-  it('aísla el bootstrap VPS del bootstrap y enable exclusivos del laboratorio', () => {
+  it('isolates the VPS bootstrap from the lab-only bootstrap and enable', () => {
     const bootstrapTokens = tokens(shellyMqttVpsBootstrapProviders);
     expect(bootstrapTokens).toEqual([
       PgMqttBootstrapPort,
@@ -117,7 +117,7 @@ describe('VPS DEV: aislar SQL del broker MQTT', () => {
     expect(new Set(bootstrapTokens).size).toBe(bootstrapTokens.length);
   });
 
-  it('registra el consumidor de revocación en un grupo separado y de mínimo alcance', () => {
+  it('registers the revocation consumer in a separate, minimum-scope group', () => {
     expect(tokens(shellyMqttVpsRevocationProviders)).toEqual([
       MQTT_REVOCATION_GATEWAY,
       PgMqttRevocationPort,

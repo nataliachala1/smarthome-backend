@@ -164,8 +164,8 @@ export class ShellyMqttBootstrapAction {
       throw new Error('MQTT_BOOTSTRAP_REQUEST_INVALID');
     }
 
-    // Endpoint y CA del Shelly se validan separados de la conexión privada
-    // del backend, antes de consumir una lectura autorizada SQL031.
+    // The Shelly endpoint and CA are validated separately from the backend's private
+    // connection, before consuming an authorized SQL031 read.
     const deviceBroker = this.deviceBrokerConfiguration();
 
     await this.sessions.assertCanManageHome(input.userId, input.homeId);
@@ -209,8 +209,8 @@ export class ShellyMqttBootstrapAction {
       row.topicScope,
     );
 
-    // SQL031 confirma PREPARED_DISABLED y limita las entregas. Mosquitto se
-    // consulta además para comprobar identidad, ACL y deshabilitado actuales.
+    // SQL031 confirms PREPARED_DISABLED and limits deliveries. Mosquitto is
+    // also queried to check the current identity, ACL and disabled state.
     await this.broker.verifyPreparedDisabled({
       username: row.username,
       clientId: row.clientId,
@@ -377,7 +377,7 @@ export class ShellyMqttBootstrapAction {
     return {
       hostname: url.hostname,
       port: Number(url.port),
-      // Solo se devuelve una CA raiz publica incluida en el trust store de Node.
+      // Only a public root CA included in Node's trust store is returned.
       caPem: readCaPem(this.settings.publicCaFile, true),
     };
   }

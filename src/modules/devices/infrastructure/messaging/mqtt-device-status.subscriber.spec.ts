@@ -16,7 +16,7 @@ jest.mock('../../../realtime/realtime-events.service', () => ({
 import { Logger } from '@nestjs/common';
 import { MqttDeviceStatusSubscriber } from './mqtt-device-status.subscriber';
 
-describe('MQTT - persistencia independiente del estado', () => {
+describe('MQTT - status persistence independent of consumption', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -100,7 +100,7 @@ describe('MQTT - persistencia independiente del estado', () => {
     return { internal, prisma, tx, emitToUser };
   }
 
-  it('mantiene ONLINE aunque falle el consumo', async () => {
+  it('keeps ONLINE even if consumption fails', async () => {
     const ctx = setup(true);
 
     await ctx.internal.handleStatusMessage(
@@ -127,7 +127,7 @@ describe('MQTT - persistencia independiente del estado', () => {
     );
   });
 
-  it('publica estado y consumo cuando la ingesta funciona', async () => {
+  it('publishes status and consumption when ingest works', async () => {
     const ctx = setup(false);
 
     await ctx.internal.handleStatusMessage(

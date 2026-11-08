@@ -10,9 +10,9 @@ import type {
 } from '../../application/services/shelly-mqtt-rpc-challenge.policy';
 
 /**
- * Adaptador MQTT de una sola llamada, sin credenciales DynSec admin.
- * Se suscribe ANTES de publicar el desafio; fail-closed sin reconexiones.
- * No registrar automaticamente: primero exige worker/lease/ACL exactos.
+ * Single-call MQTT adapter, without DynSec admin credentials.
+ * Subscribes BEFORE publishing the challenge; fails closed without reconnections.
+ * Do not register it automatically: it first requires an exact worker/lease/ACL.
  */
 export class ShellyMqttRpcChallengeTransport implements MqttRpcChallengeTransport {
   constructor(private readonly mqtt: Pick<MqttRuntimeService, 'config' | 'clientOptions'>) {}

@@ -42,40 +42,40 @@ function fixture(row: unknown = allowedPrivilegeRow()) {
 }
 
 describe('MqttReserverPgGateway / configuracion segura', () => {
-  it('acepta exclusivamente el destino local del laboratorio', () => {
+  it('accepts only the local lab target', () => {
     const cfg = parseMqttReserverConnection(LAB_URL, 'lab');
     expect(cfg.role).toBe(expectedRole);
     expect(cfg.database).toBe(expectedDatabase);
     expect(cfg.options.ssl).toBe(false);
   });
 
-  it('rechaza destinos y usuarios privilegiados en modo laboratorio', () => {
+  it('rejects privileged targets and users in lab mode', () => {
     expect(() => parseMqttReserverConnection(REMOTE_URL, 'lab')).toThrow();
     expect(() => parseMqttReserverConnection(LAB_URL.replace('lab_login', 'registrar'), 'lab')).toThrow();
     expect(() => parseMqttReserverConnection(LAB_URL.replace('55432', '5432'), 'lab')).toThrow();
   });
 
-  it('exige TLS verificado fuera del laboratorio', () => {
+  it('requires verified TLS outside the lab', () => {
     const cfg = parseMqttReserverConnection(REMOTE_URL, 'remote-tls');
     expect(cfg.options.ssl).toEqual({ rejectUnauthorized: true, minVersion: 'TLSv1.2' });
     expect(() => parseMqttReserverConnection(LAB_URL, 'remote-tls')).toThrow();
   });
 
-  it('rechaza parametros URL que podrian modificar TLS y credenciales faltantes', () => {
+  it('rejects URL parameters that could modify TLS and missing credentials', () => {
     expect(() => parseMqttReserverConnection(`${REMOTE_URL}?sslmode=disable`, 'remote-tls')).toThrow();
     expect(() => parseMqttReserverConnection('postgresql://postgres:pwd@db.example.invalid:5432/smarthome_db', 'remote-tls')).toThrow();
     expect(() => parseMqttReserverConnection(undefined, 'lab')).toThrow();
   });
 });
 
-describe('MqttReserverPgGateway / barrera de privilegios', () => {
-  it('no permite consultas antes de verificar la cuenta', async () => {
+describe('MqttReserverPgGateway / privilege barrier', () => {
+  it('does not allow queries before verifying the account', async () => {
     const { query, gateway } = fixture();
     await expect(gateway.query('SELECT 1', [])).rejects.toThrow('MQTT_RESERVER_NOT_READY');
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('habilita consultas despues de verificar la cuenta restringida', async () => {
+  it('enables queries after verifying the restricted account', async () => {
     const { query, gateway } = fixture();
     await gateway.verifyPrivileges();
     query.mockResolvedValueOnce({ rows: [{ ok: 1 }] });
@@ -85,24 +85,24 @@ describe('MqttReserverPgGateway / barrera de privilegios', () => {
   });
 
   it.each([
-    ['rol de registro', { can_register: true }],
-    ['rol de revocacion', { can_revoke: true }],
+    ['registration role', { can_register: true }],
+    ['revocation role', { can_revoke: true }],
     ['tabla directa', { can_read_operation: true }],
-    ['privilegio heredado registrar', { registrar_member: true }],
+    ['inherited registrar privilege', { registrar_member: true }],
     ['privilegio heredado revoke', { revoke_member: true }],
     ['superusuario', { is_superuser: true }],
     ['bypass RLS', { bypass_rls: true }],
-    ['puede crear roles', { can_create_role: true }],
-    ['cuenta equivocada', { role: 'smarthome_mqtt_reserver_otro' }],
+    ['can create roles', { can_create_role: true }],
+    ['wrong account', { role: 'smarthome_mqtt_reserver_otro' }],
     ['base equivocada', { database: 'smarthome_db' }],
-    ['sin permiso de reserva', { can_reserve: false }],
+    ['no reservation permission', { can_reserve: false }],
   ])('bloquea %s', async (_label, override) => {
     const { gateway } = fixture({ ...allowedPrivilegeRow(), ...override });
     await expect(gateway.verifyPrivileges()).rejects.toThrow('MQTT_RESERVER_PRIVILEGES_UNVERIFIED');
     await expect(gateway.query('SELECT 1', [])).rejects.toThrow('MQTT_RESERVER_NOT_READY');
   });
 
-  it('bloquea respuestas SQL mal formadas o fallos de conexion', async () => {
+  it('blocks malformed SQL responses or connection failures', async () => {
     const { gateway, query } = fixture();
     query.mockResolvedValueOnce({ rows: [] });
     await expect(gateway.verifyPrivileges()).rejects.toThrow('MQTT_RESERVER_PRIVILEGES_UNVERIFIED');
@@ -110,7 +110,7 @@ describe('MqttReserverPgGateway / barrera de privilegios', () => {
     await expect(gateway.verifyPrivileges()).rejects.toThrow('MQTT_RESERVER_PRIVILEGES_UNVERIFIED');
   });
 
-  it('cierra el pool y revoca disponibilidad al destruirse', async () => {
+  it('closes the pool and revokes availability when destroyed', async () => {
     const { gateway, end } = fixture();
     await gateway.verifyPrivileges();
     await gateway.onModuleDestroy();
